@@ -142,33 +142,150 @@ let tok = Tokenizer::builder()
 
 ## Architecture
 
-```
-kham-core/src/
-  normalizer.rs    — วรรณยุกต์ dedup, Sara Am composition
-  pre_tokenizer.rs — Unicode script classification (Thai/Latin/Number/Emoji/…)
-  tcc.rs           — Thai Character Cluster boundary detection (Theeramunkong 2000)
-  dict.rs          — Double-Array Trie (DARTS), O(k) lookup, built-in word list
-  segmenter.rs     — newmm DAG: DP over TCC boundaries, maximises dict matches
-  token.rs         — Token struct and TokenKind enum
+### Workspace crate graph
+
+```mermaid
+graph LR
+    core["<b>kham-core</b><br/><i>no_std · alloc only</i><br/>segmentation engine"]
+
+    cli["<b>kham-cli</b><br/>kham binary<br/>(clap)"]
+    python["<b>kham-python</b><br/>Python wheel<br/>(PyO3 · maturin)"]
+    wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
+    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)"]
+
+    core --> cli
+    core --> python
+    core --> wasm
+    core --> capi
 ```
 
-**Pipeline for Thai spans:**
+### Core module responsibilities
 
-```
-raw text
-  │
-  ▼  pre_tokenize()        split by script (Thai / Latin / Number / …)
-  │
-  ▼  tcc_boundaries()      find legal word-break positions within Thai spans
-  │
-  ▼  dict.prefixes()       enumerate dictionary matches at each boundary
-  │
-  ▼  DP shortest path      maximise dict words, minimise total tokens
-  │
-  ▼  Vec<Token<'_>>
+```mermaid
+classDiagram
+    direction LR
+
+    class normalizer {
+        +normalize(text) String
+        --
+        วรรณยุกต์ dedup
+        Sara Am composition
+    }
+
+    class pre_tokenizer {
+        +pre_tokenize(text) Vec~Token~
+        +classify_char(c) TokenKind
+        --
+        Unicode script split
+        Thai · Latin · Number
+        Emoji · Punct · WS
+    }
+
+    class tcc {
+        +tcc_boundaries(text) Vec~usize~
+        +tcc_iter(text) Iterator
+        --
+        Thai Character Cluster
+        boundary detection
+        Theeramunkong 2000
+    }
+
+    class dict {
+        +from_word_list(text) Dict
+        +contains(word) bool
+        +prefixes(text) Vec~str~
+        --
+        Double-Array Trie
+        O(k) byte-level lookup
+        built-in CC0 word list
+    }
+
+    class segmenter {
+        +segment(text) Vec~Token~
+        +normalize(text) String
+        --
+        newmm DAG algorithm
+        DP over TCC boundaries
+        maximises dict matches
+    }
+
+    class token {
+        +text : and str
+        +span : Range~usize~
+        +kind : TokenKind
+        --
+        Thai · Latin · Number
+        Punctuation · Emoji
+        Whitespace · Unknown
+    }
+
+    segmenter ..> normalizer : calls
+    segmenter ..> pre_tokenizer : calls
+    segmenter ..> tcc : calls
+    segmenter ..> dict : queries
+    segmenter ..> token : emits
+    pre_tokenizer ..> token : emits
 ```
 
-Non-Thai spans (Latin, numbers, emoji, punctuation) pass through the pre-tokenizer unchanged; only Thai spans go through the DAG.
+### Segmentation pipeline
+
+```mermaid
+flowchart TD
+    INPUT(["<b>raw &amp;str</b>"])
+
+    subgraph OPTIONAL["optional — call before segment()"]
+        NORM["<b>normalizer::normalize()</b>\nวรรณยุกต์ dedup\nSara Am อํ+อา → อำ"]
+    end
+
+    PRE["<b>pre_tokenizer::pre_tokenize()</b>\nUnicode script classification\nsplit into homogeneous spans"]
+
+    SPLIT{span kind?}
+
+    PASS["pass through\nas-is"]
+
+    subgraph THAI_PATH["Thai span processing"]
+        TCC["<b>tcc::tcc_boundaries()</b>\nTCC boundary positions\n= legal word-break points"]
+        DICT["<b>dict::prefixes()</b>\nDATS prefix search\nat each boundary"]
+        DAG["<b>DP over boundary graph</b>\nmaximise dict-word count\nfewest total tokens"]
+    end
+
+    MERGE(["<b>Vec&lt;Token&lt;'_&gt;&gt;</b>\nzero-copy &amp;str slices"])
+
+    INPUT --> OPTIONAL
+    OPTIONAL --> PRE
+    PRE --> SPLIT
+    SPLIT -->|"Thai"| TCC
+    SPLIT -->|"Latin · Number\nEmoji · Punct · WS"| PASS
+    TCC --> DICT
+    DICT --> DAG
+    DAG --> MERGE
+    PASS --> MERGE
+```
+
+### DAG segmentation detail
+
+```mermaid
+flowchart LR
+    subgraph INPUT["Thai span: &quot;กินข้าว&quot;"]
+        direction LR
+        C0(["pos 0"])
+        C1(["pos 3\n กิ"])
+        C2(["pos 6\n น"])
+        C3(["pos 9\n ข้"])
+        C4(["pos 15\n าว"])
+        C5(["pos 21\n end"])
+    end
+
+    C0 -->|"กิน ✓ dict"| C2
+    C0 -.->|"กิ  unknown"| C1
+    C1 -.->|"น   unknown"| C2
+    C2 -->|"ข้าว ✓ dict"| C5
+    C2 -.->|"ข้  unknown"| C3
+    C3 -.->|"าว  unknown"| C4
+
+    BEST["DP picks bold path:\nกิน · ข้าว\n= 2 dict words"]
+    C5 --- BEST
+```
 
 ## Building
 
