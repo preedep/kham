@@ -1,0 +1,30 @@
+# Build artifacts — large, generated, not useful for code understanding
+target/
+debug/
+**/target/
+
+# Compiled Python / WASM outputs
+kham-python/target/
+kham-wasm/pkg/
+*.pyc
+*.pyo
+__pycache__/
+*.egg-info/
+dist/
+.venv/
+
+# Criterion benchmark data
+criterion/
+
+# Cargo mutants output
+**/mutants.out*/
+
+# Lock file — not useful for reading code
+Cargo.lock
+
+# IDE metadata
+.idea/
+.vscode/
+
+# macOS metadata
+.DS_Store
