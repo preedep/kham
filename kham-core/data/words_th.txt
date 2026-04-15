@@ -1,0 +1,17 @@
+# Thai word list (CC0)
+# One word per line. Lines starting with # are comments.
+# This is a minimal placeholder — replace with a full CC0 word list.
+กิน
+ข้าว
+ปลา
+น้ำ
+คน
+ไป
+มา
+ที่
+นี่
+นั้น
+สวัสดี
+ธนาคาร
+แห่ง
+ชาวโลก

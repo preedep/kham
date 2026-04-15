@@ -1,0 +1,75 @@
+# kham.rs — Thai Word Segmentation Engine
+
+Batteries-included Thai word segmentation library in Rust. Multi-target: Rust crate, WASM, Python (PyO3), C FFI, CLI.
+
+## Architecture
+
+Workspace with multiple crates:
+
+- `kham-core/` — Pure Rust, `no_std` compatible. Contains all segmentation logic.
+    - `normalizer` — Thai text normalization (สระลอย reorder, วรรณยุกต์, NFC)
+    - `pre_tokenizer` — Unicode script classification (Thai/Latin/Number/Emoji/URL)
+    - `tcc` — Thai Character Cluster boundaries (Theeramunkong et al. 2000)
+    - `dict` — Double-Array Trie (DARTS), built-in `words_th.txt` via `include_bytes!`
+    - `segmenter` — DAG-based maximal matching (newmm algorithm)
+    - `token` — `Token` struct with text, byte span, char span, `TokenKind`
+- `kham-python/` — PyO3 bindings
+- `kham-wasm/` — wasm-bindgen bindings
+- `kham-capi/` — C FFI with cbindgen
+- `kham-cli/` — CLI binary using clap
+
+## Commands
+
+```bash
+cargo build                          # build all crates
+cargo test                           # run all tests
+cargo test -p kham-core              # test core only
+cargo bench                          # run benchmarks (criterion)
+cargo run -p kham-cli -- "ข้อความ"    # run CLI
+wasm-pack build kham-wasm --target web  # build WASM
+maturin develop -m kham-python/Cargo.toml  # build Python wheel
+```
+
+## Code Style
+
+- Rust 2021 edition, MSRV 1.75+
+- `#![no_std]` in kham-core — use `alloc` crate, no `std` dependency
+- All public APIs must have doc comments with Thai+English examples
+- Error handling: return `Result<T, KhamError>` — no `.unwrap()` in library code
+- Zero-copy where possible — return `&str` slices referencing input text
+
+## Token Output Contract
+
+Every segmentation returns `Vec<Token>` where:
+
+```rust
+pub struct Token<'a> {
+    pub text: &'a str,       // zero-copy reference to input
+    pub span: Range<usize>,  // byte offset in original text
+    pub kind: TokenKind,     // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+}
+```
+
+Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+Number input.
+
+## Testing
+
+- Unit tests co-located in each module
+- Integration tests in `kham-core/tests/` with real Thai text
+- Benchmark suite in `benches/` using criterion — compare against nlpO3
+- Test data: `testdata/` directory with `.txt` files (one test case per line, pipe-separated expected output)
+- Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
+
+## Dictionary
+
+- Built-in: `words_th.txt` (CC0) embedded at compile time
+- Custom dict loaded at runtime via `Tokenizer::builder().dict_file("path")`
+- Trie implementation: Double-Array Trie for O(n) lookup
+- Never ship BEST corpus or any non-CC0 data in the repo
+
+## Important
+
+- This is a library-first project — `kham-core` must never depend on `std`
+- Performance matters — benchmark every PR that touches segmenter or dict
+- Algorithm reference: study nlpO3 (Apache-2.0) and PyThaiNLP newmm, but write clean-room implementation
+- All Thai text in tests must be valid UTF-8, never raw bytes

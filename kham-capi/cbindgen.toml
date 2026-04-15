@@ -1,0 +1,8 @@
+language = "C"
+include_guard = "KHAM_H"
+pragma_once = true
+documentation = true
+documentation_style = "doxy"
+
+[export]
+include = ["KhamTokens"]

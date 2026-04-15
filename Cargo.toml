@@ -1,0 +1,31 @@
+[workspace]
+members = [
+    "kham-core",
+    "kham-cli",
+    "kham-python",
+    "kham-wasm",
+    "kham-capi",
+]
+# kham-python requires `maturin develop`; kham-wasm requires `wasm-pack build`.
+# Exclude them from the default `cargo build / test` invocation.
+default-members = [
+    "kham-core",
+    "kham-cli",
+    "kham-capi",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+authors = ["Preedee Ponchevin"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/preedee/kham"
+
+[workspace.dependencies]
+kham-core = { path = "kham-core" }
+
+[profile.release]
+opt-level = "z"
+lto = true

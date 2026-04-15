@@ -1,0 +1,17 @@
+[package]
+name = "kham-core"
+description = "Pure Rust Thai word segmentation engine — no_std compatible"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["std"]
+std = []
+
+[dependencies]
+
+[dev-dependencies]

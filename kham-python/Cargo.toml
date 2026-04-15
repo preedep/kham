@@ -1,0 +1,17 @@
+[package]
+name = "kham-python"
+description = "Python bindings for the kham Thai word segmenter (PyO3)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "kham"
+crate-type = ["cdylib"]
+
+[dependencies]
+kham-core = { workspace = true, features = ["std"] }
+pyo3 = { version = "0.21", features = ["extension-module", "abi3-py38"] }

@@ -1,0 +1,17 @@
+[package]
+name = "kham-wasm"
+description = "WebAssembly bindings for the kham Thai word segmenter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+kham-core = { workspace = true, features = ["std"] }
+wasm-bindgen = "0.2"
+
