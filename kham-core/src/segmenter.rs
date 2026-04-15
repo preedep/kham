@@ -9,7 +9,7 @@
 //! ```text
 //! raw text
 //!   │
-//!   ▼  (optional) Tokenizer::normalize()   ← call this first for malformed input
+//!   ▼  (optional) Tokenizer::normalize()   ← fixes tone dedup + Sara Am composition
 //!   │
 //!   ▼  pre_tokenize()
 //! [Thai span] [Number span] [Latin span] …
@@ -88,9 +88,9 @@ impl Tokenizer {
     /// use kham_core::Tokenizer;
     ///
     /// let tok = Tokenizer::new();
-    /// // Input with สระลอย in wrong order and a doubled tone mark
-    /// let raw = "\u{0E01}\u{0E40}\u{0E19}\u{0E48}\u{0E49}"; // กเน + อ่อ้
-    /// let normalized = tok.normalize(raw);
+    /// // Input with a doubled tone mark and decomposed Sara Am
+    /// let raw = "\u{0E01}\u{0E34}\u{0E19}\u{0E19}\u{0E49}\u{0E4D}\u{0E32}"; // กิน + น + ้ + อํ + อา
+    /// let normalized = tok.normalize(raw); // น้ำ composed, no dedup needed here
     /// let tokens = tok.segment(&normalized); // tokens borrow `normalized`
     /// assert!(!tokens.is_empty());
     /// ```
@@ -519,19 +519,6 @@ mod tests {
     }
 
     // ── normalize then segment ────────────────────────────────────────────────
-
-    #[test]
-    fn normalize_fixes_lead_vowel_order_before_segment() {
-        // กเ (wrong: consonant before lead vowel) should become เก after normalize
-        // so segmenter sees correct Thai text.
-        let t = tok();
-        let raw = "\u{0E01}\u{0E40}"; // ก + เ (wrong order)
-        let normalized = t.normalize(raw);
-        assert_eq!(normalized, "\u{0E40}\u{0E01}"); // เก
-        let tokens = t.segment(&normalized);
-        let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
-        assert_eq!(rebuilt, normalized);
-    }
 
     #[test]
     fn normalize_deduplicates_tone_before_segment() {
