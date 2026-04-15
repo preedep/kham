@@ -37,6 +37,8 @@ maturin develop -m kham-python/Cargo.toml  # build Python wheel
 - All public APIs must have doc comments with Thai+English examples
 - Error handling: return `Result<T, KhamError>` — no `.unwrap()` in library code
 - Zero-copy where possible — return `&str` slices referencing input text
+- For general Rust conventions, follow the `rust-engineer` skill
+- For wasm build Rust, follow the `rust-wasm-build` skill
 
 ## Token Output Contract
 
@@ -73,3 +75,12 @@ Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+N
 - Performance matters — benchmark every PR that touches segmenter or dict
 - Algorithm reference: study nlpO3 (Apache-2.0) and PyThaiNLP newmm, but write clean-room implementation
 - All Thai text in tests must be valid UTF-8, never raw bytes
+
+## Documentation
+
+- Write clear, concise documentation for each module and function
+- Use doc comments (`///`) for public APIs
+- Include examples and usage notes where appropriate
+- Follow Rust style guide for documentation formatting
+- Update documentation regularly as features evolve in README.md and Related Documentation
+- Diagram uses mermaid for visual representation
