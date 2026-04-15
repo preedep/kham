@@ -1,0 +1,12 @@
+# Thai sentences using only words present in the built-in dictionary.
+# Format: input|tok1|tok2|...
+# Whitespace tokens are excluded (keep_whitespace=false default).
+# All expected tokens are TokenKind::Thai.
+กินข้าว|กิน|ข้าว
+กินปลา|กิน|ปลา
+ไปมา|ไป|มา
+มาที่นี่|มา|ที่|นี่
+คนที่นี่|คน|ที่|นี่
+สวัสดีชาวโลก|สวัสดี|ชาวโลก
+ธนาคารแห่งนั้น|ธนาคาร|แห่ง|นั้น
+คนนั้นไปที่นี่|คน|นั้น|ไป|ที่|นี่

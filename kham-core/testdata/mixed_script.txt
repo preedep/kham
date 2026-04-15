@@ -1,0 +1,9 @@
+# Mixed Thai / Latin / Number input.
+# Format: input|tok1|tok2|...
+# Whitespace tokens are excluded.
+# Token kind is verified separately in integration tests.
+ธนาคาร100แห่ง|ธนาคาร|100|แห่ง
+สวัสดีhello|สวัสดี|hello
+คน42ไป|คน|42|ไป
+ที่นี่ ok นั้น|ที่|นี่|ok|นั้น
+ไป123มา456|ไป|123|มา|456

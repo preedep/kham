@@ -9,6 +9,8 @@
 //! ```text
 //! raw text
 //!   │
+//!   ▼  (optional) Tokenizer::normalize()   ← fixes tone dedup + Sara Am composition
+//!   │
 //!   ▼  pre_tokenize()
 //! [Thai span] [Number span] [Latin span] …
 //!   │
@@ -21,12 +23,31 @@
 //!   ▼
 //! Vec<Token<'_>>
 //! ```
+//!
+//! ## Normalization and zero-copy
+//!
+//! [`Tokenizer::segment`] is zero-copy: every [`Token`] borrows directly from
+//! the `&str` you pass in. This means segment() cannot internally normalize
+//! the text (normalization may reorder/remove characters, producing a new
+//! allocation with different byte offsets).
+//!
+//! For input that may contain สระลอย in wrong order, stacked tone marks, or
+//! decomposed Sara Am, use the two-step pattern:
+//!
+//! ```rust
+//! use kham_core::Tokenizer;
+//!
+//! let tok = Tokenizer::new();
+//! let normalized = tok.normalize("กเินข้าว"); // fix any encoding issues
+//! let tokens = tok.segment(&normalized);       // tokens borrow `normalized`
+//! ```
 
 use alloc::vec::Vec;
 use alloc::vec;
 
 use crate::dict::{Dict, BUILTIN_WORDS};
 use crate::error::KhamError;
+use crate::normalizer;
 use crate::pre_tokenizer::pre_tokenize;
 use crate::tcc::tcc_boundaries;
 use crate::token::{Token, TokenKind};
@@ -54,6 +75,29 @@ impl Tokenizer {
             dict: Dict::from_word_list(BUILTIN_WORDS),
             keep_whitespace: false,
         }
+    }
+
+    /// Normalise Thai text into canonical form.
+    ///
+    /// This is a convenience wrapper around [`normalizer::normalize`].
+    /// Because [`segment`] is zero-copy, normalization must happen **before**
+    /// segmentation. The caller owns the returned [`String`] and can then
+    /// borrow it for [`segment`]:
+    ///
+    /// ```rust
+    /// use kham_core::Tokenizer;
+    ///
+    /// let tok = Tokenizer::new();
+    /// // Input with a doubled tone mark and decomposed Sara Am
+    /// let raw = "\u{0E01}\u{0E34}\u{0E19}\u{0E19}\u{0E49}\u{0E4D}\u{0E32}"; // กิน + น + ้ + อํ + อา
+    /// let normalized = tok.normalize(raw); // น้ำ composed, no dedup needed here
+    /// let tokens = tok.segment(&normalized); // tokens borrow `normalized`
+    /// assert!(!tokens.is_empty());
+    /// ```
+    ///
+    /// [`segment`]: Tokenizer::segment
+    pub fn normalize(&self, text: &str) -> alloc::string::String {
+        normalizer::normalize(text)
     }
 
     /// Return a [`TokenizerBuilder`] for custom configuration.
@@ -97,14 +141,10 @@ impl Tokenizer {
             return Vec::new();
         }
 
-        // Split into script-homogeneous spans first. Non-Thai spans pass
-        // through; Thai spans go through the DAG segmenter.
-        //
-        // NOTE: When normalizer::normalize() is fully implemented it will
-        // reorder สระลอย and deduplicate tone marks. Because normalize()
-        // returns an owned String, integrating it here without breaking the
-        // zero-copy guarantee requires careful span mapping. For now,
-        // normalization is deferred and segment() operates on raw `text`.
+        // Split into script-homogeneous spans. Non-Thai spans pass through;
+        // Thai spans go through the newmm DAG segmenter.
+        // Call normalize() first if the input may contain สระลอย in wrong
+        // order, stacked tone marks, or decomposed Sara Am.
         let pre_tokens = pre_tokenize(text);
 
         let mut result: Vec<Token<'t>> = Vec::with_capacity(pre_tokens.len() * 2);
@@ -476,6 +516,37 @@ mod tests {
             .map(|t| t.text)
             .collect();
         assert!(thai.contains(&"มะม่วงหิมพานต์"), "got: {thai:?}");
+    }
+
+    // ── normalize then segment ────────────────────────────────────────────────
+
+    #[test]
+    fn normalize_deduplicates_tone_before_segment() {
+        // กินข้าว with a doubled tone mark on ข้ — normalize fixes it, segment proceeds.
+        let t = tok();
+        // Insert a doubled tone on ข: ข + อ้ + อ้  (ข้้)
+        let raw = "กิน\u{0E02}\u{0E49}\u{0E49}าว"; // กิน + ข้้ + าว
+        let normalized = t.normalize(raw);
+        let tokens = t.segment(&normalized);
+        assert!(!tokens.is_empty());
+        let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
+        assert_eq!(rebuilt, normalized);
+    }
+
+    #[test]
+    fn normalize_clean_input_is_identity() {
+        // normalize() on already-clean text should not change it.
+        let t = tok();
+        let clean = "กินข้าวกับปลา";
+        assert_eq!(t.normalize(clean), clean);
+    }
+
+    #[test]
+    fn segment_without_normalize_on_clean_input() {
+        // segment() alone is sufficient when input is already canonical.
+        let tokens = tok().segment("กินข้าวกับปลา");
+        let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
+        assert_eq!(rebuilt, "กินข้าวกับปลา");
     }
 
     // ── edge cases ────────────────────────────────────────────────────────────
