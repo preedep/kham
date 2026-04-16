@@ -92,9 +92,25 @@ fn build_trie(text: &str) -> Vec<TrieNode> {
 
 /// Find the smallest offset `b ≥ 1` such that `check[b + byte + 1]` is free
 /// (either `UNUSED` or out-of-bounds) for every byte in `children`.
-fn find_base(check: &[i32], children: &[u8]) -> usize {
+///
+/// Uses a free-list of known-unused slots so the scan advances in O(1) per
+/// candidate rather than scanning the whole `check` array linearly.
+/// `free_head` is the smallest index that is currently free; on return it is
+/// updated to the next free slot so successive calls stay cheap.
+fn find_base(check: &[i32], children: &[u8], free_head: &mut usize) -> usize {
     debug_assert!(!children.is_empty());
-    let mut b = 1usize;
+    // Anchor on the smallest child byte: the base must place that child at a
+    // free slot, so we only need to try b values where b + min_child + 1 is free.
+    let min_child = children[0] as usize; // children are sorted ascending
+
+    // Advance free_head past any occupied slots.
+    while *free_head < check.len() && check[*free_head] != UNUSED {
+        *free_head += 1;
+    }
+
+    // Starting candidate: the smallest b that places min_child on free_head.
+    let mut b = free_head.saturating_sub(min_child + 1).max(1);
+
     'search: loop {
         for &c in children {
             let pos = b + c as usize + 1;
@@ -157,6 +173,10 @@ impl Dict {
         let mut trie_to_darts: Vec<usize> = vec![0; n];
         // Root trie node (0) → root darts state (0).
 
+        // Tracks the lowest known-free slot; passed into find_base so it
+        // doesn't restart the scan from 1 on every call.
+        let mut free_head: usize = 1;
+
         let mut queue: VecDeque<usize> = VecDeque::new();
         queue.push_back(0); // start BFS from root trie node
 
@@ -172,7 +192,7 @@ impl Dict {
             let child_bytes: Vec<u8> = node.children.keys().copied().collect();
 
             // Find a collision-free base offset.
-            let b = find_base(&check, &child_bytes);
+            let b = find_base(&check, &child_bytes, &mut free_head);
             base[darts_id] = b as i32;
 
             // Stamp each child into the arrays.
