@@ -23,18 +23,30 @@ __pycache__/
 *.pyc
 *.pyo
 .venv/
+.maturin/
 
 # WASM build output
 kham-wasm/pkg/
 kham-wasm/target/
+kham-wasm/node_modules/
+*.wasm
 
 # C FFI / cbindgen
 kham-capi/include/*.h
+*.h                     # cbindgen root-level header output (kham.h)
+*.so
+*.dylib
+*.dll
+*.a
 
 # IDE
 .idea/
 .vscode/
 *.iml
+
+# Environment / secrets
+.env
+.env.*
 
 # macOS
 .DS_Store

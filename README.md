@@ -2,6 +2,11 @@
 
 Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core library with bindings for Python, WebAssembly, C, and a command-line interface.
 
+[![CI](https://github.com/preedep/kham/actions/workflows/ci.yml/badge.svg)](https://github.com/preedep/kham/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/kham-core.svg)](https://crates.io/crates/kham-core)
+[![PyPI](https://img.shields.io/pypi/v/kham.svg)](https://pypi.org/project/kham/)
+[![npm](https://img.shields.io/npm/v/kham-wasm.svg)](https://www.npmjs.com/package/kham-wasm)
+
 ## Features
 
 - **newmm algorithm** — DAG-based maximal matching constrained to Thai Character Cluster (TCC) boundaries
@@ -13,13 +18,13 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ## Packages
 
-| Crate | Description |
-|---|---|
-| `kham-core` | Pure Rust engine, `no_std` compatible |
-| `kham-cli` | `kham` binary (clap) |
-| `kham-python` | Python bindings via PyO3 / maturin |
-| `kham-wasm` | WebAssembly bindings via wasm-bindgen |
-| `kham-capi` | C FFI with cbindgen-generated header |
+| Crate | Registry | Description |
+|---|---|---|
+| `kham-core` | [crates.io](https://crates.io/crates/kham-core) | Pure Rust engine, `no_std` compatible |
+| `kham-cli` | [crates.io](https://crates.io/crates/kham-cli) | `kham` binary (clap) |
+| `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
+| `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
+| `kham-capi` | — | C FFI with cbindgen-generated header |
 
 ## Quick start
 
@@ -27,7 +32,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = { git = "https://github.com/preedee/kham" }
+kham-core = "0.1"
 ```
 
 ```rust
@@ -59,16 +64,43 @@ let normalized = tok.normalize(raw_input); // tone dedup + Sara Am composition
 let tokens = tok.segment(&normalized);     // tokens borrow `normalized`
 ```
 
+### Python
+
+```bash
+pip install kham
+```
+
+```python
+import kham
+
+tokens = kham.segment("กินข้าวกับปลา")
+print(tokens)  # ['กิน', 'ข้าว', 'กับ', 'ปลา']
+```
+
+### JavaScript / TypeScript (WASM)
+
+```bash
+npm install kham-wasm
+```
+
+```js
+import init, { segment } from "kham-wasm";
+await init();
+
+const tokens = segment("กินข้าวกับปลา");
+console.log(tokens); // ["กิน", "ข้าว", "กับ", "ปลา"]
+```
+
 ### CLI
 
 ```bash
-cargo install --path kham-cli
+cargo install kham-cli
 ```
 
 ```bash
 # Positional argument
 kham "กินข้าวกับปลา"
-# กิน|ข้าว|กั|บ|ปลา
+# กิน|ข้าว|กับ|ปลา
 
 # Custom separator
 kham --sep " / " "สวัสดีชาวโลก"
@@ -302,6 +334,59 @@ Binding targets require additional tooling:
 ```bash
 wasm-pack build kham-wasm --target web           # WASM
 maturin develop -m kham-python/Cargo.toml        # Python wheel
+```
+
+## CI / CD
+
+Two GitHub Actions workflows run automatically:
+
+### CI (`ci.yml`) — every push and pull request to `main` / `develop`
+
+| Job | What it checks |
+|---|---|
+| `fmt` | `cargo fmt --check` |
+| `clippy` | `cargo clippy -D warnings` |
+| `test` | Unit + integration + doc tests on stable and MSRV 1.75, Linux and macOS |
+| `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` (bare metal) |
+| `wasm` | `wasm-pack build --target web` succeeds |
+| `python` | `maturin develop` on Python 3.8 and 3.12 |
+| `bench_compile` | Benchmark suite compiles without errors |
+
+### Release (`release.yml`) — on `v*.*.*` tag push
+
+Publishes to all registries after the CI gate passes:
+
+```mermaid
+flowchart LR
+    TAG(["git tag v0.1.0\ngit push --tags"])
+    CI["CI gate\n(full test matrix)"]
+    CRATES["crates.io\nkham-core + kham-cli"]
+    PYPI["PyPI\nkham wheels\n(manylinux · macOS · Windows)"]
+    NPM["npm\nkham-wasm"]
+    GH["GitHub Release\nauto release notes\n+ wheel artifacts"]
+
+    TAG --> CI
+    CI --> CRATES
+    CI --> PYPI
+    CI --> NPM
+    CRATES --> GH
+    PYPI --> GH
+    NPM --> GH
+```
+
+#### Required secrets
+
+| Secret | Used for |
+|---|---|
+| `CARGO_REGISTRY_TOKEN` | crates.io publish |
+| `NPM_TOKEN` | npm publish |
+| PyPI — no secret needed | OIDC trusted publishing; configure via pypi.org Trusted Publisher |
+
+To cut a release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
 ```
 
 ## Benchmarks
