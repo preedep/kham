@@ -6,6 +6,8 @@
 //! To run only the file-load benchmarks:
 //!   cargo bench -p kham-core --bench dict -- dict/file
 
+use std::time::Duration;
+
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use kham_core::dict::{Dict, BUILTIN_WORDS};
 use kham_core::Tokenizer;
@@ -32,24 +34,33 @@ const PREFIX_TEXTS: &[(&str, &str)] = &[
 // ---------------------------------------------------------------------------
 
 /// Dict construction from the built-in word list.
+///
+/// Construction is a one-time startup cost; low sample_size is appropriate.
 fn bench_dict_from_builtin(c: &mut Criterion) {
-    c.bench_function("dict/from_builtin_word_list", |b| {
+    let mut group = c.benchmark_group("dict/construction");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(10));
+    group.bench_function("from_builtin_word_list", |b| {
         b.iter(|| {
             let d = Dict::from_word_list(BUILTIN_WORDS);
             criterion::black_box(d);
         });
     });
+    group.finish();
 }
 
 /// Dict construction from a small custom word list (simulates user-supplied dict).
 fn bench_dict_from_small_list(c: &mut Criterion) {
     let small = "กิน\nข้าว\nปลา\nน้ำ\nสวัสดี\nธนาคาร\nแห่ง\nชาวโลก\n";
-    c.bench_function("dict/from_small_word_list", |b| {
+    let mut group = c.benchmark_group("dict/construction");
+    group.bench_function("from_small_word_list", |b| {
         b.iter(|| {
             let d = Dict::from_word_list(small);
             criterion::black_box(d);
         });
     });
+    group.finish();
 }
 
 /// `contains()` — positive lookups (words known to be in the dict).
@@ -102,6 +113,9 @@ fn bench_prefixes(c: &mut Criterion) {
 /// this against `bench_dict_from_file_content`.
 fn bench_dict_from_file(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(10));
     group.throughput(Throughput::Bytes(
         std::fs::metadata(WORDS_TH_PATH).map(|m| m.len()).unwrap_or(0),
     ));
@@ -128,6 +142,9 @@ fn bench_dict_from_file_content(c: &mut Criterion) {
         .count();
 
     let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(20));
     group.throughput(Throughput::Elements(word_count as u64));
     group.bench_function("build_only", |b| {
         b.iter(|| {
@@ -144,6 +161,9 @@ fn bench_dict_from_file_content(c: &mut Criterion) {
 /// This is what the user pays when passing `kham --dict <file>`.
 fn bench_tokenizer_dict_file(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(20));
     group.bench_function("tokenizer_builder_dict_file", |b| {
         b.iter(|| {
             let tok = Tokenizer::builder()

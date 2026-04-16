@@ -505,17 +505,18 @@ mod tests {
 
     #[test]
     fn custom_dict_word_is_matched() {
+        // Use a nonsense word that is not in the built-in dictionary and cannot
+        // be decomposed into subwords — ensures the custom dict is actually used.
         let tok = Tokenizer::builder()
-            .dict_words("มะม่วงหิมพานต์\n")
+            .dict_words("กขคงจฉ\n")
             .build();
-        let tokens = tok.segment("มะม่วงหิมพานต์");
-        // The whole compound should be one Thai token
+        let tokens = tok.segment("กขคงจฉ");
         let thai: Vec<&str> = tokens
             .iter()
             .filter(|t| t.kind == TokenKind::Thai)
             .map(|t| t.text)
             .collect();
-        assert!(thai.contains(&"มะม่วงหิมพานต์"), "got: {thai:?}");
+        assert!(thai.contains(&"กขคงจฉ"), "got: {thai:?}");
     }
 
     // ── normalize then segment ────────────────────────────────────────────────

@@ -30,7 +30,6 @@
 //! - `prefixes(text)`: walk bytes, emit a match whenever NUL sentinel is
 //!   reachable at the current state.
 
-use alloc::collections::BTreeMap;
 use alloc::collections::VecDeque;
 use alloc::vec::Vec;
 use alloc::vec;
@@ -51,13 +50,40 @@ const TERM: u8 = 0;
 // ---------------------------------------------------------------------------
 
 struct TrieNode {
-    /// byte → child trie-node index
-    children: BTreeMap<u8, usize>,
+    /// Sorted (byte, child-node-index) pairs.
+    ///
+    /// A sorted `Vec` is faster than `BTreeMap` for the small child-counts
+    /// typical of trie nodes: no heap allocation per node, better cache
+    /// locality, and linear scan outperforms tree traversal for ≤ ~16 items.
+    children: Vec<(u8, usize)>,
 }
 
 impl TrieNode {
     fn new() -> Self {
-        Self { children: BTreeMap::new() }
+        Self { children: Vec::new() }
+    }
+
+    /// Find the index into `children` whose byte equals `b`, or `Err(pos)`
+    /// where `pos` is the insertion point to keep `children` sorted.
+    #[inline]
+    fn find(&self, b: u8) -> Result<usize, usize> {
+        self.children.binary_search_by_key(&b, |&(k, _)| k)
+    }
+
+    /// Return the child node index for byte `b`, or `None`.
+    #[inline]
+    fn get(&self, b: u8) -> Option<usize> {
+        self.find(b).ok().map(|i| self.children[i].1)
+    }
+
+    /// Insert `(b, child_id)` maintaining sorted order.
+    /// Panics in debug mode if `b` is already present.
+    #[inline]
+    fn insert(&mut self, b: u8, child_id: usize) {
+        match self.find(b) {
+            Ok(_) => debug_assert!(false, "duplicate byte in trie node"),
+            Err(pos) => self.children.insert(pos, (b, child_id)),
+        }
     }
 }
 
@@ -73,17 +99,114 @@ fn build_trie(text: &str) -> Vec<TrieNode> {
         let mut state = 0usize;
         // Append TERM so the terminal is just another trie node.
         for b in word.bytes().chain(core::iter::once(TERM)) {
-            // Look up the child first to avoid holding a borrow when pushing.
-            if !nodes[state].children.contains_key(&b) {
+            if let Some(next) = nodes[state].get(b) {
+                state = next;
+            } else {
                 let next_id = nodes.len();
                 nodes.push(TrieNode::new());
-                nodes[state].children.insert(b, next_id);
+                nodes[state].insert(b, next_id);
+                state = next_id;
             }
-            state = nodes[state].children[&b];
         }
     }
 
     nodes
+}
+
+// ---------------------------------------------------------------------------
+// Bitmap free-list
+// ---------------------------------------------------------------------------
+
+/// Bitmap tracking which slots in `check` are free (bit = 1 → free).
+///
+/// Provides `next_free_from(pos)` in O(n/64) by scanning 64 bits at a time
+/// with `u64::trailing_zeros`. This is the critical speedup for large word
+/// lists whose trie nodes have wide child-byte spreads (e.g., ASCII 0x20
+/// mixed with Thai 0xE0), where the naive one-slot-at-a-time scan is O(n²).
+struct FreeBitmap {
+    words: Vec<u64>,
+    /// Number of real slots tracked. Bits at indices `cap..` are always 0.
+    cap: usize,
+}
+
+impl FreeBitmap {
+    /// Create a bitmap for slots `0..cap`. Slot 0 is occupied (root sentinel);
+    /// slots `1..cap` are free. Bits above `cap` in the last word are 0.
+    fn new(cap: usize) -> Self {
+        let n_words = (cap + 63) / 64;
+        let mut words = vec![!0u64; n_words];
+        // Clear phantom bits in the last word.
+        let used = cap % 64;
+        if used > 0 && n_words > 0 {
+            words[n_words - 1] = (1u64 << used) - 1;
+        }
+        // Slot 0 occupied (root sentinel).
+        if n_words > 0 {
+            words[0] &= !1u64;
+        }
+        FreeBitmap { words, cap }
+    }
+
+    /// Mark `slot` as occupied (clear its bit).
+    #[inline]
+    fn occupy(&mut self, slot: usize) {
+        debug_assert!(slot < self.cap);
+        self.words[slot / 64] &= !(1u64 << (slot % 64));
+    }
+
+    /// Extend the bitmap to cover `new_cap` slots.
+    ///
+    /// - Old phantom bits (slots `old_cap .. old_n_words*64`) become real free slots.
+    /// - New phantom bits (slots `new_cap .. new_n_words*64`) are cleared.
+    fn grow(&mut self, new_cap: usize) {
+        debug_assert!(new_cap > self.cap);
+        let old_cap   = self.cap;
+        let old_words = self.words.len();
+        let new_words = (new_cap + 63) / 64;
+
+        // Un-clear old phantom bits (they're now real free slots).
+        let old_used = old_cap % 64;
+        if old_used > 0 && old_words > 0 {
+            self.words[old_words - 1] |= !((1u64 << old_used) - 1);
+        }
+
+        // Extend with all-free words.
+        self.words.resize(new_words, !0u64);
+
+        // Clear phantom bits in the new last word.
+        let new_used = new_cap % 64;
+        if new_used > 0 && new_words > 0 {
+            self.words[new_words - 1] = (1u64 << new_used) - 1;
+        }
+
+        self.cap = new_cap;
+    }
+
+    /// Return the smallest free slot index `≥ start`, or `self.cap` if none.
+    /// Never returns an index ≥ `self.cap` (phantom bits are never set).
+    fn next_free_from(&self, start: usize) -> usize {
+        if start >= self.cap {
+            return self.cap;
+        }
+        let cap_word = (self.cap + 63) / 64;
+        let word_idx = start / 64;
+        let bit_idx  = start % 64;
+
+        // Partial first word.
+        let partial = self.words[word_idx] >> bit_idx;
+        if partial != 0 {
+            return (word_idx * 64 + bit_idx + partial.trailing_zeros() as usize).min(self.cap);
+        }
+
+        // Full remaining words.
+        for i in (word_idx + 1)..cap_word {
+            if self.words[i] != 0 {
+                return (i * 64 + self.words[i].trailing_zeros() as usize).min(self.cap);
+            }
+        }
+
+        self.cap // all occupied
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -93,29 +216,23 @@ fn build_trie(text: &str) -> Vec<TrieNode> {
 /// Find the smallest offset `b ≥ 1` such that `check[b + byte + 1]` is free
 /// (either `UNUSED` or out-of-bounds) for every byte in `children`.
 ///
-/// Uses a free-list of known-unused slots so the scan advances in O(1) per
-/// candidate rather than scanning the whole `check` array linearly.
-/// `free_head` is the smallest index that is currently free; on return it is
-/// updated to the next free slot so successive calls stay cheap.
-fn find_base(check: &[i32], children: &[u8], free_head: &mut usize) -> usize {
+/// Uses the bitmap to jump over occupied regions in O(n/64) per jump instead
+/// of O(n). For nodes with wide child-byte spreads (ASCII 0x20 mixed with
+/// Thai 0xE0), this turns an O(n²) construction into near-linear time.
+fn find_base(check: &[i32], children: &[u8], bitmap: &FreeBitmap, min_free: usize) -> usize {
     debug_assert!(!children.is_empty());
-    // Anchor on the smallest child byte: the base must place that child at a
-    // free slot, so we only need to try b values where b + min_child + 1 is free.
-    let min_child = children[0] as usize; // children are sorted ascending
+    let min_child = children[0] as usize; // sorted ascending
 
-    // Advance free_head past any occupied slots.
-    while *free_head < check.len() && check[*free_head] != UNUSED {
-        *free_head += 1;
-    }
-
-    // Starting candidate: the smallest b that places min_child on free_head.
-    let mut b = free_head.saturating_sub(min_child + 1).max(1);
+    // Start b so min_child lands at or after min_free.
+    let mut b = min_free.saturating_sub(min_child + 1).max(1);
 
     'search: loop {
         for &c in children {
             let pos = b + c as usize + 1;
             if pos < check.len() && check[pos] != UNUSED {
-                b += 1;
+                // Jump: advance b so this child lands on the next free slot.
+                let nf = bitmap.next_free_from(pos + 1);
+                b = nf.saturating_sub(c as usize + 1).max(b + 1);
                 continue 'search;
             }
         }
@@ -173,9 +290,12 @@ impl Dict {
         let mut trie_to_darts: Vec<usize> = vec![0; n];
         // Root trie node (0) → root darts state (0).
 
-        // Tracks the lowest known-free slot; passed into find_base so it
-        // doesn't restart the scan from 1 on every call.
-        let mut free_head: usize = 1;
+        // Bitmap mirrors `check`: bit i is set iff check[i] == UNUSED.
+        // Kept in sync so find_base can jump over occupied runs in O(n/64).
+        let mut bitmap = FreeBitmap::new(cap);
+
+        // Smallest slot known to be free — advances monotonically.
+        let mut min_free: usize = 1;
 
         let mut queue: VecDeque<usize> = VecDeque::new();
         queue.push_back(0); // start BFS from root trie node
@@ -188,25 +308,33 @@ impl Dict {
                 continue; // leaf node — nothing to allocate
             }
 
-            // Collect sorted child bytes for base search.
-            let child_bytes: Vec<u8> = node.children.keys().copied().collect();
+            // Advance min_free to the next genuinely free slot.
+            while min_free < check.len() && check[min_free] != UNUSED {
+                min_free += 1;
+            }
 
-            // Find a collision-free base offset.
-            let b = find_base(&check, &child_bytes, &mut free_head);
+            // Collect sorted child bytes for base search.
+            // children is already sorted ascending by byte value.
+            let child_bytes: Vec<u8> = node.children.iter().map(|&(b, _)| b).collect();
+
+            // Find a collision-free base offset using the bitmap for fast jumps.
+            let b = find_base(&check, &child_bytes, &bitmap, min_free);
             base[darts_id] = b as i32;
 
             // Stamp each child into the arrays.
-            for (&byte, &child_trie_id) in &node.children {
+            for &(byte, child_trie_id) in &node.children {
                 let child_darts = b + byte as usize + 1;
 
-                // Grow arrays if the new child index exceeds current capacity.
+                // Grow arrays and bitmap if needed.
                 if child_darts + 1 > check.len() {
                     let new_cap = child_darts + 512;
                     base.resize(new_cap, 0);
                     check.resize(new_cap, UNUSED);
+                    bitmap.grow(new_cap);
                 }
 
                 check[child_darts] = darts_id as i32;
+                bitmap.occupy(child_darts);
                 trie_to_darts[child_trie_id] = child_darts;
                 queue.push_back(child_trie_id);
             }
