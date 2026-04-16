@@ -2,7 +2,7 @@
 
 Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core library with bindings for Python, WebAssembly, C, and a command-line interface.
 
-[![CI](https://github.com/preedee/kham/actions/workflows/ci.yml/badge.svg)](https://github.com/preedee/kham/actions/workflows/ci.yml)
+[![CI](https://github.com/preedep/kham/actions/workflows/ci.yml/badge.svg)](https://github.com/preedep/kham/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/kham-core.svg)](https://crates.io/crates/kham-core)
 [![PyPI](https://img.shields.io/pypi/v/kham.svg)](https://pypi.org/project/kham/)
 [![npm](https://img.shields.io/npm/v/kham-wasm.svg)](https://www.npmjs.com/package/kham-wasm)

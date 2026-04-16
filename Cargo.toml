@@ -21,7 +21,7 @@ edition = "2021"
 rust-version = "1.75"
 authors = ["Preedee Ponchevin"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/preedee/kham"
+repository = "https://github.com/preedep/kham"
 
 [workspace.dependencies]
 kham-core = { path = "kham-core" }
