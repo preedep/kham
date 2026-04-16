@@ -180,12 +180,9 @@ impl Tokenizer {
 ///    where a word boundary may legally fall.
 /// 2. Run forward DP over boundary indices. At each index `i`:
 ///    a. Enumerate all dictionary prefixes of `slice[bounds[i]..]`.
-///    b. For each prefix that ends exactly on a TCC boundary `j`, record
-///       an edge `i → j` (dictionary match, score +1).
-///    c. Always record a fallback edge `i → i+1` (one TCC, unknown token,
-///       score +0).
-///    d. Ties in dict-word count are broken by preferring fewer total
-///       tokens (i.e. longer individual words).
+///    b. For each prefix ending on a TCC boundary `j`, record an edge `i → j` (dict match).
+///    c. Always record a fallback edge `i → i+1` (one TCC, unknown token).
+///    d. Ties in dict-word count are broken by preferring fewer total tokens.
 /// 3. Backtrack from the last boundary to reconstruct the winning path.
 /// 4. Emit a `Token` for each edge, with `TokenKind::Thai` for dictionary
 ///    matches and `TokenKind::Unknown` for unknown single-TCC segments.
@@ -209,26 +206,32 @@ fn segment_thai<'t>(
 
     // DP arrays, indexed by boundary position index.
     //
-    // `dp[i]` = (dict_word_count, neg_token_count) — the best score reachable
-    // at boundary index `i`. We maximise lexicographically, so:
-    //   • dict_word_count is the primary objective (more is better).
-    //   • neg_token_count breaks ties: –k means k tokens total, so a less
-    //     negative value (fewer tokens, i.e. longer words) is preferred.
+    // `dp[i]` = (neg_unknown_count, dict_word_count, neg_token_count)
     //
-    // Sentinel: `dp[i].0 == i32::MIN` means index `i` is not yet reachable.
-    const UNREACHABLE: (i32, i32) = (i32::MIN, 0);
-    let mut dp: Vec<(i32, i32)> = vec![UNREACHABLE; nb];
+    // We maximise lexicographically:
+    //   1. neg_unknown_count — penalise unknown (out-of-dict) tokens heavily.
+    //      Fewer unknowns (less negative) is always preferred. This ensures
+    //      "สวัสดี" beats "ส"(unknown)+"วัส"+"ดี".
+    //   2. dict_word_count — more dictionary matches is better. This prefers
+    //      "กิน"+"ข้าว" (2 words) over the compound "กินข้าว" (1 word) when
+    //      both decompositions are entirely known words.
+    //   3. neg_token_count — fewer total tokens (longer individual words) as
+    //      the final tiebreaker.
+    //
+    // Sentinel: first element == i32::MIN means the index is not yet reachable.
+    const UNREACHABLE: (i32, i32, i32) = (i32::MIN, 0, 0);
+    let mut dp: Vec<(i32, i32, i32)> = vec![UNREACHABLE; nb];
     let mut from: Vec<usize> = vec![0; nb];
     let mut edge_is_dict: Vec<bool> = vec![false; nb];
 
-    dp[0] = (0, 0);
+    dp[0] = (0, 0, 0);
 
     for i in 0..nb - 1 {
         let score = dp[i];
         if score == UNREACHABLE {
             continue;
         }
-        let (dw, nt) = score;
+        let (nu, dw, nt) = score;
         let pos = bounds[i];
         let remaining = &slice[pos..];
 
@@ -239,7 +242,7 @@ fn segment_thai<'t>(
             let end_pos = pos + prefix.len();
             // Only accept matches that land exactly on a TCC boundary.
             if let Ok(j) = bounds.binary_search(&end_pos) {
-                let candidate = (dw + 1, nt - 1);
+                let candidate = (nu, dw + 1, nt - 1);
                 if candidate > dp[j] {
                     dp[j] = candidate;
                     from[j] = i;
@@ -250,7 +253,7 @@ fn segment_thai<'t>(
 
         // --- fallback edge: advance one TCC (unknown token) ---
         let j = i + 1;
-        let candidate = (dw, nt - 1);
+        let candidate = (nu - 1, dw, nt - 1);
         if candidate > dp[j] {
             dp[j] = candidate;
             from[j] = i;
@@ -505,17 +508,18 @@ mod tests {
 
     #[test]
     fn custom_dict_word_is_matched() {
+        // Use a nonsense word that is not in the built-in dictionary and cannot
+        // be decomposed into subwords — ensures the custom dict is actually used.
         let tok = Tokenizer::builder()
-            .dict_words("มะม่วงหิมพานต์\n")
+            .dict_words("กขคงจฉ\n")
             .build();
-        let tokens = tok.segment("มะม่วงหิมพานต์");
-        // The whole compound should be one Thai token
+        let tokens = tok.segment("กขคงจฉ");
         let thai: Vec<&str> = tokens
             .iter()
             .filter(|t| t.kind == TokenKind::Thai)
             .map(|t| t.text)
             .collect();
-        assert!(thai.contains(&"มะม่วงหิมพานต์"), "got: {thai:?}");
+        assert!(thai.contains(&"กขคงจฉ"), "got: {thai:?}");
     }
 
     // ── normalize then segment ────────────────────────────────────────────────

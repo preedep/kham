@@ -2,9 +2,18 @@
 //!
 //! Run with:
 //!   cargo bench -p kham-core --bench dict
+//!
+//! To run only the file-load benchmarks:
+//!   cargo bench -p kham-core --bench dict -- dict/file
+
+use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use kham_core::dict::{Dict, BUILTIN_WORDS};
+use kham_core::Tokenizer;
+
+/// Absolute path to the bundled word list, resolved at compile time.
+const WORDS_TH_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/data/words_th.txt");
 
 // ---------------------------------------------------------------------------
 // Benchmark inputs
@@ -25,24 +34,33 @@ const PREFIX_TEXTS: &[(&str, &str)] = &[
 // ---------------------------------------------------------------------------
 
 /// Dict construction from the built-in word list.
+///
+/// Construction is a one-time startup cost; low sample_size is appropriate.
 fn bench_dict_from_builtin(c: &mut Criterion) {
-    c.bench_function("dict/from_builtin_word_list", |b| {
+    let mut group = c.benchmark_group("dict/construction");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(10));
+    group.bench_function("from_builtin_word_list", |b| {
         b.iter(|| {
             let d = Dict::from_word_list(BUILTIN_WORDS);
             criterion::black_box(d);
         });
     });
+    group.finish();
 }
 
 /// Dict construction from a small custom word list (simulates user-supplied dict).
 fn bench_dict_from_small_list(c: &mut Criterion) {
     let small = "กิน\nข้าว\nปลา\nน้ำ\nสวัสดี\nธนาคาร\nแห่ง\nชาวโลก\n";
-    c.bench_function("dict/from_small_word_list", |b| {
+    let mut group = c.benchmark_group("dict/construction");
+    group.bench_function("from_small_word_list", |b| {
         b.iter(|| {
             let d = Dict::from_word_list(small);
             criterion::black_box(d);
         });
     });
+    group.finish();
 }
 
 /// `contains()` — positive lookups (words known to be in the dict).
@@ -84,10 +102,87 @@ fn bench_prefixes(c: &mut Criterion) {
     group.finish();
 }
 
+// ---------------------------------------------------------------------------
+// File-load benchmarks
+// ---------------------------------------------------------------------------
+
+/// Full path: read file from disk + build Dict from its contents.
+///
+/// This mirrors exactly what `kham --dict <file>` does at startup.
+/// Split between I/O and trie construction is visible by comparing
+/// this against `bench_dict_from_file_content`.
+fn bench_dict_from_file(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(10));
+    group.throughput(Throughput::Bytes(
+        std::fs::metadata(WORDS_TH_PATH).map(|m| m.len()).unwrap_or(0),
+    ));
+    group.bench_function("read_and_build", |b| {
+        b.iter(|| {
+            let content = std::fs::read_to_string(WORDS_TH_PATH)
+                .expect("words_th.txt not found");
+            let d = Dict::from_word_list(&content);
+            criterion::black_box(d);
+        });
+    });
+    group.finish();
+}
+
+/// Trie construction only — file already read into memory.
+///
+/// Measures `Dict::from_word_list` cost in isolation (no I/O).
+/// Useful for comparing trie-build performance after word-list changes.
+fn bench_dict_from_file_content(c: &mut Criterion) {
+    let content = std::fs::read_to_string(WORDS_TH_PATH)
+        .expect("words_th.txt not found");
+    let word_count = content.lines()
+        .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
+        .count();
+
+    let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(20));
+    group.throughput(Throughput::Elements(word_count as u64));
+    group.bench_function("build_only", |b| {
+        b.iter(|| {
+            let d = Dict::from_word_list(&content);
+            criterion::black_box(d);
+        });
+    });
+    group.finish();
+}
+
+/// Full `Tokenizer::builder().dict_file(path).build()` — the exact CLI code path.
+///
+/// Includes: file read + merge with built-in 62k words + trie rebuild.
+/// This is what the user pays when passing `kham --dict <file>`.
+fn bench_tokenizer_dict_file(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dict/file");
+    group.sample_size(10)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(20));
+    group.bench_function("tokenizer_builder_dict_file", |b| {
+        b.iter(|| {
+            let tok = Tokenizer::builder()
+                .dict_file(WORDS_TH_PATH)
+                .expect("words_th.txt not found")
+                .build();
+            criterion::black_box(tok);
+        });
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_dict_from_builtin,
     bench_dict_from_small_list,
+    bench_dict_from_file,
+    bench_dict_from_file_content,
+    bench_tokenizer_dict_file,
     bench_contains_hit,
     bench_contains_miss,
     bench_prefixes,

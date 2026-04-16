@@ -13,7 +13,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Multi-target** — single core library ships as a Rust crate, Python wheel, WASM module, C shared library, and CLI binary
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
-- **Built-in dictionary** — CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
+- **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 
 ## Packages
@@ -104,7 +104,7 @@ kham "กินข้าวกับปลา"
 
 # Custom separator
 kham --sep " / " "สวัสดีชาวโลก"
-# สวัสดี / ชาวโลก
+# สวัสดี / ชาว / โลก
 
 # Show token kinds
 kham --kind "ธนาคาร100แห่ง"
@@ -238,7 +238,7 @@ classDiagram
         --
         newmm DAG algorithm
         DP over TCC boundaries
-        maximises dict matches
+        minimises unknowns · max dict words
     }
 
     class token {
@@ -278,7 +278,7 @@ flowchart TD
     subgraph THAI_PATH["Thai span processing"]
         TCC["<b>tcc::tcc_boundaries()</b>\nTCC boundary positions\n= legal word-break points"]
         DICT["<b>dict::prefixes()</b>\nDATS prefix search\nat each boundary"]
-        DAG["<b>DP over boundary graph</b>\nmaximise dict-word count\nfewest total tokens"]
+        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nfewest total tokens as tiebreaker"]
     end
 
     MERGE(["<b>Vec&lt;Token&lt;'_&gt;&gt;</b>\nzero-copy &amp;str slices"])
@@ -322,11 +322,11 @@ flowchart LR
 ## Building
 
 ```bash
-cargo build                          # all default members
-cargo test                           # run all tests
-cargo test -p kham-core              # core only
-cargo bench -p kham-core             # criterion benchmarks
-cargo run -p kham-cli -- "ข้อความ"   # run CLI
+cargo build                                  # all default members
+cargo test --release                         # run all tests (release recommended — dict build is ~8 s vs ~44 s debug)
+cargo test -p kham-core --release            # core only
+cargo bench -p kham-core                     # criterion benchmarks
+cargo run -p kham-cli -- "ข้อความ"           # run CLI
 ```
 
 Binding targets require additional tooling:
@@ -346,7 +346,7 @@ Two GitHub Actions workflows run automatically:
 |---|---|
 | `fmt` | `cargo fmt --check` |
 | `clippy` | `cargo clippy -D warnings` |
-| `test` | Unit + integration + doc tests on stable and MSRV 1.75, Linux and macOS |
+| `test` | Unit + integration + doc tests on stable and MSRV 1.78, Linux and macOS |
 | `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` (bare metal) |
 | `wasm` | `wasm-pack build --target web` succeeds |
 | `python` | `maturin develop` on Python 3.8 and 3.12 |
@@ -391,17 +391,22 @@ git push origin v0.1.0
 
 ## Benchmarks
 
-Measured on Apple M-series (release build, LTO):
+Measured on Apple M-series (release build, LTO, built-in 62k-word dictionary):
 
 | Benchmark | Time | Throughput |
 |---|---|---|
 | `segment` — short (~37 B) | ~1.0 µs | ~37 MiB/s |
 | `segment` — medium (~182 B) | ~4.0 µs | ~42 MiB/s |
 | `segment` — long (~546 B) | ~11.6 µs | ~44 MiB/s |
-| `dict::contains` (hit) | ~19–44 ns | — |
-| `dict::contains` (miss) | ~2 ns | — |
-| `dict::prefixes` | ~57–100 ns | — |
-| Dict construction (built-in) | ~15 µs | — |
+| `dict::contains` (hit) | ~13–32 ns | ~520–690 MiB/s |
+| `dict::contains` (miss) | ~1.3 ns | ~4 GiB/s |
+| `dict::prefixes` | ~65–112 ns | ~275–860 MiB/s |
+| Dict construction (built-in, 62k words) | ~1.8 s | ~33k words/s |
+| Dict construction (small custom list) | ~7 µs | — |
+
+> Dict construction is a one-time startup cost. The built-in dictionary is embedded at compile
+> time via `include_bytes!`; future versions may pre-build the trie at compile time to eliminate
+> this cost.
 
 Run locally:
 
@@ -412,7 +417,7 @@ cargo bench -p kham-core
 
 ## Dictionary
 
-The built-in word list (`kham-core/data/words_th.txt`) is CC0-licensed. Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
+The built-in word list (`kham-core/data/words_th.txt`) is CC0-licensed and contains 62,102 Thai words. Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
 
 **Constraint:** Never ship BEST corpus data or any non-CC0 material in this repository.
 
