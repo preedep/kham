@@ -180,12 +180,9 @@ impl Tokenizer {
 ///    where a word boundary may legally fall.
 /// 2. Run forward DP over boundary indices. At each index `i`:
 ///    a. Enumerate all dictionary prefixes of `slice[bounds[i]..]`.
-///    b. For each prefix that ends exactly on a TCC boundary `j`, record
-///       an edge `i → j` (dictionary match, score +1).
-///    c. Always record a fallback edge `i → i+1` (one TCC, unknown token,
-///       score +0).
-///    d. Ties in dict-word count are broken by preferring fewer total
-///       tokens (i.e. longer individual words).
+///    b. For each prefix ending on a TCC boundary `j`, record an edge `i → j` (dict match).
+///    c. Always record a fallback edge `i → i+1` (one TCC, unknown token).
+///    d. Ties in dict-word count are broken by preferring fewer total tokens.
 /// 3. Backtrack from the last boundary to reconstruct the winning path.
 /// 4. Emit a `Token` for each edge, with `TokenKind::Thai` for dictionary
 ///    matches and `TokenKind::Unknown` for unknown single-TCC segments.

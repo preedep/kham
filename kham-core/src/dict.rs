@@ -133,7 +133,7 @@ impl FreeBitmap {
     /// Create a bitmap for slots `0..cap`. Slot 0 is occupied (root sentinel);
     /// slots `1..cap` are free. Bits above `cap` in the last word are 0.
     fn new(cap: usize) -> Self {
-        let n_words = (cap + 63) / 64;
+        let n_words = cap.div_ceil(64);
         let mut words = vec![!0u64; n_words];
         // Clear phantom bits in the last word.
         let used = cap % 64;
@@ -162,7 +162,7 @@ impl FreeBitmap {
         debug_assert!(new_cap > self.cap);
         let old_cap   = self.cap;
         let old_words = self.words.len();
-        let new_words = (new_cap + 63) / 64;
+        let new_words = new_cap.div_ceil(64);
 
         // Un-clear old phantom bits (they're now real free slots).
         let old_used = old_cap % 64;
@@ -188,7 +188,7 @@ impl FreeBitmap {
         if start >= self.cap {
             return self.cap;
         }
-        let cap_word = (self.cap + 63) / 64;
+        let cap_word = self.cap.div_ceil(64);
         let word_idx = start / 64;
         let bit_idx  = start % 64;
 
