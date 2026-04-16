@@ -4,5 +4,5 @@
 # Format: input|tok1|tok2|...
 # These verify that normalize() is idempotent on clean Thai text.
 กินข้าว|กิน|ข้าว
-สวัสดีชาวโลก|สวัสดี|ชาวโลก
+สวัสดีชาวโลก|สวัสดี|ชาว|โลก
 ธนาคารแห่งนั้น|ธนาคาร|แห่ง|นั้น

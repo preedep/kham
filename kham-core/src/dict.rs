@@ -589,6 +589,19 @@ mod tests {
     }
 
     #[test]
+    fn builtin_contains_common_words() {
+        let d = Dict::from_word_list(BUILTIN_WORDS);
+        let words = ["สวัสดี", "ธนาคาร", "ชาวโลก", "ไป", "มา", "กิน", "ข้าว"];
+        for w in words {
+            assert!(d.contains(w), "builtin dict missing: {w}");
+        }
+        let p = d.prefixes("สวัสดีชาวโลก");
+        assert!(p.contains(&"สวัสดี"), "prefixes missing สวัสดี, got: {p:?}");
+        let p2 = d.prefixes("ธนาคารแห่งนั้น");
+        assert!(p2.contains(&"ธนาคาร"), "prefixes missing ธนาคาร, got: {p2:?}");
+    }
+
+    #[test]
     fn check_array_validity() {
         // Every non-UNUSED entry in check must point to a valid state index.
         let d = small_dict();
