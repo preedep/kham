@@ -49,7 +49,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest]
-        toolchain: [stable, "1.75"]   # stable + MSRV
+        toolchain: [stable, "1.78"]   # stable + MSRV
 
     steps:
       - uses: actions/checkout@v4

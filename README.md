@@ -346,7 +346,7 @@ Two GitHub Actions workflows run automatically:
 |---|---|
 | `fmt` | `cargo fmt --check` |
 | `clippy` | `cargo clippy -D warnings` |
-| `test` | Unit + integration + doc tests on stable and MSRV 1.75, Linux and macOS |
+| `test` | Unit + integration + doc tests on stable and MSRV 1.78, Linux and macOS |
 | `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` (bare metal) |
 | `wasm` | `wasm-pack build --target web` succeeds |
 | `python` | `maturin develop` on Python 3.8 and 3.12 |
