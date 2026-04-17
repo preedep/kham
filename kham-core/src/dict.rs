@@ -278,18 +278,73 @@ impl Dict {
         Self::from_trie(trie)
     }
 
-    /// Deserialise a [`Dict`] from the binary blob produced by `build.rs`.
+    /// Deserialise a [`Dict`] from a pre-compiled DARTS binary blob.
     ///
-    /// This is O(S) — copies the pre-built DARTS arrays — versus O(W×K) for
-    /// [`from_word_list`]. Prefer [`builtin_dict()`] which calls this for you.
+    /// The binary blob is normally produced by `build.rs` at compile time and
+    /// embedded via [`include_bytes!`]. Loading from bytes bypasses the full
+    /// trie-construction pipeline, making it the fastest way to obtain a
+    /// ready-to-use dictionary.
     ///
-    /// # Panics
+    /// # Binary Format
     ///
-    /// Panics if `data` does not start with `b"KDAM"` or the version byte is
-    /// not `0x01`. These indicate a stale or corrupted binary artifact; a clean
-    /// `cargo build` regenerates it automatically.
+    /// The blob begins with a fixed 16-byte header followed by the raw array
+    /// data. All multi-byte integers are **little-endian**.
+    ///
+    /// ```text
+    /// Offset  Size  Field        Description
+    /// ──────  ────  ───────────  ───────────────────────────────────────────
+    ///      0     4  magic        ASCII b"KDAM" — identifies the file type
+    ///      4     1  version      Format version; currently 0x01
+    ///      5     3  reserved     Must be zero; reserved for future flags
+    ///      8     4  base_len     Number of i32 elements in the base array
+    ///     12     4  check_len    Number of i32 elements in the check array
+    ///     16     —  base[]       base_len × 4 bytes, little-endian i32
+    ///     16 + base_len*4  —  check[]  check_len × 4 bytes, little-endian i32
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// `O(S)` where `S` is the total byte length of `data`. The function
+    /// performs one pass of `chunks_exact(4).map(i32::from_le_bytes)` over
+    /// each array, allocating exactly `base_len + check_len` i32 values.
+    /// Compare with [`from_word_list`], which is `O(W × K)` — proportional to
+    /// total word bytes — due to trie construction and base-offset search.
+    ///
+    /// | Method            | Complexity | Allocation   | Use when                       |
+    /// |-------------------|------------|--------------|--------------------------------|
+    /// | `from_bytes`      | O(S)       | 2 × `Vec<i32>` | loading pre-built binary blob  |
+    /// | `from_word_list`  | O(W × K)   | trie + DARTS   | building from a raw word list  |
+    ///
+    /// # Errors / Panics
+    ///
+    /// This function panics — rather than returning a `Result` — because
+    /// failures indicate a corrupted or stale build artifact, not a runtime
+    /// condition the caller can meaningfully recover from. A clean
+    /// `cargo build` always regenerates a valid `dict.bin`.
+    ///
+    /// | Condition                                | Panic message                    |
+    /// |------------------------------------------|----------------------------------|
+    /// | `data.len() < 16`                        | `"dict.bin too short"`           |
+    /// | First 4 bytes ≠ `b"KDAM"`               | `"dict.bin: bad magic"`          |
+    /// | Byte 4 ≠ `0x01`                          | `"dict.bin: unsupported version"`|
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::dict::Dict;
+    ///
+    /// // Typically you embed a pre-built blob with include_bytes! and pass it here.
+    /// // This example constructs a minimal valid blob by hand for illustration.
+    /// let dict = kham_core::dict::builtin_dict();
+    /// assert!(dict.contains("กิน"));
+    /// assert!(dict.contains("ธนาคาร"));
+    /// ```
+    ///
+    /// For the common case of the built-in word list, prefer [`builtin_dict()`],
+    /// which calls this function with the compile-time-embedded blob.
     ///
     /// [`from_word_list`]: Dict::from_word_list
+    /// [`builtin_dict()`]: crate::dict::builtin_dict
     pub fn from_bytes(data: &[u8]) -> Self {
         const HDR: usize = 16; // 4 magic + 1 version + 3 reserved + 4 base_len + 4 check_len
         assert!(data.len() >= HDR, "dict.bin too short");
