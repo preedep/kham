@@ -45,7 +45,7 @@
 use alloc::vec::Vec;
 use alloc::vec;
 
-use crate::dict::{Dict, BUILTIN_WORDS};
+use crate::dict::{builtin_dict, Dict, BUILTIN_WORDS};
 use crate::error::KhamError;
 use crate::normalizer;
 use crate::pre_tokenizer::pre_tokenize;
@@ -72,7 +72,7 @@ impl Tokenizer {
     /// Create a tokenizer with the built-in dictionary.
     pub fn new() -> Self {
         Self {
-            dict: Dict::from_word_list(BUILTIN_WORDS),
+            dict: builtin_dict(),
             keep_whitespace: false,
         }
     }
@@ -336,14 +336,15 @@ impl TokenizerBuilder {
 
     /// Consume the builder and return a configured [`Tokenizer`].
     pub fn build(self) -> Tokenizer {
-        let base = BUILTIN_WORDS;
         let dict = if let Some(extra) = &self.dict_words {
-            let mut combined = alloc::string::String::from(base);
+            // Custom words: merge with built-in word list and rebuild.
+            let mut combined = alloc::string::String::from(BUILTIN_WORDS);
             combined.push('\n');
             combined.push_str(extra);
             Dict::from_word_list(&combined)
         } else {
-            Dict::from_word_list(base)
+            // Default path: load from pre-compiled binary — O(S) copy.
+            builtin_dict()
         };
         Tokenizer { dict, keep_whitespace: self.keep_whitespace }
     }
