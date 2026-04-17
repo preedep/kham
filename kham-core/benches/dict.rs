@@ -39,9 +39,10 @@ const PREFIX_TEXTS: &[(&str, &str)] = &[
 /// construction is done at compile time; runtime cost is only an O(S) copy.
 fn bench_dict_from_binary(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/construction");
-    group.sample_size(50)
-         .warm_up_time(Duration::from_secs(1))
-         .measurement_time(Duration::from_secs(5));
+    group
+        .sample_size(50)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(5));
     group.bench_function("from_binary_blob", |b| {
         b.iter(|| {
             let d = builtin_dict();
@@ -56,9 +57,10 @@ fn bench_dict_from_binary(c: &mut Criterion) {
 /// Construction is a one-time startup cost; low sample_size is appropriate.
 fn bench_dict_from_builtin(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/construction");
-    group.sample_size(10)
-         .warm_up_time(Duration::from_secs(1))
-         .measurement_time(Duration::from_secs(10));
+    group
+        .sample_size(10)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(10));
     group.bench_function("from_builtin_word_list", |b| {
         b.iter(|| {
             let d = Dict::from_word_list(BUILTIN_WORDS);
@@ -131,16 +133,18 @@ fn bench_prefixes(c: &mut Criterion) {
 /// this against `bench_dict_from_file_content`.
 fn bench_dict_from_file(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/file");
-    group.sample_size(10)
-         .warm_up_time(Duration::from_secs(1))
-         .measurement_time(Duration::from_secs(10));
+    group
+        .sample_size(10)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(10));
     group.throughput(Throughput::Bytes(
-        std::fs::metadata(WORDS_TH_PATH).map(|m| m.len()).unwrap_or(0),
+        std::fs::metadata(WORDS_TH_PATH)
+            .map(|m| m.len())
+            .unwrap_or(0),
     ));
     group.bench_function("read_and_build", |b| {
         b.iter(|| {
-            let content = std::fs::read_to_string(WORDS_TH_PATH)
-                .expect("words_th.txt not found");
+            let content = std::fs::read_to_string(WORDS_TH_PATH).expect("words_th.txt not found");
             let d = Dict::from_word_list(&content);
             criterion::black_box(d);
         });
@@ -153,16 +157,17 @@ fn bench_dict_from_file(c: &mut Criterion) {
 /// Measures `Dict::from_word_list` cost in isolation (no I/O).
 /// Useful for comparing trie-build performance after word-list changes.
 fn bench_dict_from_file_content(c: &mut Criterion) {
-    let content = std::fs::read_to_string(WORDS_TH_PATH)
-        .expect("words_th.txt not found");
-    let word_count = content.lines()
+    let content = std::fs::read_to_string(WORDS_TH_PATH).expect("words_th.txt not found");
+    let word_count = content
+        .lines()
         .filter(|l| !l.trim().is_empty() && !l.trim_start().starts_with('#'))
         .count();
 
     let mut group = c.benchmark_group("dict/file");
-    group.sample_size(10)
-         .warm_up_time(Duration::from_secs(1))
-         .measurement_time(Duration::from_secs(20));
+    group
+        .sample_size(10)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(20));
     group.throughput(Throughput::Elements(word_count as u64));
     group.bench_function("build_only", |b| {
         b.iter(|| {
@@ -179,9 +184,10 @@ fn bench_dict_from_file_content(c: &mut Criterion) {
 /// This is what the user pays when passing `kham --dict <file>`.
 fn bench_tokenizer_dict_file(c: &mut Criterion) {
     let mut group = c.benchmark_group("dict/file");
-    group.sample_size(10)
-         .warm_up_time(Duration::from_secs(1))
-         .measurement_time(Duration::from_secs(20));
+    group
+        .sample_size(10)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(20));
     group.bench_function("tokenizer_builder_dict_file", |b| {
         b.iter(|| {
             let tok = Tokenizer::builder()

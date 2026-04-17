@@ -31,8 +31,8 @@
 //!   reachable at the current state.
 
 use alloc::collections::VecDeque;
-use alloc::vec::Vec;
 use alloc::vec;
+use alloc::vec::Vec;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -60,7 +60,9 @@ struct TrieNode {
 
 impl TrieNode {
     fn new() -> Self {
-        Self { children: Vec::new() }
+        Self {
+            children: Vec::new(),
+        }
     }
 
     /// Find the index into `children` whose byte equals `b`, or `Err(pos)`
@@ -160,7 +162,7 @@ impl FreeBitmap {
     /// - New phantom bits (slots `new_cap .. new_n_words*64`) are cleared.
     fn grow(&mut self, new_cap: usize) {
         debug_assert!(new_cap > self.cap);
-        let old_cap   = self.cap;
+        let old_cap = self.cap;
         let old_words = self.words.len();
         let new_words = new_cap.div_ceil(64);
 
@@ -190,7 +192,7 @@ impl FreeBitmap {
         }
         let cap_word = self.cap.div_ceil(64);
         let word_idx = start / 64;
-        let bit_idx  = start % 64;
+        let bit_idx = start % 64;
 
         // Partial first word.
         let partial = self.words[word_idx] >> bit_idx;
@@ -294,10 +296,10 @@ impl Dict {
         assert_eq!(&data[0..4], b"KDAM", "dict.bin: bad magic");
         assert_eq!(data[4], 0x01, "dict.bin: unsupported version");
 
-        let base_len  = u32::from_le_bytes([data[8],  data[9],  data[10], data[11]]) as usize;
+        let base_len = u32::from_le_bytes([data[8], data[9], data[10], data[11]]) as usize;
         let check_len = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
 
-        let base_end  = HDR + base_len  * 4;
+        let base_end = HDR + base_len * 4;
         let check_end = base_end + check_len * 4;
 
         let base: Vec<i32> = data[HDR..base_end]
@@ -497,8 +499,7 @@ pub static BUILTIN_WORDS: &str = include_str!("../data/words_th.txt");
 ///
 /// Format: 16-byte header (`b"KDAM"` magic, version, lengths) followed by
 /// `base[]` then `check[]` as little-endian `i32` values.
-static BUILTIN_DICT_BYTES: &[u8] =
-    include_bytes!(concat!(env!("OUT_DIR"), "/dict.bin"));
+static BUILTIN_DICT_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dict.bin"));
 
 /// Return the built-in dictionary loaded from the pre-compiled binary blob.
 ///
@@ -637,13 +638,26 @@ mod tests {
     fn large_word_list() {
         // Insert many words and verify all are retrievable
         let words = [
-            "กิน", "ข้าว", "ปลา", "น้ำ", "คน", "ไป", "มา", "ที่", "นี่", "นั้น",
-            "สวัสดี", "ธนาคาร", "แห่ง", "ชาวโลก", "ประเทศ", "ภาษา", "เมือง", "บ้าน",
+            "กิน",
+            "ข้าว",
+            "ปลา",
+            "น้ำ",
+            "คน",
+            "ไป",
+            "มา",
+            "ที่",
+            "นี่",
+            "นั้น",
+            "สวัสดี",
+            "ธนาคาร",
+            "แห่ง",
+            "ชาวโลก",
+            "ประเทศ",
+            "ภาษา",
+            "เมือง",
+            "บ้าน",
         ];
-        let list: alloc::string::String = words
-            .iter()
-            .map(|w| alloc::format!("{w}\n"))
-            .collect();
+        let list: alloc::string::String = words.iter().map(|w| alloc::format!("{w}\n")).collect();
         let d = Dict::from_word_list(&list);
         for &w in &words {
             assert!(d.contains(w), "missing word: {w}");
@@ -661,7 +675,10 @@ mod tests {
         let p = d.prefixes("สวัสดีชาวโลก");
         assert!(p.contains(&"สวัสดี"), "prefixes missing สวัสดี, got: {p:?}");
         let p2 = d.prefixes("ธนาคารแห่งนั้น");
-        assert!(p2.contains(&"ธนาคาร"), "prefixes missing ธนาคาร, got: {p2:?}");
+        assert!(
+            p2.contains(&"ธนาคาร"),
+            "prefixes missing ธนาคาร, got: {p2:?}"
+        );
     }
 
     #[test]

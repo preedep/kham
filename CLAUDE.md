@@ -32,7 +32,7 @@ maturin develop -m kham-python/Cargo.toml  # build Python wheel
 
 ## Code Style
 
-- Rust 2021 edition, MSRV 1.75+
+- Rust 2021 edition, MSRV 1.85+
 - `#![no_std]` in kham-core — use `alloc` crate, no `std` dependency
 - All public APIs must have doc comments with Thai+English examples
 - Error handling: return `Result<T, KhamError>` — no `.unwrap()` in library code
