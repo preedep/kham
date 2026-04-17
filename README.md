@@ -14,7 +14,9 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
+- **Pre-compiled DARTS** — Double-Array Trie is built once at compile time (`build.rs`) and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction from text)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
+- **Structured CLI logging** — `RUST_LOG`-controlled output with coloured log levels via `env_logger` + `colored`
 
 ## Packages
 
@@ -139,6 +141,13 @@ Options:
   -V, --version       Print version
 ```
 
+Debug and timing output is controlled by the `RUST_LOG` environment variable:
+
+```bash
+RUST_LOG=debug kham "กินข้าวกับปลา"   # full per-token trace + timing
+RUST_LOG=info  kham --dict w.txt "..."  # dict-load confirmation only
+```
+
 ## Token contract
 
 Every `segment()` call returns `Vec<Token>`:
@@ -223,12 +232,15 @@ classDiagram
     }
 
     class dict {
+        +builtin_dict() Dict
         +from_word_list(text) Dict
+        +from_bytes(data) Dict
         +contains(word) bool
         +prefixes(text) Vec~str~
         --
         Double-Array Trie
         O(k) byte-level lookup
+        pre-compiled binary blob
         built-in CC0 word list
     }
 
@@ -322,12 +334,14 @@ flowchart LR
 ## Building
 
 ```bash
-cargo build                                  # all default members
-cargo test --release                         # run all tests (release recommended — dict build is ~8 s vs ~44 s debug)
+cargo build                                  # all default members (also runs build.rs → dict.bin)
+cargo test --release                         # run all tests
 cargo test -p kham-core --release            # core only
 cargo bench -p kham-core                     # criterion benchmarks
 cargo run -p kham-cli -- "ข้อความ"           # run CLI
 ```
+
+The `kham-core` build script (`build.rs`) pre-compiles the built-in dictionary into a binary DARTS blob (`$OUT_DIR/dict.bin`) on every `cargo build`. It only reruns when `build.rs` or `data/words_th.txt` change.
 
 Binding targets require additional tooling:
 
@@ -401,12 +415,14 @@ Measured on Apple M-series (release build, LTO, built-in 62k-word dictionary):
 | `dict::contains` (hit) | ~13–32 ns | ~520–690 MiB/s |
 | `dict::contains` (miss) | ~1.3 ns | ~4 GiB/s |
 | `dict::prefixes` | ~65–112 ns | ~275–860 MiB/s |
-| Dict construction (built-in, 62k words) | ~1.8 s | ~33k words/s |
-| Dict construction (small custom list) | ~7 µs | — |
+| `builtin_dict()` — binary blob load | ~64 µs | — |
+| `Dict::from_word_list` — 62k words (custom merge) | ~960 ms | ~65k words/s |
+| Dict construction (small custom list) | ~4 µs | — |
 
-> Dict construction is a one-time startup cost. The built-in dictionary is embedded at compile
-> time via `include_bytes!`; future versions may pre-build the trie at compile time to eliminate
-> this cost.
+> `Tokenizer::new()` and `TokenizerBuilder::build()` (no custom dict) use `builtin_dict()` which
+> loads the pre-compiled DARTS binary produced by `build.rs` at compile time — ~15,000× faster
+> than constructing from text. `Dict::from_word_list` is only called when a custom dictionary is
+> merged with the built-in word list.
 
 Run locally:
 

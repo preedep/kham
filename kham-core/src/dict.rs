@@ -276,6 +276,42 @@ impl Dict {
         Self::from_trie(trie)
     }
 
+    /// Deserialise a [`Dict`] from the binary blob produced by `build.rs`.
+    ///
+    /// This is O(S) — copies the pre-built DARTS arrays — versus O(W×K) for
+    /// [`from_word_list`]. Prefer [`builtin_dict()`] which calls this for you.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `data` does not start with `b"KDAM"` or the version byte is
+    /// not `0x01`. These indicate a stale or corrupted binary artifact; a clean
+    /// `cargo build` regenerates it automatically.
+    ///
+    /// [`from_word_list`]: Dict::from_word_list
+    pub fn from_bytes(data: &[u8]) -> Self {
+        const HDR: usize = 16; // 4 magic + 1 version + 3 reserved + 4 base_len + 4 check_len
+        assert!(data.len() >= HDR, "dict.bin too short");
+        assert_eq!(&data[0..4], b"KDAM", "dict.bin: bad magic");
+        assert_eq!(data[4], 0x01, "dict.bin: unsupported version");
+
+        let base_len  = u32::from_le_bytes([data[8],  data[9],  data[10], data[11]]) as usize;
+        let check_len = u32::from_le_bytes([data[12], data[13], data[14], data[15]]) as usize;
+
+        let base_end  = HDR + base_len  * 4;
+        let check_end = base_end + check_len * 4;
+
+        let base: Vec<i32> = data[HDR..base_end]
+            .chunks_exact(4)
+            .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+        let check: Vec<i32> = data[base_end..check_end]
+            .chunks_exact(4)
+            .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+            .collect();
+
+        Self { base, check }
+    }
+
     fn from_trie(nodes: Vec<TrieNode>) -> Self {
         let n = nodes.len();
         // Initial capacity: trie nodes * average fanout, plus breathing room.
@@ -448,13 +484,40 @@ impl Dict {
 }
 
 // ---------------------------------------------------------------------------
-// Built-in word list
+// Built-in word list and pre-compiled binary dictionary
 // ---------------------------------------------------------------------------
 
 /// The built-in CC0 Thai word list, embedded at compile time.
 ///
-/// Pass to [`Dict::from_word_list`] to build the default dictionary.
+/// Pass to [`Dict::from_word_list`] to build the default dictionary, or use
+/// [`builtin_dict`] to load the pre-compiled binary form in O(S) time.
 pub static BUILTIN_WORDS: &str = include_str!("../data/words_th.txt");
+
+/// Pre-compiled binary DARTS blob produced by `build.rs` at compile time.
+///
+/// Format: 16-byte header (`b"KDAM"` magic, version, lengths) followed by
+/// `base[]` then `check[]` as little-endian `i32` values.
+static BUILTIN_DICT_BYTES: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/dict.bin"));
+
+/// Return the built-in dictionary loaded from the pre-compiled binary blob.
+///
+/// This is O(S) — a simple byte copy of the pre-built DARTS arrays — versus
+/// O(W×K) for [`Dict::from_word_list`] which reconstructs the trie at runtime.
+/// Use this in [`Tokenizer::new`] and wherever the default dictionary is needed.
+///
+/// # Example
+///
+/// ```rust
+/// use kham_core::dict::builtin_dict;
+///
+/// let dict = builtin_dict();
+/// assert!(dict.contains("กิน"));
+/// assert!(dict.contains("ธนาคาร"));
+/// ```
+pub fn builtin_dict() -> Dict {
+    Dict::from_bytes(BUILTIN_DICT_BYTES)
+}
 
 // ---------------------------------------------------------------------------
 // Tests

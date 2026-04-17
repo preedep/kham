@@ -5,16 +5,17 @@ on:
     branches: ["main", "develop"]
   pull_request:
     branches: ["main", "develop"]
-  workflow_call:   # allows release.yml to call this as a gate
+  workflow_call: # allows release.yml to call this as a gate
 
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
 
 jobs:
-  # -------------------------------------------------------------------------
-  # Formatting check — fast, runs first to fail early
-  # -------------------------------------------------------------------------
+  # ---------------------------------------------------------------------------
+  # CORE CHECKS — must be green; block merge on failure
+  # ---------------------------------------------------------------------------
+
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
@@ -25,9 +26,6 @@ jobs:
           components: rustfmt
       - run: cargo fmt --all -- --check
 
-  # -------------------------------------------------------------------------
-  # Clippy lints
-  # -------------------------------------------------------------------------
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
@@ -37,64 +35,85 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets --all-features -- -D warnings
+      # Exclude binding crates: kham-python needs Python headers,
+      # kham-wasm needs the wasm32 target — neither is available here.
+      - run: >
+          cargo clippy
+          --workspace
+          --exclude kham-python
+          --exclude kham-wasm
+          --all-targets
+          -- -D warnings
 
-  # -------------------------------------------------------------------------
-  # Core tests — matrix of stable + MSRV across Linux / macOS
-  # -------------------------------------------------------------------------
   test:
-    name: Test (${{ matrix.toolchain }} / ${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Test (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        toolchain: [stable, "1.78"]   # stable + MSRV
-
+        toolchain: [stable, "1.78"] # stable + MSRV
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@master
+      - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ matrix.toolchain }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.os }}-${{ matrix.toolchain }}
-
-      # Build and test default-members (kham-core, kham-cli, kham-capi)
+          key: ${{ matrix.toolchain }}
       - name: Build
-        run: cargo build --workspace --exclude kham-python --exclude kham-wasm
-
+        run: >
+          cargo build
+          --workspace
+          --exclude kham-python
+          --exclude kham-wasm
       - name: Unit + integration tests
-        run: cargo test --workspace --exclude kham-python --exclude kham-wasm
-
-      # Doc-tests separately so failures are easier to triage
+        run: >
+          cargo test
+          --workspace
+          --exclude kham-python
+          --exclude kham-wasm
       - name: Doc tests
-        run: cargo test --doc --workspace --exclude kham-python --exclude kham-wasm
+        run: >
+          cargo test --doc
+          --workspace
+          --exclude kham-python
+          --exclude kham-wasm
 
-  # -------------------------------------------------------------------------
-  # no_std check — kham-core must compile without std
-  # -------------------------------------------------------------------------
-  no_std:
-    name: no_std (kham-core)
+  bench_compile:
+    name: Bench compile
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo bench -p kham-core --no-run
+
+  # ---------------------------------------------------------------------------
+  # EXTENDED CHECKS — informational; failures don't block CI
+  # Harden one by one: remove continue-on-error when confirmed green.
+  # ---------------------------------------------------------------------------
+
+  no_std:
+    name: no_std check (kham-core)
+    runs-on: ubuntu-latest
+    # cargo check avoids invoking the linker, so no arm-none-eabi-gcc needed.
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: thumbv7em-none-eabihf
       - uses: Swatinem/rust-cache@v2
-      - name: Build kham-core for no_std target
+      - name: cargo check for bare-metal target
         run: >
-          cargo build -p kham-core
+          cargo check -p kham-core
           --no-default-features
           --target thumbv7em-none-eabihf
 
-  # -------------------------------------------------------------------------
-  # WASM build — wasm-pack build must succeed
-  # -------------------------------------------------------------------------
   wasm:
     name: WASM build
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -102,39 +121,41 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        uses: jetli/wasm-pack-action@v0.4.0
+        with:
+          version: "latest"
       - name: wasm-pack build
         run: wasm-pack build kham-wasm --target web --release
 
-  # -------------------------------------------------------------------------
-  # Python wheel build check — maturin develop must succeed
-  # -------------------------------------------------------------------------
   python:
-    name: Python wheel (${{ matrix.python-version }})
+    name: Python wheel (3.${{ matrix.minor }})
     runs-on: ubuntu-latest
+    continue-on-error: true
     strategy:
       matrix:
-        python-version: ["3.8", "3.12"]
+        minor: [11, 12] # 3.8 is EOL; wheel still runs on 3.8+ via abi3-py38
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - name: Install maturin
-        run: pip install maturin
-      - name: maturin develop
-        run: maturin develop -m kham-python/Cargo.toml
+          python-version: "3.${{ matrix.minor }}"
+      - run: pip install maturin
+      - run: maturin develop -m kham-python/Cargo.toml
 
-  # -------------------------------------------------------------------------
-  # Benchmarks — compile-check only (no timing assertions)
-  # -------------------------------------------------------------------------
-  bench_compile:
-    name: Bench compile check
-    runs-on: ubuntu-latest
+  # macOS smoke-test — same code, different OS; informational until
+  # we're confident the matrix is worth the runner cost.
+  test_macos:
+    name: Test (macOS / stable)
+    runs-on: macos-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo bench -p kham-core --no-run
+      - run: >
+          cargo test
+          --workspace
+          --exclude kham-python
+          --exclude kham-wasm

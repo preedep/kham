@@ -9,7 +9,7 @@
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use kham_core::dict::{Dict, BUILTIN_WORDS};
+use kham_core::dict::{builtin_dict, Dict, BUILTIN_WORDS};
 use kham_core::Tokenizer;
 
 /// Absolute path to the bundled word list, resolved at compile time.
@@ -32,6 +32,24 @@ const PREFIX_TEXTS: &[(&str, &str)] = &[
 // ---------------------------------------------------------------------------
 // Benchmarks
 // ---------------------------------------------------------------------------
+
+/// Dict construction from the pre-compiled binary blob (the fast path).
+///
+/// This should be ~100× faster than `from_builtin_word_list` because DARTS
+/// construction is done at compile time; runtime cost is only an O(S) copy.
+fn bench_dict_from_binary(c: &mut Criterion) {
+    let mut group = c.benchmark_group("dict/construction");
+    group.sample_size(50)
+         .warm_up_time(Duration::from_secs(1))
+         .measurement_time(Duration::from_secs(5));
+    group.bench_function("from_binary_blob", |b| {
+        b.iter(|| {
+            let d = builtin_dict();
+            criterion::black_box(d);
+        });
+    });
+    group.finish();
+}
 
 /// Dict construction from the built-in word list.
 ///
@@ -178,6 +196,7 @@ fn bench_tokenizer_dict_file(c: &mut Criterion) {
 
 criterion_group!(
     benches,
+    bench_dict_from_binary,
     bench_dict_from_builtin,
     bench_dict_from_small_list,
     bench_dict_from_file,
