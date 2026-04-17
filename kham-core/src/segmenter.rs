@@ -171,98 +171,90 @@ impl Tokenizer {
 // newmm DAG segmentation — Thai spans only
 // ---------------------------------------------------------------------------
 
-/// Segment a single Thai span (identified by its byte range in `text`) using
-/// the newmm DAG algorithm and append the resulting tokens to `out`.
+/// Lexicographic DP score for a TCC boundary position.
 ///
-/// ## Algorithm
-///
-/// 1. Compute TCC boundaries for the span — these are the only positions
-///    where a word boundary may legally fall.
-/// 2. Run forward DP over boundary indices. At each index `i`:
-///    a. Enumerate all dictionary prefixes of `slice[bounds[i]..]`.
-///    b. For each prefix ending on a TCC boundary `j`, record an edge `i → j` (dict match).
-///    c. Always record a fallback edge `i → i+1` (one TCC, unknown token).
-///    d. Ties in dict-word count are broken by preferring fewer total tokens.
-/// 3. Backtrack from the last boundary to reconstruct the winning path.
-/// 4. Emit a `Token` for each edge, with `TokenKind::Thai` for dictionary
-///    matches and `TokenKind::Unknown` for unknown single-TCC segments.
-fn segment_thai<'t>(
-    dict: &Dict,
-    text: &'t str,
-    span: core::ops::Range<usize>,
-    out: &mut Vec<Token<'t>>,
-) {
-    let slice = &text[span.start..span.end];
+/// Fields are ordered so that `Ord` naturally expresses the newmm preference:
+/// 1. Minimise unknowns (fewer unknowns → `neg_unknowns` less negative → greater).
+/// 2. Maximise dictionary matches.
+/// 3. Minimise total token count as the final tiebreaker.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct DpScore {
+    neg_unknowns: i32,
+    dict_words: i32,
+    neg_tokens: i32,
+}
 
-    // TCC boundaries relative to `slice` (always starts with 0, ends with
-    // slice.len(), has at least 2 elements for non-empty input).
-    let bounds = tcc_boundaries(slice);
-    let nb = bounds.len();
+impl DpScore {
+    const ZERO: Self = Self { neg_unknowns: 0, dict_words: 0, neg_tokens: 0 };
 
-    if nb <= 1 {
-        // Empty span — nothing to emit.
-        return;
+    fn dict_edge(self) -> Self {
+        Self { dict_words: self.dict_words + 1, neg_tokens: self.neg_tokens - 1, ..self }
     }
 
-    // DP arrays, indexed by boundary position index.
-    //
-    // `dp[i]` = (neg_unknown_count, dict_word_count, neg_token_count)
-    //
-    // We maximise lexicographically:
-    //   1. neg_unknown_count — penalise unknown (out-of-dict) tokens heavily.
-    //      Fewer unknowns (less negative) is always preferred. This ensures
-    //      "สวัสดี" beats "ส"(unknown)+"วัส"+"ดี".
-    //   2. dict_word_count — more dictionary matches is better. This prefers
-    //      "กิน"+"ข้าว" (2 words) over the compound "กินข้าว" (1 word) when
-    //      both decompositions are entirely known words.
-    //   3. neg_token_count — fewer total tokens (longer individual words) as
-    //      the final tiebreaker.
-    //
-    // Sentinel: first element == i32::MIN means the index is not yet reachable.
-    const UNREACHABLE: (i32, i32, i32) = (i32::MIN, 0, 0);
-    let mut dp: Vec<(i32, i32, i32)> = vec![UNREACHABLE; nb];
-    let mut from: Vec<usize> = vec![0; nb];
-    let mut edge_is_dict: Vec<bool> = vec![false; nb];
+    fn unknown_edge(self) -> Self {
+        Self { neg_unknowns: self.neg_unknowns - 1, neg_tokens: self.neg_tokens - 1, ..self }
+    }
+}
 
-    dp[0] = (0, 0, 0);
+/// Output of the forward DP pass.
+struct DpTable {
+    /// Predecessor boundary index for backtracking.
+    from: Vec<usize>,
+    /// Whether the incoming edge at index `i` was a dictionary match.
+    is_dict: Vec<bool>,
+}
+
+/// Forward DP over TCC boundary indices for a single Thai slice.
+///
+/// `bounds` must be the output of [`tcc_boundaries`] for `slice`.
+fn forward_dp(dict: &Dict, slice: &str, bounds: &[usize]) -> DpTable {
+    let nb = bounds.len();
+    let mut best: Vec<Option<DpScore>> = vec![None; nb];
+    let mut from = vec![0usize; nb];
+    let mut is_dict = vec![false; nb];
+
+    best[0] = Some(DpScore::ZERO);
 
     for i in 0..nb - 1 {
-        let score = dp[i];
-        if score == UNREACHABLE {
-            continue;
-        }
-        let (nu, dw, nt) = score;
+        let score = match best[i] {
+            Some(s) => s,
+            None => continue,
+        };
         let pos = bounds[i];
         let remaining = &slice[pos..];
 
-        // --- dictionary edges ---
-        // `dict.prefixes()` returns matches longest-first; we iterate all of
-        // them so the DP can choose globally rather than greedily.
+        // Dictionary edges — all prefixes, not just the longest, so the DP
+        // can make a globally optimal choice rather than a greedy one.
         for prefix in dict.prefixes(remaining) {
             let end_pos = pos + prefix.len();
-            // Only accept matches that land exactly on a TCC boundary.
             if let Ok(j) = bounds.binary_search(&end_pos) {
-                let candidate = (nu, dw + 1, nt - 1);
-                if candidate > dp[j] {
-                    dp[j] = candidate;
+                let candidate = Some(score.dict_edge());
+                if candidate > best[j] {
+                    best[j] = candidate;
                     from[j] = i;
-                    edge_is_dict[j] = true;
+                    is_dict[j] = true;
                 }
             }
         }
 
-        // --- fallback edge: advance one TCC (unknown token) ---
+        // Fallback edge: advance one TCC as an unknown token.
         let j = i + 1;
-        let candidate = (nu - 1, dw, nt - 1);
-        if candidate > dp[j] {
-            dp[j] = candidate;
+        let candidate = Some(score.unknown_edge());
+        if candidate > best[j] {
+            best[j] = candidate;
             from[j] = i;
-            edge_is_dict[j] = false;
+            is_dict[j] = false;
         }
     }
 
-    // Backtrack from the last boundary to reconstruct the winning path.
-    let mut path: Vec<usize> = Vec::with_capacity(nb);
+    DpTable { from, is_dict }
+}
+
+/// Reconstruct the winning boundary-index path by following `from` pointers
+/// from the last index back to 0, then reversing.
+fn backtrack_path(from: &[usize]) -> Vec<usize> {
+    let nb = from.len();
+    let mut path = Vec::with_capacity(nb);
     let mut cur = nb - 1;
     loop {
         path.push(cur);
@@ -272,21 +264,34 @@ fn segment_thai<'t>(
         cur = from[cur];
     }
     path.reverse();
+    path
+}
 
-    // Emit one token per edge in the path.
+/// Segment a single Thai span using the newmm DAG algorithm and append tokens
+/// to `out`.
+///
+/// Steps: TCC boundaries → forward DP → backtrack → emit tokens.
+fn segment_thai<'t>(
+    dict: &Dict,
+    text: &'t str,
+    span: core::ops::Range<usize>,
+    out: &mut Vec<Token<'t>>,
+) {
+    let slice = &text[span.start..span.end];
+    let bounds = tcc_boundaries(slice);
+
+    if bounds.len() <= 1 {
+        return;
+    }
+
+    let dp = forward_dp(dict, slice, &bounds);
+    let path = backtrack_path(&dp.from);
+
     for w in path.windows(2) {
         let start_byte = span.start + bounds[w[0]];
         let end_byte = span.start + bounds[w[1]];
-        let kind = if edge_is_dict[w[1]] {
-            TokenKind::Thai
-        } else {
-            TokenKind::Unknown
-        };
-        out.push(Token::new(
-            &text[start_byte..end_byte],
-            start_byte..end_byte,
-            kind,
-        ));
+        let kind = if dp.is_dict[w[1]] { TokenKind::Thai } else { TokenKind::Unknown };
+        out.push(Token::new(&text[start_byte..end_byte], start_byte..end_byte, kind));
     }
 }
 
