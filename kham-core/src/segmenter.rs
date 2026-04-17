@@ -185,14 +185,26 @@ struct DpScore {
 }
 
 impl DpScore {
-    const ZERO: Self = Self { neg_unknowns: 0, dict_words: 0, neg_tokens: 0 };
+    const ZERO: Self = Self {
+        neg_unknowns: 0,
+        dict_words: 0,
+        neg_tokens: 0,
+    };
 
     fn dict_edge(self) -> Self {
-        Self { dict_words: self.dict_words + 1, neg_tokens: self.neg_tokens - 1, ..self }
+        Self {
+            dict_words: self.dict_words + 1,
+            neg_tokens: self.neg_tokens - 1,
+            ..self
+        }
     }
 
     fn unknown_edge(self) -> Self {
-        Self { neg_unknowns: self.neg_unknowns - 1, neg_tokens: self.neg_tokens - 1, ..self }
+        Self {
+            neg_unknowns: self.neg_unknowns - 1,
+            neg_tokens: self.neg_tokens - 1,
+            ..self
+        }
     }
 }
 
@@ -290,8 +302,16 @@ fn segment_thai<'t>(
     for w in path.windows(2) {
         let start_byte = span.start + bounds[w[0]];
         let end_byte = span.start + bounds[w[1]];
-        let kind = if dp.is_dict[w[1]] { TokenKind::Thai } else { TokenKind::Unknown };
-        out.push(Token::new(&text[start_byte..end_byte], start_byte..end_byte, kind));
+        let kind = if dp.is_dict[w[1]] {
+            TokenKind::Thai
+        } else {
+            TokenKind::Unknown
+        };
+        out.push(Token::new(
+            &text[start_byte..end_byte],
+            start_byte..end_byte,
+            kind,
+        ));
     }
 }
 
