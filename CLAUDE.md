@@ -61,6 +61,7 @@ Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+N
 - Benchmark suite in `benches/` using criterion — compare against nlpO3
 - Test data: `testdata/` directory with `.txt` files (one test case per line, pipe-separated expected output)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
+- Test command for github workflow
 
 ## Dictionary
 
