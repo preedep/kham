@@ -224,7 +224,13 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
 /// free of repetitive indexing. The byte range `start..end` must be valid
 /// UTF-8 boundaries within `text`.
 #[inline]
-fn push_token<'t>(out: &mut Vec<Token<'t>>, text: &'t str, start: usize, end: usize, kind: TokenKind) {
+fn push_token<'t>(
+    out: &mut Vec<Token<'t>>,
+    text: &'t str,
+    start: usize,
+    end: usize,
+    kind: TokenKind,
+) {
     out.push(Token::new(&text[start..end], start..end, kind));
 }
 
@@ -509,7 +515,7 @@ mod tests {
     #[test]
     fn classify_char_spot_checks() {
         assert_eq!(classify_char('ก'), TokenKind::Thai);
-        assert_eq!(classify_char('๑'), TokenKind::Number);  // Thai digit
+        assert_eq!(classify_char('๑'), TokenKind::Number); // Thai digit
         assert_eq!(classify_char('a'), TokenKind::Latin);
         assert_eq!(classify_char('Z'), TokenKind::Latin);
         assert_eq!(classify_char('5'), TokenKind::Number);

@@ -188,7 +188,7 @@ mod tests {
     fn tone_in_real_word() {
         // ข้้าว (ข้าว with doubled อ้) → ข้าว
         let input = "\u{0E02}\u{0E49}\u{0E49}\u{0E32}\u{0E27}"; // ข + อ้ + อ้ + า + ว
-        let expected = "\u{0E02}\u{0E49}\u{0E32}\u{0E27}";        // ข้าว
+        let expected = "\u{0E02}\u{0E49}\u{0E32}\u{0E27}"; // ข้าว
         assert_eq!(normalize(input), expected);
     }
 

@@ -23,7 +23,9 @@ impl fmt::Display for KhamError {
         match self {
             KhamError::InvalidUtf8 => f.write_str("invalid UTF-8 sequence"),
             KhamError::DictLoadError(msg) => write!(f, "dictionary load error: {msg}"),
-            KhamError::CorruptDict => f.write_str("dictionary data is corrupt or has wrong version"),
+            KhamError::CorruptDict => {
+                f.write_str("dictionary data is corrupt or has wrong version")
+            }
             KhamError::EmptyInput => f.write_str("input must not be empty"),
         }
     }

@@ -16,8 +16,7 @@ use kham_core::Tokenizer;
 const SHORT: &str = "กินข้าวกับปลา";
 
 /// Medium sentence — realistic Thai prose (~50 chars).
-const MEDIUM: &str =
-    "สวัสดีชาวโลกคนที่นี่ไปมาที่ธนาคารแห่งนั้นกินข้าวกับปลาและน้ำ";
+const MEDIUM: &str = "สวัสดีชาวโลกคนที่นี่ไปมาที่ธนาคารแห่งนั้นกินข้าวกับปลาและน้ำ";
 
 /// Long paragraph — stress test (~200 chars, repeated medium sentence).
 const LONG: &str = concat!(
@@ -47,11 +46,7 @@ fn bench_tokenizer_new(c: &mut Criterion) {
 /// Measure `segment()` for different input sizes.
 fn bench_segment_by_length(c: &mut Criterion) {
     let tok = Tokenizer::new();
-    let inputs = [
-        ("short", SHORT),
-        ("medium", MEDIUM),
-        ("long", LONG),
-    ];
+    let inputs = [("short", SHORT), ("medium", MEDIUM), ("long", LONG)];
 
     let mut group = c.benchmark_group("segment");
     for (label, text) in inputs {

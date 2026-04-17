@@ -55,9 +55,7 @@ pub unsafe extern "C" fn kham_segment(text: *const c_char) -> *mut KhamTokens {
 
     let mut words: Vec<*mut c_char> = tokens
         .iter()
-        .map(|t| {
-            CString::new(t.text).unwrap_or_default().into_raw()
-        })
+        .map(|t| CString::new(t.text).unwrap_or_default().into_raw())
         .collect();
 
     let len = words.len();
@@ -81,9 +79,7 @@ pub unsafe extern "C" fn kham_tokens_free(tokens: *mut KhamTokens) {
         return;
     }
     let tokens = unsafe { Box::from_raw(tokens) };
-    let words = unsafe {
-        Vec::from_raw_parts(tokens.words, tokens.len, tokens.len)
-    };
+    let words = unsafe { Vec::from_raw_parts(tokens.words, tokens.len, tokens.len) };
     for w in words {
         if !w.is_null() {
             drop(unsafe { CString::from_raw(w) });

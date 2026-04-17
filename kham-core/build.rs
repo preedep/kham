@@ -32,7 +32,9 @@ struct TrieNode {
 
 impl TrieNode {
     fn new() -> Self {
-        Self { children: Vec::new() }
+        Self {
+            children: Vec::new(),
+        }
     }
 
     fn get(&self, b: u8) -> Option<usize> {
@@ -214,8 +216,8 @@ fn serialize_darts(base: &[i32], check: &[i32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(total);
 
     // Header
-    out.extend_from_slice(b"KDAM");   // magic
-    out.push(0x01);                   // version
+    out.extend_from_slice(b"KDAM"); // magic
+    out.push(0x01); // version
     out.extend_from_slice(&[0u8; 3]); // reserved
     out.extend_from_slice(&(base_len as u32).to_le_bytes());
     out.extend_from_slice(&(check_len as u32).to_le_bytes());

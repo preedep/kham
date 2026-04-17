@@ -42,8 +42,8 @@
 //! let tokens = tok.segment(&normalized);       // tokens borrow `normalized`
 //! ```
 
-use alloc::vec::Vec;
 use alloc::vec;
+use alloc::vec::Vec;
 
 use crate::dict::{builtin_dict, Dict, BUILTIN_WORDS};
 use crate::error::KhamError;
@@ -282,7 +282,11 @@ fn segment_thai<'t>(
         } else {
             TokenKind::Unknown
         };
-        out.push(Token::new(&text[start_byte..end_byte], start_byte..end_byte, kind));
+        out.push(Token::new(
+            &text[start_byte..end_byte],
+            start_byte..end_byte,
+            kind,
+        ));
     }
 }
 
@@ -346,7 +350,10 @@ impl TokenizerBuilder {
             // Default path: load from pre-compiled binary — O(S) copy.
             builtin_dict()
         };
-        Tokenizer { dict, keep_whitespace: self.keep_whitespace }
+        Tokenizer {
+            dict,
+            keep_whitespace: self.keep_whitespace,
+        }
     }
 
     /// Try to load a custom word list from a file path.
@@ -456,13 +463,12 @@ mod tests {
     #[test]
     fn mixed_thai_latin() {
         let tokens = tok().segment("สวัสดี hello");
-        let rebuilt: alloc::string::String = tokens
-            .iter()
-            .map(|t| t.text)
-            .collect();
+        let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
         // Whitespace dropped by default
         assert_eq!(rebuilt, "สวัสดีhello");
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Latin && t.text == "hello"));
+        assert!(tokens
+            .iter()
+            .any(|t| t.kind == TokenKind::Latin && t.text == "hello"));
     }
 
     // ── span / byte-offset invariants ────────────────────────────────────────
@@ -488,11 +494,9 @@ mod tests {
             .segment(text);
         for w in tokens.windows(2) {
             assert_eq!(
-                w[0].span.end,
-                w[1].span.start,
+                w[0].span.end, w[1].span.start,
                 "gap between {:?} and {:?}",
-                w[0],
-                w[1]
+                w[0], w[1]
             );
         }
     }
@@ -511,9 +515,7 @@ mod tests {
     fn custom_dict_word_is_matched() {
         // Use a nonsense word that is not in the built-in dictionary and cannot
         // be decomposed into subwords — ensures the custom dict is actually used.
-        let tok = Tokenizer::builder()
-            .dict_words("กขคงจฉ\n")
-            .build();
+        let tok = Tokenizer::builder().dict_words("กขคงจฉ\n").build();
         let tokens = tok.segment("กขคงจฉ");
         let thai: Vec<&str> = tokens
             .iter()

@@ -12,8 +12,8 @@
 //! print(tokens)  # ['กิน', 'ข้าว', 'กับ', 'ปลา']
 //! ```
 
-use pyo3::prelude::*;
 use kham_core::Tokenizer;
+use pyo3::prelude::*;
 
 /// Segment Thai text into a list of token strings.
 ///

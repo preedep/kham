@@ -13,8 +13,8 @@
 //! TCC segmentation is used as a pre-pass by the main segmenter to ensure
 //! that word boundaries always fall on TCC boundaries.
 
-use alloc::vec::Vec;
 use alloc::vec;
+use alloc::vec::Vec;
 
 // ---------------------------------------------------------------------------
 // Unicode character classification
@@ -429,13 +429,13 @@ mod tests {
         assert_eq!(*bounds.last().unwrap(), text.len());
         // All intermediate boundaries are valid char boundaries
         for &b in &bounds {
-            assert!(text.is_char_boundary(b), "offset {b} is not a char boundary");
+            assert!(
+                text.is_char_boundary(b),
+                "offset {b} is not a char boundary"
+            );
         }
         // Joining the slices reconstructs the original
-        let rebuilt: alloc::string::String = bounds
-            .windows(2)
-            .map(|w| &text[w[0]..w[1]])
-            .collect();
+        let rebuilt: alloc::string::String = bounds.windows(2).map(|w| &text[w[0]..w[1]]).collect();
         assert_eq!(rebuilt, text);
     }
 }

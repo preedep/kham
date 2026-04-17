@@ -12,7 +12,7 @@
 //!   input|tok1|tok2|…
 //! Whitespace tokens are excluded (keep_whitespace=false default).
 
-use kham_core::{Tokenizer, TokenKind};
+use kham_core::{TokenKind, Tokenizer};
 
 // ---------------------------------------------------------------------------
 // Test data helpers
@@ -22,8 +22,8 @@ use kham_core::{Tokenizer, TokenKind};
 ///
 /// Lines starting with `#` and blank lines are skipped.
 fn load_cases(path: &str) -> Vec<(String, Vec<String>)> {
-    let content = std::fs::read_to_string(path)
-        .unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
+    let content =
+        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("failed to read {path}: {e}"));
 
     content
         .lines()
@@ -196,7 +196,7 @@ fn normalize_then_segment_composes_sara_am() {
     let decomposed = "\u{0E19}\u{0E49}\u{0E4D}\u{0E32}"; // น + ้ + อํ + อา
     let normalized = tok.normalize(decomposed);
     assert_eq!(normalized, "\u{0E19}\u{0E49}\u{0E33}"); // น้ำ
-    // น้ำ is in the built-in dict — should be one Thai token.
+                                                        // น้ำ is in the built-in dict — should be one Thai token.
     let tokens = tok.segment(&normalized);
     assert_eq!(tokens.len(), 1);
     assert_eq!(tokens[0].text, "\u{0E19}\u{0E49}\u{0E33}");
@@ -292,12 +292,7 @@ fn edge_mixed_thai_number_thai_no_spaces() {
 #[test]
 fn all_spans_valid_utf8_boundaries() {
     let tok = Tokenizer::new();
-    let cases = [
-        "กินข้าวกับปลา",
-        "ธนาคาร100แห่ง",
-        "สวัสดีhello123",
-        "คนที่นี่ไปมา",
-    ];
+    let cases = ["กินข้าวกับปลา", "ธนาคาร100แห่ง", "สวัสดีhello123", "คนที่นี่ไปมา"];
     for input in cases {
         for token in tok.segment(input) {
             assert!(
@@ -324,11 +319,9 @@ fn keep_whitespace_spans_are_contiguous() {
     let tokens = tok.segment(input);
     for w in tokens.windows(2) {
         assert_eq!(
-            w[0].span.end,
-            w[1].span.start,
+            w[0].span.end, w[1].span.start,
             "gap between tokens in {input:?}: {:?} and {:?}",
-            w[0],
-            w[1]
+            w[0], w[1]
         );
     }
 }

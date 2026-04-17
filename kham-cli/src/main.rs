@@ -64,21 +64,21 @@ fn main() {
 
             let level = match record.level() {
                 log::Level::Error => format!("{:<5}", record.level()).red().bold(),
-                log::Level::Warn  => format!("{:<5}", record.level()).yellow().bold(),
-                log::Level::Info  => format!("{:<5}", record.level()).green().bold(),
+                log::Level::Warn => format!("{:<5}", record.level()).yellow().bold(),
+                log::Level::Info => format!("{:<5}", record.level()).green().bold(),
                 log::Level::Debug => format!("{:<5}", record.level()).cyan(),
                 log::Level::Trace => format!("{:<5}", record.level()).magenta(),
             };
 
-            let ts      = buf.timestamp_micros().to_string().dimmed();
-            let target  = format!("[{}]", record.target()).dimmed();
+            let ts = buf.timestamp_micros().to_string().dimmed();
+            let target = format!("[{}]", record.target()).dimmed();
             let message = record.args().to_string();
 
             // Colour the message body for WARN/ERROR to make it stand out.
             let message = match record.level() {
                 log::Level::Error => message.red().to_string(),
-                log::Level::Warn  => message.yellow().to_string(),
-                _                 => message,
+                log::Level::Warn => message.yellow().to_string(),
+                _ => message,
             };
 
             writeln!(buf, "{ts} {level} {target} {message}")
@@ -108,7 +108,10 @@ fn main() {
         };
     }
     let tokenizer = builder.build();
-    debug!("Tokenizer ready ({:.3}ms)", t0.elapsed().as_secs_f64() * 1000.0);
+    debug!(
+        "Tokenizer ready ({:.3}ms)",
+        t0.elapsed().as_secs_f64() * 1000.0
+    );
 
     match cli.text {
         // Text supplied as a positional argument.
@@ -181,16 +184,15 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
         for (i, t) in tokens.iter().enumerate() {
             debug!(
                 "  token[{:02}] {:?}  span={}..{}  text={:?}",
-                i,
-                t.kind,
-                t.span.start,
-                t.span.end,
-                t.text,
+                i, t.kind, t.span.start, t.span.end, t.text,
             );
         }
     }
 
-    let unknown_count = tokens.iter().filter(|t| t.kind == kham_core::TokenKind::Unknown).count();
+    let unknown_count = tokens
+        .iter()
+        .filter(|t| t.kind == kham_core::TokenKind::Unknown)
+        .count();
     if unknown_count > 0 {
         warn!("segment: {} unknown token(s) in {:?}", unknown_count, text);
     }
