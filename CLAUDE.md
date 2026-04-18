@@ -11,6 +11,7 @@ Workspace with multiple crates:
     - `pre_tokenizer` — Unicode script classification (Thai/Latin/Number/Emoji/URL)
     - `tcc` — Thai Character Cluster boundaries (Theeramunkong et al. 2000)
     - `dict` — Double-Array Trie (DARTS), built-in `words_th.txt` via `include_bytes!`
+    - `freq` — TNC frequency table (`tnc_freq.txt`), `FreqMap` used by DP scorer
     - `segmenter` — DAG-based maximal matching (newmm algorithm)
     - `token` — `Token` struct with text, byte span, char span, `TokenKind`
 - `kham-python/` — PyO3 bindings
@@ -74,6 +75,29 @@ Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+N
 - Avoid unnecessary allocations during dictionary loading and token lookup
 - Prefer compact trie/node representations for large-scale dictionaries
 - Frequency data: `tnc_freq.txt` (CC0, Thai National Corpus raw counts) embedded separately from `dict.bin` — loaded into `FreqMap` at runtime, used by the newmm DP scorer to break ties between equally-matched segmentation paths; do not merge into the trie binary
+
+## Segmenter DP scoring
+
+The newmm forward DP uses a 4-field lexicographic score (`DpScore`) to select the best segmentation path. Priority order is fixed — do not reorder the fields:
+
+1. **Minimise unknowns** (`neg_unknowns`) — fewest out-of-vocabulary tokens, primary criterion
+2. **Maximise dict matches** (`dict_words`) — more recognised words is better
+3. **Maximise TNC frequency** (`freq_score`) — cumulative raw corpus counts break ties between equally-matched paths; unknown edges contribute 0
+4. **Minimise token count** (`neg_tokens`) — final tiebreaker; fewer, longer tokens preferred
+
+When adding a new scoring dimension, insert it at the correct priority position and update the `DpScore` struct field order (the `Ord` derive compares fields in declaration order).
+
+## CLI design
+
+`kham-cli` exposes options that map to **user-facing runtime inputs** — things that vary per invocation and that a non-developer user can reasonably author:
+
+- `--dict <FILE>` — custom word list (plain text, one word per line); users have domain vocabulary
+- `--sep`, `--whitespace`, `--normalize`, `--kind` — output formatting
+
+**Do not add** a `--freq-file` or `--no-freq` flag. Frequency data is an internal scorer detail, not a user input:
+- It is a tiebreaker that only activates when unknown count and dict match count are identical
+- Users cannot meaningfully author replacement frequency data (requires corpus counts)
+- If domain-tuned frequencies are ever needed, add `freq_tsv(data: &str)` to `TokenizerBuilder` first, then reconsider the CLI
 
 ## Important
 
