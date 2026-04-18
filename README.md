@@ -434,6 +434,68 @@ flowchart LR
     C5 --- BEST
 ```
 
+## Prerequisites
+
+### All targets
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Rust toolchain | ≥ 1.85 (MSRV) | `curl -sSf https://sh.rustup.rs \| sh` |
+| Cargo | ships with Rust | — |
+
+Verify: `rustc --version`
+
+---
+
+### WASM (`kham-wasm`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| `wasm32-unknown-unknown` target | — | `rustup target add wasm32-unknown-unknown` |
+| `wasm-pack` | ≥ 0.13 | `cargo install wasm-pack` |
+
+`wasm-pack` wraps `cargo build --target wasm32-unknown-unknown` and `wasm-bindgen-cli` to produce the `.wasm` binary and JavaScript/TypeScript glue in one step.
+
+---
+
+### Python (`kham-python`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Python | ≥ 3.8 | system package manager or [python.org](https://www.python.org/downloads/) |
+| `maturin` | ≥ 1.0 | `pip install maturin` |
+
+`maturin` compiles the PyO3 extension module and installs it into the active virtual environment. Always run inside a `venv` or `conda` environment.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install maturin
+maturin develop -m kham-python/Cargo.toml
+```
+
+The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel runs on 3.8 through 3.13+.
+
+---
+
+### C (`kham-capi`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| `cbindgen` | ≥ 0.26 | `cargo install cbindgen` |
+| C compiler | any C11-capable compiler | system package manager |
+
+`cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
+
+```bash
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham.h
+cargo build -p kham-capi --release
+# macOS: target/release/libkham_capi.dylib
+# Linux: target/release/libkham_capi.so
+# Windows: target/release/kham_capi.dll
+```
+
+---
+
 ## Building
 
 ```bash
@@ -446,11 +508,14 @@ cargo run -p kham-cli -- "ข้อความ"           # run CLI
 
 The `kham-core` build script (`build.rs`) pre-compiles the built-in dictionary into a binary DARTS blob (`$OUT_DIR/dict.bin`) on every `cargo build`. It only reruns when `build.rs` or `data/words_th.txt` change.
 
-Binding targets require additional tooling:
+Binding targets (after installing prerequisites above):
 
 ```bash
-wasm-pack build kham-wasm --target web           # WASM
-maturin develop -m kham-python/Cargo.toml        # Python wheel
+wasm-pack build kham-wasm --target web           # WASM → kham-wasm/pkg/
+maturin develop -m kham-python/Cargo.toml        # Python wheel (active venv)
+cbindgen --config kham-capi/cbindgen.toml \
+    --crate kham-capi --output kham.h            # C header
+cargo build -p kham-capi --release               # C shared library
 ```
 
 ## CI / CD
