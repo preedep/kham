@@ -28,7 +28,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-cli` | [crates.io](https://crates.io/crates/kham-cli) | `kham` binary (clap) |
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
-| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header |
+| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header; includes FTS API |
 
 ## Quick start
 
@@ -219,6 +219,35 @@ kham_token_list_free(list);
 
 `KhamToken` fields: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind` (all null-terminated UTF-8 strings or `size_t`).
 
+#### FTS API (C)
+
+Run the full Thai FTS pipeline from C to get stopword flags, synonym expansions, and OOV trigrams:
+
+```c
+#include "kham.h"
+
+// Annotated FTS tokens (all non-whitespace, with metadata)
+KhamFtsTokenList *fts = kham_fts_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < fts->len; i++) {
+    KhamFtsToken t = fts->tokens[i];
+    printf("%s  pos=%zu  stop=%d  synonyms=%zu  trigrams=%zu\n",
+           t.text, t.position, t.is_stop, t.synonyms_len, t.trigrams_len);
+}
+// กิน  pos=0  stop=0  synonyms=0  trigrams=0
+// ข้าว pos=1  stop=0  synonyms=0  trigrams=0
+// กับ  pos=2  stop=1  synonyms=0  trigrams=0
+// ปลา  pos=3  stop=0  synonyms=0  trigrams=0
+kham_fts_token_list_free(fts);
+
+// Flat lexeme array for tsvector population (stopwords removed)
+size_t n = 0;
+char **lexemes = kham_fts_lexemes("กินข้าวกับปลา", &n);
+// lexemes[0] = "กิน", lexemes[1] = "ข้าว", lexemes[2] = "ปลา"  (n = 3)
+kham_fts_lexemes_free(lexemes, n);
+```
+
+`KhamFtsToken` fields: `text`, `position` (`size_t`), `kind`, `is_stop` (`bool`), `synonyms`/`synonyms_len`, `trigrams`/`trigrams_len`.
+
 ## Token contract
 
 Every `segment()` call returns `Vec<Token>`:
@@ -364,7 +393,7 @@ graph LR
     cli["<b>kham-cli</b><br/>kham binary<br/>(clap)"]
     python["<b>kham-python</b><br/>Python wheel<br/>(PyO3 · maturin)"]
     wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
-    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)"]
+    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)<br/>segment · FTS · lexemes"]
 
     core --> cli
     core --> python
