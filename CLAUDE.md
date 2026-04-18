@@ -22,6 +22,9 @@ Workspace with multiple crates:
 ## Commands
 
 ```bash
+cargo fmt --all                      # format (run before every commit)
+cargo fmt --all -- --check           # verify formatting (CI gate)
+cargo clippy --all-targets -- -D warnings  # lint (CI gate)
 cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
@@ -46,6 +49,20 @@ cargo build -p kham-capi --release                              # build C shared
 - Zero-copy where possible — return `&str` slices referencing input text
 - For general Rust conventions, follow the `rust-engineer` skill
 - For wasm build Rust, follow the `rust-wasm-build` skill
+
+### Formatting — run before every commit
+
+```bash
+cargo fmt --all                  # format
+cargo fmt --all -- --check       # verify (what CI runs)
+```
+
+The CI `fmt` job fails if any diff exists. Common triggers:
+- Long function signatures or call-sites not broken across lines (`rustfmt` wraps at 100 chars)
+- Struct literals with 3+ fields left on one line
+- `assert!` / `assert_eq!` with a message argument not split onto its own line
+
+**Always run `cargo fmt --all` before pushing.** If you edit any `.rs` file, format before committing — do not rely on CI to catch it.
 
 ## Token Output Contract
 
