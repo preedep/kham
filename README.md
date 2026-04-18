@@ -190,7 +190,7 @@ RUST_LOG=info  kham --dict w.txt "..."  # dict-load confirmation only
 Generate the header and link `libkham_capi`:
 
 ```bash
-cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham.h
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
 cargo build -p kham-capi --release
 ```
 
@@ -487,7 +487,7 @@ The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel run
 `cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
 
 ```bash
-cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham.h
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
 cargo build -p kham-capi --release
 # macOS: target/release/libkham_capi.dylib
 # Linux: target/release/libkham_capi.so

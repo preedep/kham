@@ -2,7 +2,7 @@
 //!
 //! Generate the header with:
 //! ```bash
-//! cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham.h
+//! cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
 //! ```
 //!
 //! Link and use from C:
