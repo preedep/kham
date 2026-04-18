@@ -1,0 +1,29 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "kham"
+version = "0.1.0"
+description = "Thai word segmentation library (Python bindings for kham-core)"
+requires-python = ">=3.8"
+license = { text = "MIT OR Apache-2.0" }
+authors = [{ name = "Preedee Ponchevin" }]
+keywords = ["thai", "nlp", "tokenizer", "segmentation"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Text Processing :: Linguistic",
+]
+
+[project.urls]
+Repository = "https://github.com/preedep/kham"
+
+[tool.maturin]
+module-name = "kham"
+manifest-path = "Cargo.toml"
+features = ["pyo3/extension-module"]
