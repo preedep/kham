@@ -73,6 +73,7 @@ Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+N
 - Keep memory usage predictable and efficient
 - Avoid unnecessary allocations during dictionary loading and token lookup
 - Prefer compact trie/node representations for large-scale dictionaries
+- Frequency data: `tnc_freq.txt` (CC0, Thai National Corpus raw counts) embedded separately from `dict.bin` — loaded into `FreqMap` at runtime, used by the newmm DP scorer to break ties between equally-matched segmentation paths; do not merge into the trie binary
 
 ## Important
 

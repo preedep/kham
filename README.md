@@ -14,6 +14,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
+- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations when multiple dictionary paths tie
 - **Pre-compiled DARTS** — Double-Array Trie is built once at compile time (`build.rs`) and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction from text)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Structured CLI logging** — `RUST_LOG`-controlled output with coloured log levels via `env_logger` + `colored`
@@ -244,13 +245,24 @@ classDiagram
         built-in CC0 word list
     }
 
+    class freq {
+        +FreqMap::builtin() FreqMap
+        +from_tsv(data) FreqMap
+        +get(word) u32
+        --
+        TNC raw occurrence counts
+        CC0 · 106k entries
+        DP tie-breaking scorer
+    }
+
     class segmenter {
         +segment(text) Vec~Token~
         +normalize(text) String
         --
         newmm DAG algorithm
         DP over TCC boundaries
-        minimises unknowns · max dict words
+        min unknowns · max dict words
+        TNC freq · min token count
     }
 
     class token {
@@ -267,6 +279,7 @@ classDiagram
     segmenter ..> pre_tokenizer : calls
     segmenter ..> tcc : calls
     segmenter ..> dict : queries
+    segmenter ..> freq : scores
     segmenter ..> token : emits
     pre_tokenizer ..> token : emits
 ```
@@ -290,7 +303,7 @@ flowchart TD
     subgraph THAI_PATH["Thai span processing"]
         TCC["<b>tcc::tcc_boundaries()</b>\nTCC boundary positions\n= legal word-break points"]
         DICT["<b>dict::prefixes()</b>\nDATS prefix search\nat each boundary"]
-        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nfewest total tokens as tiebreaker"]
+        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nTNC frequency score · fewest tokens"]
     end
 
     MERGE(["<b>Vec&lt;Token&lt;'_&gt;&gt;</b>\nzero-copy &amp;str slices"])
@@ -435,6 +448,8 @@ cargo bench -p kham-core
 
 The built-in word list (`kham-core/data/words_th.txt`) is CC0-licensed and contains 62,102 Thai words. Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
 
+A separate frequency table (`kham-core/data/tnc_freq.txt`, CC0) provides raw occurrence counts from the Thai National Corpus (106,125 entries). It is embedded at compile time and loaded into a `FreqMap` at runtime. The newmm DP scorer uses it as the third tiebreaker — after minimising unknown tokens and maximising dictionary matches — so statistically more common segmentations are preferred when multiple paths are otherwise equal. Frequency data is kept separate from `dict.bin`; do not merge them.
+
 **Constraint:** Never ship BEST corpus data or any non-CC0 material in this repository.
 
 ### Pre-compiled DARTS binary (`dict.bin`)
@@ -467,6 +482,13 @@ flowchart LR
     BD(["builtin_dict()\nready Dict"])
 
     WL --> BS --> BIN --> IB --> RT --> BD
+
+    FQ(["tnc_freq.txt\n106k entries · CC0"])
+    FM["include_str!\nembedded at compile time"]
+    FP["FreqMap::builtin()\nparse TSV → BTreeMap"]
+    FS(["FreqMap\nDP tie-breaking scorer"])
+
+    FQ --> FM --> FP --> FS
 ```
 
 #### Validity guarantees

@@ -47,6 +47,7 @@ use alloc::vec::Vec;
 
 use crate::dict::{builtin_dict, Dict, BUILTIN_WORDS};
 use crate::error::KhamError;
+use crate::freq::FreqMap;
 use crate::normalizer;
 use crate::pre_tokenizer::pre_tokenize;
 use crate::tcc::tcc_boundaries;
@@ -65,14 +66,16 @@ use crate::token::{Token, TokenKind};
 /// ```
 pub struct Tokenizer {
     dict: Dict,
+    freq: FreqMap,
     keep_whitespace: bool,
 }
 
 impl Tokenizer {
-    /// Create a tokenizer with the built-in dictionary.
+    /// Create a tokenizer with the built-in dictionary and TNC frequency table.
     pub fn new() -> Self {
         Self {
             dict: builtin_dict(),
+            freq: FreqMap::builtin(),
             keep_whitespace: false,
         }
     }
@@ -152,7 +155,7 @@ impl Tokenizer {
         for token in pre_tokens {
             match token.kind {
                 TokenKind::Thai => {
-                    segment_thai(&self.dict, text, token.span, &mut result);
+                    segment_thai(&self.dict, &self.freq, text, token.span, &mut result);
                 }
                 TokenKind::Whitespace if !self.keep_whitespace => {
                     // Discard whitespace tokens unless keep_whitespace is set.
@@ -176,11 +179,13 @@ impl Tokenizer {
 /// Fields are ordered so that `Ord` naturally expresses the newmm preference:
 /// 1. Minimise unknowns (fewer unknowns → `neg_unknowns` less negative → greater).
 /// 2. Maximise dictionary matches.
-/// 3. Minimise total token count as the final tiebreaker.
+/// 3. Maximise cumulative TNC frequency (higher freq → more common segmentation).
+/// 4. Minimise total token count as the final tiebreaker.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct DpScore {
     neg_unknowns: i32,
     dict_words: i32,
+    freq_score: u64,
     neg_tokens: i32,
 }
 
@@ -188,12 +193,14 @@ impl DpScore {
     const ZERO: Self = Self {
         neg_unknowns: 0,
         dict_words: 0,
+        freq_score: 0,
         neg_tokens: 0,
     };
 
-    fn dict_edge(self) -> Self {
+    fn dict_edge(self, freq: u32) -> Self {
         Self {
             dict_words: self.dict_words + 1,
+            freq_score: self.freq_score + freq as u64,
             neg_tokens: self.neg_tokens - 1,
             ..self
         }
@@ -219,7 +226,7 @@ struct DpTable {
 /// Forward DP over TCC boundary indices for a single Thai slice.
 ///
 /// `bounds` must be the output of [`tcc_boundaries`] for `slice`.
-fn forward_dp(dict: &Dict, slice: &str, bounds: &[usize]) -> DpTable {
+fn forward_dp(dict: &Dict, freqs: &FreqMap, slice: &str, bounds: &[usize]) -> DpTable {
     let nb = bounds.len();
     let mut best: Vec<Option<DpScore>> = vec![None; nb];
     let mut from = vec![0usize; nb];
@@ -240,7 +247,8 @@ fn forward_dp(dict: &Dict, slice: &str, bounds: &[usize]) -> DpTable {
         for prefix in dict.prefixes(remaining) {
             let end_pos = pos + prefix.len();
             if let Ok(j) = bounds.binary_search(&end_pos) {
-                let candidate = Some(score.dict_edge());
+                let freq = freqs.get(prefix);
+                let candidate = Some(score.dict_edge(freq));
                 if candidate > best[j] {
                     best[j] = candidate;
                     from[j] = i;
@@ -285,6 +293,7 @@ fn backtrack_path(from: &[usize]) -> Vec<usize> {
 /// Steps: TCC boundaries → forward DP → backtrack → emit tokens.
 fn segment_thai<'t>(
     dict: &Dict,
+    freqs: &FreqMap,
     text: &'t str,
     span: core::ops::Range<usize>,
     out: &mut Vec<Token<'t>>,
@@ -296,7 +305,7 @@ fn segment_thai<'t>(
         return;
     }
 
-    let dp = forward_dp(dict, slice, &bounds);
+    let dp = forward_dp(dict, freqs, slice, &bounds);
     let path = backtrack_path(&dp.from);
 
     for w in path.windows(2) {
@@ -377,6 +386,7 @@ impl TokenizerBuilder {
         };
         Tokenizer {
             dict,
+            freq: FreqMap::builtin(),
             keep_whitespace: self.keep_whitespace,
         }
     }
@@ -579,6 +589,87 @@ mod tests {
         let tokens = tok().segment("กินข้าวกับปลา");
         let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
         assert_eq!(rebuilt, "กินข้าวกับปลา");
+    }
+
+    // ── DpScore ordering (TNC frequency scoring) ─────────────────────────────
+    //
+    // The score is a 4-field lexicographic key:
+    //   1. neg_unknowns  — fewer unknowns is strictly better
+    //   2. dict_words    — more dictionary matches is better
+    //   3. freq_score    — higher cumulative TNC frequency is better
+    //   4. neg_tokens    — fewer total tokens is the final tiebreaker
+
+    #[test]
+    fn dp_score_fewer_unknowns_is_primary() {
+        // A path with no unknowns beats one with unknowns regardless of other fields.
+        let no_unknown = DpScore::ZERO;
+        let one_unknown = DpScore::ZERO.unknown_edge();
+        assert!(no_unknown > one_unknown);
+    }
+
+    #[test]
+    fn dp_score_more_dict_words_beats_fewer() {
+        // Same unknowns (0); more dict matches wins.
+        let one_dict = DpScore::ZERO.dict_edge(0);
+        let two_dict = DpScore::ZERO.dict_edge(0).dict_edge(0);
+        assert!(two_dict > one_dict);
+    }
+
+    #[test]
+    fn dp_score_higher_freq_breaks_dict_tie() {
+        // Same unknowns and dict count; higher TNC freq wins.
+        let low_freq = DpScore::ZERO.dict_edge(10);
+        let high_freq = DpScore::ZERO.dict_edge(100);
+        assert!(high_freq > low_freq);
+    }
+
+    #[test]
+    fn dp_score_freq_dominates_token_count() {
+        // Higher freq wins even when the competing path has fewer tokens.
+        let high_freq_more_tokens =
+            DpScore { neg_unknowns: 0, dict_words: 1, freq_score: 200, neg_tokens: -2 };
+        let low_freq_fewer_tokens =
+            DpScore { neg_unknowns: 0, dict_words: 1, freq_score: 100, neg_tokens: -1 };
+        assert!(high_freq_more_tokens > low_freq_fewer_tokens);
+    }
+
+    #[test]
+    fn dp_score_fewer_tokens_is_final_tiebreaker() {
+        // Same unknowns, dict count, and freq; fewer tokens wins.
+        let fewer = DpScore { neg_unknowns: 0, dict_words: 2, freq_score: 100, neg_tokens: -2 };
+        let more  = DpScore { neg_unknowns: 0, dict_words: 2, freq_score: 100, neg_tokens: -3 };
+        assert!(fewer > more);
+    }
+
+    #[test]
+    fn dict_edge_accumulates_freq_score() {
+        let after_one = DpScore::ZERO.dict_edge(50);
+        let after_two = after_one.dict_edge(30);
+        assert_eq!(after_one.freq_score, 50);
+        assert_eq!(after_two.freq_score, 80);
+    }
+
+    #[test]
+    fn dict_edge_increments_dict_words_and_neg_tokens() {
+        let s = DpScore::ZERO.dict_edge(0);
+        assert_eq!(s.dict_words, 1);
+        assert_eq!(s.neg_tokens, -1);
+        assert_eq!(s.neg_unknowns, 0);
+    }
+
+    #[test]
+    fn unknown_edge_increments_neg_unknowns_only() {
+        let s = DpScore::ZERO.unknown_edge();
+        assert_eq!(s.neg_unknowns, -1);
+        assert_eq!(s.neg_tokens, -1);
+        assert_eq!(s.dict_words, 0);
+        assert_eq!(s.freq_score, 0);
+    }
+
+    #[test]
+    fn unknown_edge_does_not_contribute_freq() {
+        let s = DpScore::ZERO.unknown_edge().unknown_edge();
+        assert_eq!(s.freq_score, 0);
     }
 
     // ── edge cases ────────────────────────────────────────────────────────────
