@@ -164,8 +164,8 @@ cargo bench
 - Prefix lookup throughput (`dict/prefixes`)
 - FreqMap startup cost (`freq/construction/builtin`) — compare against `dict/construction/from_binary_blob` to see relative weight
 - FreqMap lookup throughput (`freq/get`) — hit, rare-hit, and miss cases
-- End-to-end segmentation throughput (`segment/by_length`)
-- Mixed-script segmentation performance (`segment/mixed`)
+- End-to-end segmentation throughput (`segment/by_length/short`, `medium`, `long`) — pure Thai, reports MB/s
+- Mixed-script segmentation performance (`segment/mixed/sparse`, `medium`, `dense`) — exercises pre-tokenizer boundary overhead
 - Memory footprint of built-in dictionary
 
 ### Benchmark Rules
