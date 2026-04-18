@@ -57,9 +57,12 @@ fn kind_str(kind: TokenKind) -> &'static str {
 ///         ``"Punctuation"``, ``"Emoji"``, ``"Whitespace"``, ``"Unknown"``.
 ///
 /// Example:
-///     >>> tokens = kham.segment_tokens("ธนาคาร100แห่ง")
-///     >>> tokens[0].text, tokens[0].char_start, tokens[0].char_end
-///     ('ธนาคาร', 0, 6)
+///
+/// ```python
+/// tokens = kham.segment_tokens("ธนาคาร100แห่ง")
+/// tokens[0].text, tokens[0].char_start, tokens[0].char_end
+/// # ('ธนาคาร', 0, 6)
+/// ```
 #[pyclass(frozen)]
 pub struct Token {
     #[pyo3(get)]

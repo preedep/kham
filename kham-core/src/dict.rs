@@ -560,7 +560,7 @@ static BUILTIN_DICT_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/dic
 ///
 /// This is O(S) — a simple byte copy of the pre-built DARTS arrays — versus
 /// O(W×K) for [`Dict::from_word_list`] which reconstructs the trie at runtime.
-/// Use this in [`Tokenizer::new`] and wherever the default dictionary is needed.
+/// Use this in [`crate::segmenter::Tokenizer`] and wherever the default dictionary is needed.
 ///
 /// # Example
 ///
