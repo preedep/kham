@@ -114,7 +114,10 @@ All three bindings expose two functions:
 `kham-cli` exposes options that map to **user-facing runtime inputs** — things that vary per invocation and that a non-developer user can reasonably author:
 
 - `--dict <FILE>` — custom word list (plain text, one word per line); users have domain vocabulary
-- `--sep`, `--whitespace`, `--normalize`, `--kind` — output formatting
+- `--sep`, `--whitespace`, `--normalize`, `--kind`, `--spans` — output formatting
+  - `--kind` appends token kind: `กิน:Thai`
+  - `--spans` appends Unicode char span: `กิน:0-3`
+  - Combined `--kind --spans`: `กิน:Thai:0-3`
 
 **Do not add** a `--freq-file` or `--no-freq` flag. Frequency data is an internal scorer detail, not a user input:
 - It is a tiebreaker that only activates when unknown count and dict match count are identical

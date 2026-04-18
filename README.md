@@ -140,6 +140,14 @@ kham --sep " / " "สวัสดีชาวโลก"
 kham --kind "ธนาคาร100แห่ง"
 # ธนาคาร:Thai|100:Number|แห่ง:Thai
 
+# Show Unicode char spans
+kham --spans "กินข้าวกับปลา"
+# กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
+
+# Combine kind and spans
+kham --kind --spans "กินข้าว"
+# กิน:Thai:0-3|ข้าว:Thai:3-7
+
 # Normalize before segmenting
 kham --normalize "กิน\u{0E02}\u{0E49}\u{0E49}าว"
 
@@ -165,6 +173,7 @@ Options:
   -w, --whitespace    Include whitespace tokens in output
   -n, --normalize     Run normalize() before segmenting
   -k, --kind          Append token kind after each token (e.g. กิน:Thai)
+      --spans         Append Unicode char span after each token (e.g. กิน:0-3)
   -h, --help          Print help
   -V, --version       Print version
 ```
