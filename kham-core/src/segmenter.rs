@@ -84,7 +84,7 @@ impl Tokenizer {
     ///
     /// This is a convenience wrapper around [`normalizer::normalize`].
     /// Because [`segment`] is zero-copy, normalization must happen **before**
-    /// segmentation. The caller owns the returned [`String`] and can then
+    /// segmentation. The caller owns the returned [`alloc::string::String`] and can then
     /// borrow it for [`segment`]:
     ///
     /// ```rust
