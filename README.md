@@ -27,7 +27,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-cli` | [crates.io](https://crates.io/crates/kham-cli) | `kham` binary (clap) |
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
-| `kham-capi` | — | C FFI with cbindgen-generated header |
+| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header |
 
 ## Quick start
 
@@ -470,7 +470,7 @@ Verify: `rustc --version`
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install maturin
-maturin develop -m kham-python/Cargo.toml
+cd kham-python && maturin develop
 ```
 
 The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel runs on 3.8 through 3.13+.
@@ -512,11 +512,24 @@ Binding targets (after installing prerequisites above):
 
 ```bash
 wasm-pack build kham-wasm --target web           # WASM → kham-wasm/pkg/
-maturin develop -m kham-python/Cargo.toml        # Python wheel (active venv)
+cd kham-python && maturin develop                # Python wheel (active venv)
 cbindgen --config kham-capi/cbindgen.toml \
     --crate kham-capi --output kham-capi/include/kham.h  # C header
 cargo build -p kham-capi --release               # C shared library
 ```
+
+### Deploy script
+
+`scripts/deploy.sh` publishes any combination of packages in the correct dependency order:
+
+```bash
+./scripts/deploy.sh --all               # publish everything
+./scripts/deploy.sh core capi cli       # crates.io only
+./scripts/deploy.sh wasm python         # npm + PyPI only
+./scripts/deploy.sh --dry-run --all     # preflight checks, no upload
+```
+
+Runs `cargo fmt`, `cargo clippy`, and `cargo test` before any upload. Requires `MATURIN_PYPI_TOKEN` env var for PyPI and an active `npm login` session for npm.
 
 ## CI / CD
 
@@ -528,7 +541,7 @@ Two GitHub Actions workflows run automatically:
 |---|---|
 | `fmt` | `cargo fmt --check` |
 | `clippy` | `cargo clippy -D warnings` |
-| `test` | Unit + integration + doc tests on stable and MSRV 1.78, Linux and macOS |
+| `test` | Unit + integration + doc tests on stable and MSRV 1.85, Linux and macOS |
 | `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` (bare metal) |
 | `wasm` | `wasm-pack build --target web` succeeds |
 | `python` | `maturin develop` on Python 3.8 and 3.12 |
@@ -724,6 +737,6 @@ flowchart LR
 Licensed under either of:
 
 - [MIT License](LICENSE-MIT)
-- [Apache License, Version 2.0](LICENSE)
+- [Apache License, Version 2.0](LICENSE-APACHE)
 
 at your option.
