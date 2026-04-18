@@ -14,9 +14,9 @@ Workspace with multiple crates:
     - `freq` — TNC frequency table (`tnc_freq.txt`), `FreqMap` used by DP scorer
     - `segmenter` — DAG-based maximal matching (newmm algorithm)
     - `token` — `Token` struct with text, byte span, char span, `TokenKind`
-- `kham-python/` — PyO3 bindings
-- `kham-wasm/` — wasm-bindgen bindings
-- `kham-capi/` — C FFI with cbindgen
+- `kham-python/` — PyO3 bindings; exposes `segment()` → `list[str]` and `segment_tokens()` → `list[Token]`
+- `kham-wasm/` — wasm-bindgen bindings; exposes `segment()` → `string[]` and `segment_tokens()` → `Token[]`
+- `kham-capi/` — C FFI with cbindgen; exposes `kham_segment()` (legacy `KhamTokens`) and `kham_segment_tokens()` (`KhamTokenList` with `KhamToken` structs)
 - `kham-cli/` — CLI binary using clap
 
 ## Commands
@@ -91,6 +91,23 @@ The newmm forward DP uses a 4-field lexicographic score (`DpScore`) to select th
 4. **Minimise token count** (`neg_tokens`) — final tiebreaker; fewer, longer tokens preferred
 
 When adding a new scoring dimension, insert it at the correct priority position and update the `DpScore` struct field order (the `Ord` derive compares fields in declaration order).
+
+## Binding crates
+
+All three bindings expose two functions:
+
+| Function | Returns | Use when |
+|---|---|---|
+| `segment(text)` | token strings only | simple tokenisation, backward-compatible |
+| `segment_tokens(text)` | rich token objects | span information needed |
+
+**Token field mapping** — `Token.char_span: Range<usize>` is flattened into two integer fields in every binding: `char_start` and `char_end`. The same pattern applies to `span` → `byte_start` / `byte_end`. Follow this convention for any future `Token` field additions.
+
+**Rule: adding a field to `Token` requires updating all three bindings.** The binding layer is the boundary where Rust types are serialised for the target language — a field that exists in `kham-core` but not in the binding is silently invisible to callers.
+
+**C FFI legacy API** — `KhamTokens` / `kham_segment()` / `kham_tokens_free()` exist for backward compatibility and return only token strings. Do not remove them. New span-aware callers should use `kham_segment_tokens()` / `kham_token_list_free()`.
+
+**C FFI safety** — `kham-capi` is the only crate in this workspace that uses `unsafe`. This is intentional (FFI boundary). Do not add `unsafe` to any other crate.
 
 ## CLI design
 
