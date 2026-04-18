@@ -11,10 +11,38 @@
 --   5  emoji    Emoji token
 --   6  unknown  Unknown / OOV token
 
--- Guard against accidental direct load
+-- Guard against accidental direct \i load
 \echo Use "CREATE EXTENSION kham_pg" to load this file. \quit
 
--- ── Parser ──────────────────────────────────────────────────────────────────
+-- ── C function registrations ─────────────────────────────────────────────────
+-- PostgreSQL resolves these to symbols in MODULE_PATHNAME (= $libdir/kham_pg).
+-- Signatures match what ts_parse.c passes:
+--   startfunc  (internal, int4)               → internal
+--   gettoken   (internal, internal, internal) → int4
+--   endfunc    (internal)                     → void
+--   lextypes   (internal)                     → internal
+
+CREATE FUNCTION kham_start(internal, int4)
+    RETURNS internal
+    AS 'MODULE_PATHNAME', 'kham_start'
+    LANGUAGE c STRICT;
+
+CREATE FUNCTION kham_gettoken(internal, internal, internal)
+    RETURNS int4
+    AS 'MODULE_PATHNAME', 'kham_gettoken'
+    LANGUAGE c STRICT;
+
+CREATE FUNCTION kham_end(internal)
+    RETURNS void
+    AS 'MODULE_PATHNAME', 'kham_end'
+    LANGUAGE c STRICT;
+
+CREATE FUNCTION kham_lextypes(internal)
+    RETURNS internal
+    AS 'MODULE_PATHNAME', 'kham_lextypes'
+    LANGUAGE c STRICT;
+
+-- ── Parser ───────────────────────────────────────────────────────────────────
 
 CREATE TEXT SEARCH PARSER kham (
     START    = kham_start,
@@ -23,23 +51,23 @@ CREATE TEXT SEARCH PARSER kham (
     LEXTYPES = kham_lextypes
 );
 
--- ── Dictionary ──────────────────────────────────────────────────────────────
--- Simple pass-through: lowercases Latin/Number tokens; Thai tokens are
--- returned unchanged (Thai script is not case-folded by the simple template).
+-- ── Dictionary ───────────────────────────────────────────────────────────────
+-- Simple pass-through: lowercases Latin/Number tokens; Thai is returned as-is
+-- (Thai script is not case-folded by the simple template).
 
 CREATE TEXT SEARCH DICTIONARY kham_dict (
     TEMPLATE = simple
 );
 
--- ── Configuration ───────────────────────────────────────────────────────────
+-- ── Configuration ────────────────────────────────────────────────────────────
 
 CREATE TEXT SEARCH CONFIGURATION kham (
     PARSER = kham
 );
 
--- Map all parser token types through kham_dict.
--- Punctuation and emoji are intentionally omitted so they are discarded
--- during indexing (no MAPPING means PG drops those token types).
+-- Map substantive token types through kham_dict.
+-- Punctuation and emoji are omitted intentionally — no MAPPING means PG
+-- discards those token types during indexing.
 
 ALTER TEXT SEARCH CONFIGURATION kham
     ADD MAPPING FOR thai    WITH kham_dict;

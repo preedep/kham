@@ -7,7 +7,6 @@
  */
 
 #include "postgres.h"
-#include "varatt.h"
 #include "fmgr.h"
 #include "tsearch/ts_public.h"
 #include "utils/palloc.h"
@@ -24,13 +23,19 @@ extern void  kham_end_impl(void *state);
 
 /* ----------------------------------------------------------------
  * startfunc — allocate parser state for one document
+ *
+ * PostgreSQL calls startfunc(internal, int4): arg 0 is a raw char* to the
+ * document bytes (NOT a varlena text*), arg 1 is the byte length.
+ * See ts_parse.c: OidFunctionCall2(prs->prsstart,
+ *     PointerGetDatum(buf), Int32GetDatum(len)).
  * ---------------------------------------------------------------- */
 PG_FUNCTION_INFO_V1(kham_start);
 Datum
 kham_start(PG_FUNCTION_ARGS)
 {
-    text *input = PG_GETARG_TEXT_PP(0);
-    void *state = kham_start_impl(VARDATA_ANY(input), (int) VARSIZE_ANY_EXHDR(input));
+    const char *input = (const char *) PG_GETARG_POINTER(0);
+    int         len   = PG_GETARG_INT32(1);
+    void       *state = kham_start_impl(input, len);
     if (state == NULL)
         ereport(ERROR,
                 (errcode(ERRCODE_INTERNAL_ERROR),
