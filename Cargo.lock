@@ -547,7 +547,7 @@ dependencies = [
 
 [[package]]
 name = "kham-capi"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "cbindgen",
  "kham-core",
@@ -555,7 +555,7 @@ dependencies = [
 
 [[package]]
 name = "kham-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "clap 4.6.0",
  "colored",
@@ -566,14 +566,14 @@ dependencies = [
 
 [[package]]
 name = "kham-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "criterion",
 ]
 
 [[package]]
 name = "kham-python"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "kham-core",
  "pyo3",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "kham-wasm"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "kham-core",
  "wasm-bindgen",
