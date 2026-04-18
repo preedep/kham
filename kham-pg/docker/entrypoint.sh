@@ -6,6 +6,7 @@
 set -euo pipefail
 
 PG_BIN=/usr/lib/postgresql/17/bin
+PG_CONFIG="$PG_BIN/pg_config"
 PGDATA=/var/lib/postgresql/17/kham_test
 PGSOCKET=/var/run/postgresql
 PGPORT=15432
@@ -69,7 +70,17 @@ cd /kham/kham-pg/regress
 mkdir -p results
 chown -R postgres:postgres results
 
-gosu postgres "$PG_BIN/pg_regress" \
+# pg_regress lives in the pgxs tree, not in the bin directory
+PGXS_MK=$("$PG_CONFIG" --pgxs)                              # .../pgxs/src/makefiles/pgxs.mk
+PG_REGRESS=$(dirname "$(dirname "$PGXS_MK")")/test/regress/pg_regress
+
+if [ ! -x "$PG_REGRESS" ]; then
+    echo "[entrypoint] pg_regress not found at $PG_REGRESS, falling back to find..."
+    PG_REGRESS=$(find /usr/lib/postgresql -name pg_regress -type f 2>/dev/null | head -1)
+fi
+echo "[entrypoint] Using pg_regress: $PG_REGRESS"
+
+gosu postgres "$PG_REGRESS" \
     --inputdir=. \
     --outputdir=results \
     --dbname=regression \

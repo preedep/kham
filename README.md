@@ -29,6 +29,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
 | `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header; includes FTS API |
+| `kham-pg` | — | PostgreSQL extension: custom text search parser for Thai |
 
 ## Quick start
 
@@ -121,6 +122,59 @@ for (const t of tokens) {
 > **Note on JS string offsets:** `char_start`/`char_end` are Unicode scalar-value counts.
 > For BMP text these equal JavaScript's `string.slice()` indices. For surrogate-pair
 > emoji, use `byte_start`/`byte_end` with `TextEncoder` for precise byte-level slicing.
+
+### PostgreSQL
+
+`kham-pg` is a PostgreSQL extension that registers a custom text search parser so you can index and query Thai text with `tsvector` / `tsquery`.
+
+**Prerequisites:** Docker with BuildKit (for the test runner), or PostgreSQL dev headers and `pg_config` for a local install.
+
+```bash
+# Build and run pg_regress tests in Docker
+make -C kham-pg regress
+
+# Manual install (if pg_config is in PATH)
+cargo build -p kham-pg --release
+cp target/release/libkham_pg.so $(pg_config --pkglibdir)/kham_pg.so
+cp kham-pg/kham_pg.control $(pg_config --sharedir)/extension/
+cp kham-pg/sql/kham_pg--0.1.0.sql $(pg_config --sharedir)/extension/
+psql -c "CREATE EXTENSION kham_pg;"
+```
+
+Once installed:
+
+```sql
+-- Register the extension
+CREATE EXTENSION kham_pg;
+
+-- Inspect token types produced by the parser
+SELECT * FROM ts_token_type('kham');
+-- 1  thai     Thai word
+-- 2  latin    Latin script token
+-- 3  number   Numeric token
+-- 4  punct    Punctuation
+-- 5  emoji    Emoji token
+-- 6  unknown  Unknown / OOV token
+
+-- Tokenise a document
+SELECT * FROM ts_parse('kham', 'กินข้าวกับปลา');
+-- 1  กิน
+-- 1  ข้าว
+-- 1  กับ
+-- 1  ปลา
+
+-- Build a tsvector (stopwords removed, lexemes normalised)
+SELECT to_tsvector('kham', 'กินข้าวกับปลา');
+-- 'กิน':1 'ข้าว':2 'ปลา':3
+
+-- Full-text search
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าวกับปลา');
+
+-- Phrase search
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ phraseto_tsquery('kham', 'ข้าว ปลา');
+```
 
 ### CLI
 
@@ -303,7 +357,7 @@ let tok = Tokenizer::builder()
 
 ## Full-Text Search (FTS)
 
-`kham-core` ships a complete Thai FTS pipeline on top of the segmenter, ready for PostgreSQL `tsvector` integration (see `kham-pg`, Phase 2).
+`kham-core` ships a complete Thai FTS pipeline on top of the segmenter. The `kham-pg` PostgreSQL extension (Phase 2) wraps this pipeline as a custom text search parser — see the [PostgreSQL quick start](#postgresql) above.
 
 ### Basic indexing
 
@@ -395,10 +449,13 @@ graph LR
     wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
     capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)<br/>segment · FTS · lexemes"]
 
+    pg["<b>kham-pg</b><br/>PostgreSQL extension<br/>(C shim · cdylib)"]
+
     core --> cli
     core --> python
     core --> wasm
     core --> capi
+    core --> pg
 ```
 
 ### Core module responsibilities
@@ -639,6 +696,23 @@ The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel run
 | `cbindgen` | ≥ 0.26 | `cargo install cbindgen` |
 | C compiler | any C11-capable compiler | system package manager |
 
+---
+
+### PostgreSQL (`kham-pg`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Docker with BuildKit | ≥ 24 | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| `make` | any | system package manager |
+
+For local (non-Docker) builds, also install:
+
+| Tool | Version | Install |
+|------|---------|---------|
+| PostgreSQL dev headers | 14–17 | `apt install postgresql-server-dev-17` |
+| `pg_config` | ships with dev headers | — |
+| C compiler | any C11-capable compiler | system package manager |
+
 `cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
 
 ```bash
@@ -671,6 +745,7 @@ cd kham-python && maturin develop                # Python wheel (active venv)
 cbindgen --config kham-capi/cbindgen.toml \
     --crate kham-capi --output kham-capi/include/kham.h  # C header
 cargo build -p kham-capi --release               # C shared library
+make -C kham-pg regress                          # PostgreSQL: build + run pg_regress in Docker
 ```
 
 ### Deploy script
