@@ -130,8 +130,12 @@ mod tests {
     #[test]
     fn builtin_common_words_have_nonzero_freq() {
         let m = FreqMap::builtin();
-        for word in &["กิน", "ข้าว", "ไป", "มา", "คน", "ที่", "นี้"] {
-            assert!(m.get(word) > 0, "expected '{word}' to have non-zero TNC freq");
+        for word in &["กิน", "ข้าว", "ไป", "มา", "คน", "ที่", "นี้"]
+        {
+            assert!(
+                m.get(word) > 0,
+                "expected '{word}' to have non-zero TNC freq"
+            );
         }
     }
 

@@ -65,10 +65,20 @@ impl<'a> Token<'a> {
     /// Panics in debug builds if `span` length does not match `text.len()`, or
     /// if `char_span` length does not match `text.chars().count()`.
     #[inline]
-    pub fn new(text: &'a str, span: Range<usize>, char_span: Range<usize>, kind: TokenKind) -> Self {
+    pub fn new(
+        text: &'a str,
+        span: Range<usize>,
+        char_span: Range<usize>,
+        kind: TokenKind,
+    ) -> Self {
         debug_assert_eq!(text.len(), span.end - span.start);
         debug_assert_eq!(text.chars().count(), char_span.end - char_span.start);
-        Self { text, span, char_span, kind }
+        Self {
+            text,
+            span,
+            char_span,
+            kind,
+        }
     }
 
     /// Byte length of this token's text.

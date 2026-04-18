@@ -205,7 +205,15 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
 
             // Different kind — flush the completed span and open a new one.
             Some(k) => {
-                push_token(&mut tokens, text, span_start, byte_pos, char_span_start, char_pos, k);
+                push_token(
+                    &mut tokens,
+                    text,
+                    span_start,
+                    byte_pos,
+                    char_span_start,
+                    char_pos,
+                    k,
+                );
                 span_start = byte_pos;
                 char_span_start = char_pos;
                 span_kind = Some(kind);
@@ -217,7 +225,15 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
 
     // Flush the final span (always non-empty because text is non-empty).
     if let Some(k) = span_kind {
-        push_token(&mut tokens, text, span_start, text.len(), char_span_start, char_pos, k);
+        push_token(
+            &mut tokens,
+            text,
+            span_start,
+            text.len(),
+            char_span_start,
+            char_pos,
+            k,
+        );
     }
 
     tokens
@@ -234,7 +250,12 @@ fn push_token<'t>(
     char_end: usize,
     kind: TokenKind,
 ) {
-    out.push(Token::new(&text[start..end], start..end, char_start..char_end, kind));
+    out.push(Token::new(
+        &text[start..end],
+        start..end,
+        char_start..char_end,
+        kind,
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -533,7 +554,8 @@ mod tests {
             assert_eq!(
                 tok.char_span.end - tok.char_span.start,
                 tok.text.chars().count(),
-                "char_span mismatch for {:?}", tok.text
+                "char_span mismatch for {:?}",
+                tok.text
             );
         }
     }

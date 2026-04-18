@@ -633,18 +633,36 @@ mod tests {
     #[test]
     fn dp_score_freq_dominates_token_count() {
         // Higher freq wins even when the competing path has fewer tokens.
-        let high_freq_more_tokens =
-            DpScore { neg_unknowns: 0, dict_words: 1, freq_score: 200, neg_tokens: -2 };
-        let low_freq_fewer_tokens =
-            DpScore { neg_unknowns: 0, dict_words: 1, freq_score: 100, neg_tokens: -1 };
+        let high_freq_more_tokens = DpScore {
+            neg_unknowns: 0,
+            dict_words: 1,
+            freq_score: 200,
+            neg_tokens: -2,
+        };
+        let low_freq_fewer_tokens = DpScore {
+            neg_unknowns: 0,
+            dict_words: 1,
+            freq_score: 100,
+            neg_tokens: -1,
+        };
         assert!(high_freq_more_tokens > low_freq_fewer_tokens);
     }
 
     #[test]
     fn dp_score_fewer_tokens_is_final_tiebreaker() {
         // Same unknowns, dict count, and freq; fewer tokens wins.
-        let fewer = DpScore { neg_unknowns: 0, dict_words: 2, freq_score: 100, neg_tokens: -2 };
-        let more  = DpScore { neg_unknowns: 0, dict_words: 2, freq_score: 100, neg_tokens: -3 };
+        let fewer = DpScore {
+            neg_unknowns: 0,
+            dict_words: 2,
+            freq_score: 100,
+            neg_tokens: -2,
+        };
+        let more = DpScore {
+            neg_unknowns: 0,
+            dict_words: 2,
+            freq_score: 100,
+            neg_tokens: -3,
+        };
         assert!(fewer > more);
     }
 
@@ -688,7 +706,8 @@ mod tests {
             assert_eq!(
                 t.char_span.end - t.char_span.start,
                 t.text.chars().count(),
-                "char_span length mismatch for {:?}", t.text
+                "char_span length mismatch for {:?}",
+                t.text
             );
         }
     }
@@ -702,7 +721,8 @@ mod tests {
         for w in tokens.windows(2) {
             assert_eq!(
                 w[0].char_span.end, w[1].char_span.start,
-                "char_span gap between {:?} and {:?}", w[0].text, w[1].text
+                "char_span gap between {:?} and {:?}",
+                w[0].text, w[1].text
             );
         }
     }

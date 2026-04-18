@@ -81,8 +81,7 @@ impl Token {
     fn __repr__(&self) -> String {
         format!(
             "Token(text={:?}, byte_span={}..{}, char_span={}..{}, kind={:?})",
-            self.text, self.byte_start, self.byte_end,
-            self.char_start, self.char_end, self.kind,
+            self.text, self.byte_start, self.byte_end, self.char_start, self.char_end, self.kind,
         )
     }
 }
