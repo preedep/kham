@@ -64,6 +64,17 @@ The CI `fmt` job fails if any diff exists. Common triggers:
 
 **Always run `cargo fmt --all` before pushing.** If you edit any `.rs` file, format before committing — do not rely on CI to catch it.
 
+### Clippy — run before every commit
+
+```bash
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --all-targets -- -D warnings
+```
+
+Common clippy failures in this codebase:
+- `map_or(false, |x| …)` → use `is_some_and(|x| …)` instead
+- `map_or(true, |x| …)` → use `is_none_or(|x| …)` instead
+- Needless `return`, redundant closures, or unused `mut` bindings
+
 ## Token Output Contract
 
 Every segmentation returns `Vec<Token>` where:

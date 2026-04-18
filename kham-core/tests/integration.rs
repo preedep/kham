@@ -329,7 +329,7 @@ fn all_testdata_files() {
     let mut entries: Vec<_> = std::fs::read_dir(&dir)
         .unwrap_or_else(|e| panic!("cannot read testdata dir {dir}: {e}"))
         .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().map_or(false, |x| x == "txt"))
+        .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
         .collect();
 
     // Sort for deterministic test order.
