@@ -6,7 +6,7 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 
 Workspace with multiple crates:
 
-- `kham-core/` — Pure Rust, `no_std` compatible. Contains all segmentation logic.
+- `kham-core/` — Pure Rust, `no_std` compatible. Contains all segmentation and FTS logic.
     - `normalizer` — Thai text normalization (สระลอย reorder, วรรณยุกต์, NFC)
     - `pre_tokenizer` — Unicode script classification (Thai/Latin/Number/Emoji/URL)
     - `tcc` — Thai Character Cluster boundaries (Theeramunkong et al. 2000)
@@ -14,6 +14,10 @@ Workspace with multiple crates:
     - `freq` — TNC frequency table (`tnc_freq.txt`), `FreqMap` used by DP scorer
     - `segmenter` — DAG-based maximal matching (newmm algorithm)
     - `token` — `Token` struct with text, byte span, char span, `TokenKind`
+    - `stopwords` — `StopwordSet`: sorted `Vec<String>` with binary-search lookup; built-in 1 029-entry list from PyThaiNLP (Apache-2.0) embedded via `include_str!`
+    - `synonym` — `SynonymMap`: `BTreeMap<canonical → Vec<synonym>>` loaded from TSV; used by `FtsTokenizer` for query-time expansion
+    - `ngram` — `char_ngrams(text, n)` (zero-alloc `&str` iterator) and `token_ngrams(tokens, n)` (owned `String` iterator); OOV fallback indexing
+    - `fts` — `FtsTokenizer` / `FtsToken`: orchestrates normalize → segment → stopword tag → synonym expand → OOV trigrams; entry point for `kham-pg` (Phase 2)
 - `kham-python/` — PyO3 bindings; exposes `segment()` → `list[str]` and `segment_tokens()` → `list[Token]`
 - `kham-wasm/` — wasm-bindgen bindings; exposes `segment()` → `string[]` and `segment_tokens()` → `Token[]`
 - `kham-capi/` — C FFI with cbindgen; exposes `kham_segment()` (legacy `KhamTokens`) and `kham_segment_tokens()` (`KhamTokenList` with `KhamToken` structs)
@@ -74,6 +78,7 @@ Common clippy failures in this codebase:
 - `map_or(false, |x| …)` → use `is_some_and(|x| …)` instead
 - `map_or(true, |x| …)` → use `is_none_or(|x| …)` instead
 - Needless `return`, redundant closures, or unused `mut` bindings
+- Literal tab characters inside `//!` or `///` doc-comment code blocks → replace with spaces or `<TAB>` placeholder text (`tabs_in_doc_comments` lint)
 
 ## Token Output Contract
 
@@ -105,7 +110,7 @@ Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/Ja
 
 ## Dictionary
 
-- Built-in: `words_th.txt` (CC0) embedded at compile time
+- Built-in: `words_th.txt` (Apache-2.0, sourced from PyThaiNLP) embedded at compile time
 - Custom dict loaded at runtime via `Tokenizer::builder().dict_file("path")`
 - Trie implementation: Double-Array Trie for O(n) lookup
 - Never ship BEST corpus or any non-CC0 data in the repo
@@ -113,7 +118,83 @@ Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/Ja
 - Keep memory usage predictable and efficient
 - Avoid unnecessary allocations during dictionary loading and token lookup
 - Prefer compact trie/node representations for large-scale dictionaries
-- Frequency data: `tnc_freq.txt` (CC0, Thai National Corpus raw counts) embedded separately from `dict.bin` — loaded into `FreqMap` at runtime, used by the newmm DP scorer to break ties between equally-matched segmentation paths; do not merge into the trie binary
+- Frequency data: `tnc_freq.txt` (Apache-2.0, sourced from PyThaiNLP) embedded separately from `dict.bin` — loaded into `FreqMap` at runtime, used by the newmm DP scorer to break ties between equally-matched segmentation paths; do not merge into the trie binary
+- Stopword data: `stopwords_th.txt` (Apache-2.0, sourced from PyThaiNLP) embedded via `include_str!` — 1 029 Thai function words parsed and sorted at runtime into `StopwordSet`; attribution header must be kept in the data file
+
+## FTS Modules
+
+Four modules in `kham-core` implement Phase 1 of Thai full-text search support. All are `no_std` / `alloc`-only.
+
+### `stopwords` — `StopwordSet`
+
+```rust
+StopwordSet::builtin()               // 1 029-word built-in list (PyThaiNLP Apache-2.0)
+StopwordSet::from_text(data: &str)   // parse newline-separated list; lines with # ignored; BOM stripped
+set.contains(word: &str) -> bool     // O(log n) binary search on sorted Vec<String>
+set.len() -> usize
+```
+
+Data file: `kham-core/data/stopwords_th.txt` — sorted, deduplicated, UTF-8, BOM-stripped. Attribution header must be preserved.
+
+### `synonym` — `SynonymMap`
+
+TSV format: `canonical<TAB>syn1<TAB>syn2<TAB>…` (one rule per line; `#` lines ignored).
+
+```rust
+SynonymMap::empty()                  // no expansions
+SynonymMap::from_tsv(data: &str)     // parse TSV; duplicate canonicals merge their synonym lists
+map.expand(word: &str) -> Option<&[String]>   // None if no entry
+map.has_synonyms(word: &str) -> bool
+```
+
+When adding a new synonym entry, duplicate canonicals accumulate — later lines extend the existing `Vec`, not replace it.
+
+### `ngram` — character and token n-grams
+
+```rust
+// Zero-alloc iterator: yields &str slices of exactly n Unicode scalar values
+char_ngrams(text: &str, n: usize) -> impl Iterator<Item = &str>
+
+// Owned iterator: concatenates n consecutive token strings
+token_ngrams(tokens: &[&str], n: usize) -> impl Iterator<Item = String>
+```
+
+**Unknown-token constraint:** The newmm DP emits Unknown tokens one TCC at a time. Bare consonants (1 char) produce no grams when `n ≥ 2`. Only multi-char TCCs (e.g. consonant + vowel = 2 chars) generate grams. This is expected — single Thai chars are morphemically atomic and are not useful n-gram anchors.
+
+### `fts` — `FtsTokenizer` / `FtsToken`
+
+```rust
+pub struct FtsToken {
+    pub text: String,         // owned; may be normalised
+    pub position: usize,      // ordinal index in non-whitespace sequence (0-based)
+    pub kind: TokenKind,      // from underlying segmenter
+    pub is_stop: bool,        // matched StopwordSet
+    pub synonyms: Vec<String>,// from SynonymMap (empty if no match)
+    pub trigrams: Vec<String>,// char n-grams for TokenKind::Unknown tokens only
+}
+```
+
+```rust
+FtsTokenizer::new()                          // built-in stopwords, no synonyms, ngram_size=3
+FtsTokenizer::builder()
+    .stopwords(StopwordSet)
+    .synonyms(SynonymMap)
+    .ngram_size(usize)                       // 0 = disable n-gram generation
+    .build()
+
+fts.segment_for_fts(text) -> Vec<FtsToken>  // all non-whitespace tokens, with metadata
+fts.index_tokens(text)    -> Vec<FtsToken>  // stopwords removed; positions preserved
+fts.lexemes(text)         -> Vec<String>    // flat list: text + synonyms + trigrams per token
+```
+
+`lexemes()` is the single method `kham-pg` (Phase 2) calls to populate a PostgreSQL `tsvector`.
+
+### FTS implementation rules
+
+- `segment_for_fts` always calls `normalize()` internally before `segment()` — callers do not need to normalise first.
+- Stopword positions are preserved in `index_tokens` output so phrase-distance scoring remains correct.
+- `trigrams` is only populated for `TokenKind::Unknown` tokens; `TokenKind::Thai` tokens never receive trigrams.
+- Do not add `std`-only code to any of these modules. If FST support is ever needed (synonym sets > 5k), gate it behind `#[cfg(feature = "std")]`.
 
 ## Segmenter DP scoring
 

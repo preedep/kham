@@ -22,9 +22,13 @@ extern crate alloc;
 pub mod dict;
 pub mod error;
 pub mod freq;
+pub mod fts;
+pub mod ngram;
 pub mod normalizer;
 pub mod pre_tokenizer;
 pub mod segmenter;
+pub mod stopwords;
+pub mod synonym;
 pub mod tcc;
 pub mod token;
 
