@@ -47,20 +47,25 @@ Every segmentation returns `Vec<Token>` where:
 
 ```rust
 pub struct Token<'a> {
-    pub text: &'a str,       // zero-copy reference to input
-    pub span: Range<usize>,  // byte offset in original text
-    pub kind: TokenKind,     // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+    pub text: &'a str,            // zero-copy reference to input
+    pub span: Range<usize>,       // byte offsets in original text
+    pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets in original text
+    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
 }
 ```
 
-Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+Number input.
+Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/JavaScript string indexing. Always test both `span` and `char_span` with mixed Thai+English+Number+Emoji input.
 
 ## Testing
 
 - Unit tests co-located in each module
 - Integration tests in `kham-core/tests/` with real Thai text
 - Benchmark suite in `benches/` using criterion — compare against nlpO3
-- Test data: `testdata/` directory with `.txt` files (one test case per line, pipe-separated expected output)
+- Test data: `kham-core/testdata/` — one `.txt` file per scenario, loaded by `kham-core/tests/integration.rs`
+  - `basic.txt` — pure Thai sentences, all tokens must be `TokenKind::Thai`
+  - `mixed_script.txt` — Thai + Latin + Number combinations
+  - `normalization.txt` — canonical inputs; asserts `normalize()` is idempotent then segments correctly
+  - Format: `input|tok1|tok2|…` (one case per line; lines starting with `#` are comments; whitespace tokens excluded)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
 - Test command for github workflow
 

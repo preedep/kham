@@ -9,17 +9,47 @@
 //! ```c
 //! #include "kham.h"
 //!
+//! // Simple: array of token strings
 //! KhamTokens* tokens = kham_segment("กินข้าว");
 //! for (size_t i = 0; i < tokens->len; i++) {
 //!     printf("%s\n", tokens->words[i]);
 //! }
 //! kham_tokens_free(tokens);
+//!
+//! // Rich: array of KhamToken with full span information
+//! KhamTokenList* list = kham_segment_tokens("ธนาคาร100แห่ง");
+//! for (size_t i = 0; i < list->len; i++) {
+//!     KhamToken t = list->tokens[i];
+//!     printf("%s  char %zu..%zu  %s\n", t.text, t.char_start, t.char_end, t.kind);
+//! }
+//! kham_token_list_free(list);
 //! ```
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
-use kham_core::Tokenizer;
+use kham_core::{TokenKind, Tokenizer};
+
+// ---------------------------------------------------------------------------
+// Token kind helper
+// ---------------------------------------------------------------------------
+
+fn kind_cstring(kind: TokenKind) -> CString {
+    CString::new(match kind {
+        TokenKind::Thai => "Thai",
+        TokenKind::Latin => "Latin",
+        TokenKind::Number => "Number",
+        TokenKind::Punctuation => "Punctuation",
+        TokenKind::Emoji => "Emoji",
+        TokenKind::Whitespace => "Whitespace",
+        TokenKind::Unknown => "Unknown",
+    })
+    .unwrap()
+}
+
+// ---------------------------------------------------------------------------
+// Legacy API — simple word-string array
+// ---------------------------------------------------------------------------
 
 /// Heap-allocated array of null-terminated token strings.
 ///
@@ -32,7 +62,7 @@ pub struct KhamTokens {
     pub len: usize,
 }
 
-/// Segment `text` into Thai tokens.
+/// Segment `text` into Thai tokens, returning an array of token strings.
 ///
 /// # Safety
 ///
@@ -83,6 +113,108 @@ pub unsafe extern "C" fn kham_tokens_free(tokens: *mut KhamTokens) {
     for w in words {
         if !w.is_null() {
             drop(unsafe { CString::from_raw(w) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Rich API — structured token with span information
+// ---------------------------------------------------------------------------
+
+/// A single token with text, byte/char span, and kind.
+///
+/// All pointer fields are heap-allocated and owned by the containing
+/// [`KhamTokenList`]. Free the list with [`kham_token_list_free`] — do not
+/// free individual fields directly.
+#[repr(C)]
+pub struct KhamToken {
+    /// Null-terminated UTF-8 token text.
+    pub text: *mut c_char,
+    /// Start byte offset in the original UTF-8 input string.
+    pub byte_start: usize,
+    /// End byte offset in the original UTF-8 input string.
+    pub byte_end: usize,
+    /// Start Unicode scalar-value (char) offset in the original input string.
+    pub char_start: usize,
+    /// End Unicode scalar-value (char) offset in the original input string.
+    pub char_end: usize,
+    /// Null-terminated token kind string: `"Thai"`, `"Latin"`, `"Number"`,
+    /// `"Punctuation"`, `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
+    pub kind: *mut c_char,
+}
+
+/// Heap-allocated array of [`KhamToken`] values.
+///
+/// Must be freed with [`kham_token_list_free`].
+#[repr(C)]
+pub struct KhamTokenList {
+    /// Pointer to an array of `len` [`KhamToken`] values.
+    pub tokens: *mut KhamToken,
+    /// Number of tokens.
+    pub len: usize,
+}
+
+/// Segment `text` into tokens, returning full span and kind information.
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_token_list_free`].
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_segment_tokens(text: *const c_char) -> *mut KhamTokenList {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let c_str = unsafe { CStr::from_ptr(text) };
+    let s = match c_str.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let tok = Tokenizer::new();
+    let tokens = tok.segment(s);
+
+    let mut c_tokens: Vec<KhamToken> = tokens
+        .iter()
+        .map(|t| KhamToken {
+            text: CString::new(t.text).unwrap_or_default().into_raw(),
+            byte_start: t.span.start,
+            byte_end: t.span.end,
+            char_start: t.char_span.start,
+            char_end: t.char_span.end,
+            kind: kind_cstring(t.kind).into_raw(),
+        })
+        .collect();
+
+    let len = c_tokens.len();
+    c_tokens.shrink_to_fit();
+    let ptr = c_tokens.as_mut_ptr();
+    std::mem::forget(c_tokens);
+
+    Box::into_raw(Box::new(KhamTokenList { tokens: ptr, len }))
+}
+
+/// Free a [`KhamTokenList`] value returned by [`kham_segment_tokens`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_segment_tokens`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_token_list_free(list: *mut KhamTokenList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let tokens = unsafe { Vec::from_raw_parts(list.tokens, list.len, list.len) };
+    for t in tokens {
+        if !t.text.is_null() {
+            drop(unsafe { CString::from_raw(t.text) });
+        }
+        if !t.kind.is_null() {
+            drop(unsafe { CString::from_raw(t.kind) });
         }
     }
 }

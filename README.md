@@ -76,9 +76,20 @@ pip install kham
 ```python
 import kham
 
+# Simple — list of token strings
 tokens = kham.segment("กินข้าวกับปลา")
 print(tokens)  # ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+# Rich — Token objects with span information
+tokens = kham.segment_tokens("ธนาคาร100แห่ง")
+for t in tokens:
+    print(t.text, t.char_start, t.char_end, t.kind)
+# ธนาคาร  0  6  Thai
+# 100     6  9  Number
+# แห่ง    9  13 Thai
 ```
+
+`Token` attributes: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
 
 ### JavaScript / TypeScript (WASM)
 
@@ -87,12 +98,28 @@ npm install kham-wasm
 ```
 
 ```js
-import init, { segment } from "kham-wasm";
+import init, { segment, segment_tokens } from "kham-wasm";
 await init();
 
-const tokens = segment("กินข้าวกับปลา");
-console.log(tokens); // ["กิน", "ข้าว", "กับ", "ปลา"]
+// Simple — array of token strings
+const words = segment("กินข้าวกับปลา");
+console.log(words); // ["กิน", "ข้าว", "กับ", "ปลา"]
+
+// Rich — Token objects with span information
+const tokens = segment_tokens("ธนาคาร100แห่ง");
+for (const t of tokens) {
+    console.log(t.text, t.char_start, t.char_end, t.kind);
+}
+// ธนาคาร  0  6  Thai
+// 100     6  9  Number
+// แห่ง    9  13 Thai
 ```
+
+`Token` properties: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
+
+> **Note on JS string offsets:** `char_start`/`char_end` are Unicode scalar-value counts.
+> For BMP text these equal JavaScript's `string.slice()` indices. For surrogate-pair
+> emoji, use `byte_start`/`byte_end` with `TextEncoder` for precise byte-level slicing.
 
 ### CLI
 
@@ -149,19 +176,72 @@ RUST_LOG=debug kham "กินข้าวกับปลา"   # full per-token
 RUST_LOG=info  kham --dict w.txt "..."  # dict-load confirmation only
 ```
 
+### C
+
+Generate the header and link `libkham_capi`:
+
+```bash
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham.h
+cargo build -p kham-capi --release
+```
+
+```c
+#include "kham.h"
+
+// Simple — array of token strings
+KhamTokens *tokens = kham_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < tokens->len; i++) {
+    printf("%s\n", tokens->words[i]);
+}
+kham_tokens_free(tokens);
+
+// Rich — KhamToken structs with full span information
+KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
+for (size_t i = 0; i < list->len; i++) {
+    KhamToken t = list->tokens[i];
+    printf("%s  char %zu..%zu  %s\n", t.text, t.char_start, t.char_end, t.kind);
+}
+// ธนาคาร  char 0..6   Thai
+// 100     char 6..9   Number
+// แห่ง    char 9..13  Thai
+kham_token_list_free(list);
+```
+
+`KhamToken` fields: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind` (all null-terminated UTF-8 strings or `size_t`).
+
 ## Token contract
 
 Every `segment()` call returns `Vec<Token>`:
 
 ```rust
 pub struct Token<'a> {
-    pub text: &'a str,       // zero-copy slice of the input string
-    pub span: Range<usize>,  // byte offsets in the original string
-    pub kind: TokenKind,     // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+    pub text: &'a str,            // zero-copy slice of the input string
+    pub span: Range<usize>,       // byte offsets in the original string
+    pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets
+    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
 }
 ```
 
-Byte spans are always valid UTF-8 boundaries. Joining all `token.text` values (with whitespace kept) reconstructs the original input exactly.
+- `span` — byte offsets; use to slice `&str` directly (`&input[token.span.clone()]`)
+- `char_span` — Unicode scalar-value offsets; use for Python/JavaScript string indexing where strings are char- or code-unit-indexed
+- Both spans are always valid UTF-8 boundaries
+- Joining all `token.text` values (with whitespace kept) reconstructs the original input exactly
+
+```rust
+use kham_core::Tokenizer;
+
+let tok = Tokenizer::new();
+let input = "ธนาคาร100แห่ง";
+let tokens = tok.segment(input);
+
+// ธนาคาร: 6 chars, 18 bytes
+assert_eq!(tokens[0].span,      0..18);
+assert_eq!(tokens[0].char_span, 0..6);
+
+// 100: 3 chars, 3 bytes
+assert_eq!(tokens[1].span,      18..21);
+assert_eq!(tokens[1].char_span, 6..9);
+```
 
 ## Custom dictionary
 
@@ -268,6 +348,7 @@ classDiagram
     class token {
         +text : and str
         +span : Range~usize~
+        +char_span : Range~usize~
         +kind : TokenKind
         --
         Thai · Latin · Number

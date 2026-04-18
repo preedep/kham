@@ -308,17 +308,24 @@ fn segment_thai<'t>(
     let dp = forward_dp(dict, freqs, slice, &bounds);
     let path = backtrack_path(&dp.from);
 
+    // Char offset of span.start — computed once, then incremented per token.
+    let mut char_cursor = text[..span.start].chars().count();
+
     for w in path.windows(2) {
         let start_byte = span.start + bounds[w[0]];
         let end_byte = span.start + bounds[w[1]];
+        let token_text = &text[start_byte..end_byte];
+        let char_start = char_cursor;
+        char_cursor += token_text.chars().count();
         let kind = if dp.is_dict[w[1]] {
             TokenKind::Thai
         } else {
             TokenKind::Unknown
         };
         out.push(Token::new(
-            &text[start_byte..end_byte],
+            token_text,
             start_byte..end_byte,
+            char_start..char_cursor,
             kind,
         ));
     }
@@ -670,6 +677,60 @@ mod tests {
     fn unknown_edge_does_not_contribute_freq() {
         let s = DpScore::ZERO.unknown_edge().unknown_edge();
         assert_eq!(s.freq_score, 0);
+    }
+
+    // ── char_span invariants ──────────────────────────────────────────────────
+
+    #[test]
+    fn char_span_len_equals_char_count() {
+        let tokens = tok().segment("กินข้าวกับปลา");
+        for t in &tokens {
+            assert_eq!(
+                t.char_span.end - t.char_span.start,
+                t.text.chars().count(),
+                "char_span length mismatch for {:?}", t.text
+            );
+        }
+    }
+
+    #[test]
+    fn char_spans_are_contiguous() {
+        let tokens = Tokenizer::builder()
+            .keep_whitespace(true)
+            .build()
+            .segment("กินข้าว 100 hello");
+        for w in tokens.windows(2) {
+            assert_eq!(
+                w[0].char_span.end, w[1].char_span.start,
+                "char_span gap between {:?} and {:?}", w[0].text, w[1].text
+            );
+        }
+    }
+
+    #[test]
+    fn char_span_for_mixed_script() {
+        // "ธนาคาร100แห่ง": ธนาคาร=6 chars, 100=3 chars, แห่ง=4 chars
+        let tokens = tok().segment("ธนาคาร100แห่ง");
+        assert_eq!(tokens[0].char_span, 0..6);
+        assert_eq!(tokens[1].char_span, 6..9);
+        assert_eq!(tokens[2].char_span, 9..13);
+    }
+
+    #[test]
+    fn char_span_accounts_for_multibyte_chars() {
+        // Each Thai codepoint is 3 bytes but 1 char.
+        // "กิน" = 3 chars (9 bytes); char_span should be 0..3, span 0..9.
+        let tokens = tok().segment("กิน");
+        assert_eq!(tokens[0].span, 0..9);
+        assert_eq!(tokens[0].char_span, 0..3);
+    }
+
+    #[test]
+    fn char_span_emoji_is_single_char() {
+        // 😀 = 1 char, 4 bytes — verify char_span counts it as 1.
+        let tokens = tok().segment("😀");
+        assert_eq!(tokens[0].char_len(), 1);
+        assert_eq!(tokens[0].byte_len(), 4);
     }
 
     // ── edge cases ────────────────────────────────────────────────────────────
