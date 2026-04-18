@@ -24,7 +24,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/preedep/kham"
 
 [workspace.dependencies]
-kham-core = { path = "kham-core" }
+kham-core = { path = "kham-core", version = "0.1.0" }
 
 [profile.release]
 opt-level = "z"
