@@ -514,7 +514,7 @@ Binding targets (after installing prerequisites above):
 wasm-pack build kham-wasm --target web           # WASM → kham-wasm/pkg/
 maturin develop -m kham-python/Cargo.toml        # Python wheel (active venv)
 cbindgen --config kham-capi/cbindgen.toml \
-    --crate kham-capi --output kham.h            # C header
+    --crate kham-capi --output kham-capi/include/kham.h  # C header
 cargo build -p kham-capi --release               # C shared library
 ```
 
@@ -573,24 +573,87 @@ git push origin v0.1.0
 
 ## Benchmarks
 
-Measured on Apple M-series (release build, LTO, built-in 62k-word dictionary):
+### Environment
 
-| Benchmark | Time | Throughput |
+| Field | Value |
+|---|---|
+| CPU | Apple M-series (arm64) |
+| OS | macOS 26.4.1 |
+| Rust | 1.94.1 (stable) |
+| Profile | release (LTO enabled) |
+| Built-in dictionary | 62,102 words · 669,387 DARTS states · 5.1 MiB |
+| TNC frequency table | 106,125 entries |
+
+### Segmentation throughput (`segment/by_length`)
+
+Pure Thai input, built-in dictionary, no custom dict.
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| short | 37 B | 879 ns | 42.3 MiB/s |
+| medium | 182 B | 3.80 µs | 45.1 MiB/s |
+| long | 546 B | 10.9 µs | 47.1 MiB/s |
+
+### Mixed-script throughput (`segment/mixed`)
+
+Thai + Latin + Number in the same input, measuring pre-tokenizer boundary overhead.
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| sparse (`ธนาคาร100แห่ง`) | 26 B | 744 ns | 42.3 MiB/s |
+| medium (multi-boundary) | 74 B | 1.73 µs | 43.5 MiB/s |
+| dense (alternating script) | 29 B | 535 ns | 55.3 MiB/s |
+
+### Normalize + segment (`normalize_then_segment/medium`)
+
+| Operation | Time (median) |
+|---|---|
+| `normalize()` then `segment()` on medium input | 4.09 µs |
+
+### Normalization throughput (`normalize/thai`)
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| short | 37 B | 79.9 ns | 465 MiB/s |
+| medium | 182 B | 199 ns | 864 MiB/s |
+| long | 546 B | 507 ns | 1.0 GiB/s |
+
+### Dictionary construction (`dict/construction`)
+
+| Operation | Time (median) | Notes |
 |---|---|---|
-| `segment` — short (~37 B) | ~1.0 µs | ~37 MiB/s |
-| `segment` — medium (~182 B) | ~4.0 µs | ~42 MiB/s |
-| `segment` — long (~546 B) | ~11.6 µs | ~44 MiB/s |
-| `dict::contains` (hit) | ~13–32 ns | ~520–690 MiB/s |
-| `dict::contains` (miss) | ~1.3 ns | ~4 GiB/s |
-| `dict::prefixes` | ~65–112 ns | ~275–860 MiB/s |
-| `builtin_dict()` — binary blob load | ~64 µs | — |
-| `Dict::from_word_list` — 62k words (custom merge) | ~960 ms | ~65k words/s |
-| Dict construction (small custom list) | ~4 µs | — |
+| `builtin_dict()` — binary blob load | 78 µs | pay-once startup cost |
+| `Dict::from_word_list` — 62k words | 980 ms | only when merging a custom dict |
+| `Dict::from_word_list` — 8-word list | 3.72 µs | small custom dict |
+| `dict/file/read_and_build` — disk + build | 1.01 s | `kham --dict <file>` startup |
+| `Tokenizer::builder().dict_file().build()` | 1.04 s | full CLI code path with custom dict |
 
-> `Tokenizer::new()` and `TokenizerBuilder::build()` (no custom dict) use `builtin_dict()` which
-> loads the pre-compiled DARTS binary produced by `build.rs` at compile time — ~15,000× faster
-> than constructing from text. `Dict::from_word_list` is only called when a custom dictionary is
-> merged with the built-in word list.
+> `builtin_dict()` is **~12,500×** faster than `Dict::from_word_list` because the DARTS trie is
+> pre-compiled by `build.rs` at compile time; runtime cost is a single O(S) binary decode pass.
+> `Dict::from_word_list` runs only when a user-supplied custom dictionary is merged with the built-in list.
+
+### Dictionary lookup (`dict/contains`, `dict/prefixes`)
+
+| Operation | Time (median) | Throughput |
+|---|---|---|
+| `contains` — hit (3-byte word `กิน`) | 7.1 ns | 1.18 GiB/s |
+| `contains` — hit (12-byte word `สวัสดี`) | 18.3 ns | 940 MiB/s |
+| `contains` — miss (ASCII non-word) | 744 ps | 7.5–8.8 GiB/s |
+| `prefixes` — short anchor (7 B) | 42.3 ns | 473 MiB/s |
+| `prefixes` — medium anchor (60 B) | 36.7 ns | 1.52 GiB/s |
+| `prefixes` — long anchor (97 B) | 74.5 ns | 1.24 GiB/s |
+
+### TNC frequency table (`freq/construction`, `freq/get`)
+
+| Operation | Time (median) | Notes |
+|---|---|---|
+| `FreqMap::builtin()` — parse 106k TSV entries | 22.1 ms | pay-once startup cost |
+| `FreqMap::get` — common word hit (`กิน`) | 67.8 ns | O(log n) BTreeMap |
+| `FreqMap::get` — rare word hit | 48.6 ns | |
+| `FreqMap::get` — miss | 56.5 ns | |
+
+> `FreqMap::builtin()` startup cost (~22 ms) is the dominant component of `Tokenizer::new()` (~20 ms total).
+> It is paid once per tokenizer instance; the returned `FreqMap` is reused across all `segment()` calls.
 
 Run locally:
 
