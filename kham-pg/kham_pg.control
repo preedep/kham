@@ -1,0 +1,4 @@
+# kham_pg PostgreSQL extension
+comment = 'Thai full-text search parser using the kham word segmenter'
+default_version = '0.1.0'
+relocatable = false

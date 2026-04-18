@@ -1,0 +1,48 @@
+# Dockerfile.test — builds kham-pg and runs pg_regress inside a PostgreSQL 17
+# container.  Used by `make regress` in kham-pg/Makefile.
+#
+# Build context: repository root (so the full Cargo workspace is available).
+
+FROM postgres:17-bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# ── System dependencies ──────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+        pkg-config \
+        postgresql-server-dev-17 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Rust toolchain ───────────────────────────────────────────────────────────
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+        | sh -s -- -y --default-toolchain stable --no-modify-path \
+    && chmod -R a+w /usr/local/rustup /usr/local/cargo
+
+# ── Copy workspace ───────────────────────────────────────────────────────────
+WORKDIR /kham
+COPY . .
+
+# ── Build kham-pg with PG 17 headers ────────────────────────────────────────
+ENV PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+
+RUN cargo build -p kham-pg --release
+
+# ── Install extension files ──────────────────────────────────────────────────
+RUN PG_PKGLIBDIR=$($PG_CONFIG --pkglibdir) && \
+    PG_SHAREDIR=$($PG_CONFIG --sharedir) && \
+    cp target/release/libkham_pg.so "$PG_PKGLIBDIR/kham_pg.so" && \
+    cp kham-pg/kham_pg.control "$PG_SHAREDIR/extension/" && \
+    cp kham-pg/sql/kham_pg--0.1.0.sql "$PG_SHAREDIR/extension/"
+
+# ── Entrypoint: start PG, run pg_regress, report result ─────────────────────
+COPY kham-pg/docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

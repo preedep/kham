@@ -1,0 +1,15 @@
+---
+# docker-compose.yml — runs the kham-pg pg_regress test suite.
+#
+# Usage:
+#   docker compose -f kham-pg/docker/docker-compose.yml up --build --exit-code-from regress
+#
+# Or via the Makefile shortcut:
+#   make -C kham-pg regress
+
+services:
+  regress:
+    build:
+      context: ../..          # repository root — gives access to full workspace
+      dockerfile: kham-pg/docker/Dockerfile.test
+    # No persistent volumes needed; everything lives in the container.

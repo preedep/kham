@@ -107,7 +107,8 @@ Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/Ja
   - Format: `input|tok1|tok2|…` (one case per line; lines starting with `#` are comments; whitespace tokens excluded)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
 - Python binding tests: `kham-python/tests/test_kham.py` — 30 pytest cases covering `segment_tokens()` char_span round-trip, byte_span UTF-8 decoding, kind labels, contiguity, and edge cases; run after every `maturin develop`
-
+- kham-pg use Docker/container to spin up a PostgreSQL instance for testing
+  
 ## Dictionary
 
 - Built-in: `words_th.txt` (Apache-2.0, sourced from PyThaiNLP) embedded at compile time
