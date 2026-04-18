@@ -312,6 +312,61 @@ fn all_spans_valid_utf8_boundaries() {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Generic testdata file-discovery runner
+// ---------------------------------------------------------------------------
+
+/// Discover every `*.txt` file in `testdata/` and assert segment() output
+/// against every case it contains.
+///
+/// This test runs automatically when new `.txt` files are added to
+/// `testdata/` — no changes to this file are needed.
+#[test]
+fn all_testdata_files() {
+    let dir = format!("{}/testdata", env!("CARGO_MANIFEST_DIR"));
+    let tok = Tokenizer::new();
+
+    let mut entries: Vec<_> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read testdata dir {dir}: {e}"))
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().map_or(false, |x| x == "txt"))
+        .collect();
+
+    // Sort for deterministic test order.
+    entries.sort_by_key(|e| e.path());
+
+    assert!(
+        !entries.is_empty(),
+        "testdata/ contains no .txt files — expected at least basic.txt"
+    );
+
+    let mut total_cases = 0usize;
+    let mut failures: Vec<String> = Vec::new();
+
+    for entry in &entries {
+        let path = entry.path();
+        let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+
+        for (input, expected) in load_cases(&path.to_string_lossy()) {
+            total_cases += 1;
+            let got = segment_texts(&tok, &input);
+            if got != expected {
+                failures.push(format!(
+                    "{file_name}: {input:?}\n    got:      {got:?}\n    expected: {expected:?}"
+                ));
+            }
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "{} / {} case(s) failed:\n{}",
+        failures.len(),
+        total_cases,
+        failures.join("\n")
+    );
+}
+
 #[test]
 fn keep_whitespace_spans_are_contiguous() {
     let tok = Tokenizer::builder().keep_whitespace(true).build();
