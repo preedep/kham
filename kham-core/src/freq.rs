@@ -10,15 +10,18 @@ use alloc::string::String;
 
 static BUILTIN_FREQ_DATA: &str = include_str!("../data/tnc_freq.txt");
 
-/// A word→frequency lookup table.
+/// A word→frequency lookup table backed by the Thai National Corpus (TNC).
 ///
 /// Frequencies are raw TNC occurrence counts. Words absent from the table
 /// return 0, which is a safe default (the DP scorer simply ignores them).
-pub(crate) struct FreqMap(BTreeMap<String, u32>);
+///
+/// The built-in table is loaded with [`FreqMap::builtin`]. Custom tables can
+/// be constructed from any tab-separated `word\tcount` text via [`FreqMap::from_tsv`].
+pub struct FreqMap(BTreeMap<String, u32>);
 
 impl FreqMap {
     /// Parse a tab-separated `word\tcount` text (one entry per line).
-    pub(crate) fn from_tsv(data: &str) -> Self {
+    pub fn from_tsv(data: &str) -> Self {
         let mut map = BTreeMap::new();
         for line in data.lines() {
             if let Some((word, freq_str)) = line.split_once('\t') {
@@ -31,13 +34,19 @@ impl FreqMap {
     }
 
     /// Load the built-in TNC frequency table.
-    pub(crate) fn builtin() -> Self {
+    ///
+    /// Parses the embedded `tnc_freq.txt` (106k entries) into a [`BTreeMap`].
+    /// This is a pay-once startup cost; the returned [`FreqMap`] should be
+    /// reused across segmentation calls (e.g. stored in [`Tokenizer`]).
+    ///
+    /// [`Tokenizer`]: crate::Tokenizer
+    pub fn builtin() -> Self {
         Self::from_tsv(BUILTIN_FREQ_DATA)
     }
 
     /// Look up a word's frequency; returns 0 if not found.
     #[inline]
-    pub(crate) fn get(&self, word: &str) -> u32 {
+    pub fn get(&self, word: &str) -> u32 {
         self.0.get(word).copied().unwrap_or(0)
     }
 }

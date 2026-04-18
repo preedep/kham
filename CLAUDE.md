@@ -156,11 +156,13 @@ cargo bench
 
 ### Benchmark Scope
 
-- Dictionary build time
-- Dictionary lookup throughput
-- Prefix lookup throughput
-- End-to-end segmentation throughput
-- Mixed-script segmentation performance
+- Dictionary build time (`dict/construction/from_binary_blob`, `from_builtin_word_list`)
+- Dictionary lookup throughput (`dict/contains/hit`, `dict/contains/miss`)
+- Prefix lookup throughput (`dict/prefixes`)
+- FreqMap startup cost (`freq/construction/builtin`) — compare against `dict/construction/from_binary_blob` to see relative weight
+- FreqMap lookup throughput (`freq/get`) — hit, rare-hit, and miss cases
+- End-to-end segmentation throughput (`segment/by_length`)
+- Mixed-script segmentation performance (`segment/mixed`)
 - Memory footprint of built-in dictionary
 
 ### Benchmark Rules
