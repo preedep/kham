@@ -17,6 +17,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations when multiple dictionary paths tie
 - **Pre-compiled DARTS** — Double-Array Trie is built once at compile time (`build.rs`) and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction from text)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
+- **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering (1 029 built-in entries, PyThaiNLP Apache-2.0), synonym expansion (TSV-driven `SynonymMap`), and character n-gram fallback for OOV tokens; ready for PostgreSQL `tsvector` integration
 - **Structured CLI logging** — `RUST_LOG`-controlled output with coloured log levels via `env_logger` + `colored`
 
 ## Packages
@@ -271,6 +272,87 @@ let tok = Tokenizer::builder()
     .build();
 ```
 
+## Full-Text Search (FTS)
+
+`kham-core` ships a complete Thai FTS pipeline on top of the segmenter, ready for PostgreSQL `tsvector` integration (see `kham-pg`, Phase 2).
+
+### Basic indexing
+
+```rust
+use kham_core::fts::FtsTokenizer;
+
+let fts = FtsTokenizer::new(); // built-in stopwords, no synonyms
+
+// All tokens with metadata
+let tokens = fts.segment_for_fts("กินข้าวกับปลา");
+for t in &tokens {
+    println!("{} pos={} stop={}", t.text, t.position, t.is_stop);
+}
+// กิน  pos=0 stop=false
+// ข้าว pos=1 stop=false
+// กับ  pos=2 stop=true   ← conjunction → filtered at index time
+// ปลา  pos=3 stop=false
+
+// Flat lexeme list for tsvector (stopwords removed)
+let lexemes = fts.lexemes("กินข้าวกับปลา");
+// → ["กิน", "ข้าว", "ปลา"]
+```
+
+### Synonym expansion
+
+Define a TSV file where each line maps a canonical form to one or more equivalents:
+
+```text
+คอม    คอมพิวเตอร์    computer
+รถไฟฟ้า    BTS    MRT    รถไฟใต้ดิน
+```
+
+```rust
+use kham_core::fts::FtsTokenizer;
+use kham_core::synonym::SynonymMap;
+
+let synonyms = SynonymMap::from_tsv(include_str!("synonyms.tsv"));
+let fts = FtsTokenizer::builder().synonyms(synonyms).build();
+
+let lexemes = fts.lexemes("ซื้อคอมใหม่");
+// → ["ซื้อ", "คอม", "คอมพิวเตอร์", "computer", "ใหม่"]
+//              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  expanded
+```
+
+### Custom stopwords
+
+```rust
+use kham_core::stopwords::StopwordSet;
+use kham_core::fts::FtsTokenizer;
+
+// Add domain-specific stopwords on top of the built-in list
+let extra = StopwordSet::from_text("ซื้อ\nขาย\nราคา\n");
+let fts = FtsTokenizer::builder().stopwords(extra).build();
+```
+
+### OOV (out-of-vocabulary) n-grams
+
+Words not in the dictionary are emitted as `TokenKind::Unknown`. The FTS pipeline automatically generates character n-grams for these tokens so they remain searchable:
+
+```rust
+// Default ngram_size = 3 (trigrams)
+// Unknown token "สกรีน" (3-char TCC clusters) → ["สกร", "กรี", "รีน"]
+
+// Disable n-gram generation:
+let fts = FtsTokenizer::builder().ngram_size(0).build();
+```
+
+### `FtsToken` fields
+
+| Field | Type | Description |
+|---|---|---|
+| `text` | `String` | Token text (normalised) |
+| `position` | `usize` | Ordinal index in non-whitespace sequence (0-based) |
+| `kind` | `TokenKind` | Thai / Latin / Number / … / Unknown |
+| `is_stop` | `bool` | Matched the stopword list |
+| `synonyms` | `Vec<String>` | Synonym expansions (empty if none) |
+| `trigrams` | `Vec<String>` | Char n-grams for `Unknown` tokens only |
+
 ## Architecture
 
 ### Workspace crate graph
@@ -365,6 +447,46 @@ classDiagram
         Whitespace · Unknown
     }
 
+    class stopwords {
+        +StopwordSet::builtin() StopwordSet
+        +from_text(data) StopwordSet
+        +contains(word) bool
+        --
+        1029 entries · Apache-2.0
+        sorted Vec binary search
+        O(log n) lookup
+    }
+
+    class synonym {
+        +SynonymMap::from_tsv(data) SynonymMap
+        +expand(word) Option~slice~
+        +has_synonyms(word) bool
+        --
+        BTreeMap canonical→synonyms
+        TSV format
+        duplicate canonicals merge
+    }
+
+    class ngram {
+        +char_ngrams(text, n) Iterator
+        +token_ngrams(tokens, n) Iterator
+        --
+        zero-alloc char slices
+        OOV fallback indexing
+        phrase proximity
+    }
+
+    class fts {
+        +FtsTokenizer::new() FtsTokenizer
+        +segment_for_fts(text) Vec~FtsToken~
+        +index_tokens(text) Vec~FtsToken~
+        +lexemes(text) Vec~String~
+        --
+        FtsToken: text · position
+        is_stop · synonyms · trigrams
+        PostgreSQL tsvector entry point
+    }
+
     segmenter ..> normalizer : calls
     segmenter ..> pre_tokenizer : calls
     segmenter ..> tcc : calls
@@ -372,6 +494,10 @@ classDiagram
     segmenter ..> freq : scores
     segmenter ..> token : emits
     pre_tokenizer ..> token : emits
+    fts ..> segmenter : wraps
+    fts ..> stopwords : filters
+    fts ..> synonym : expands
+    fts ..> ngram : OOV grams
 ```
 
 ### Segmentation pipeline
@@ -675,13 +801,21 @@ cargo bench -p kham-core
 # HTML report: target/criterion/report/index.html
 ```
 
-## Dictionary
+## Dictionary and corpus data
 
-The built-in word list (`kham-core/data/words_th.txt`) is CC0-licensed and contains 62,102 Thai words. Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
+| File | License | Entries | Purpose |
+|---|---|---|---|
+| `data/words_th.txt` | CC0 | 62,102 words | Built-in segmentation dictionary |
+| `data/tnc_freq.txt` | CC0 | 106,125 entries | TNC raw counts → DP tie-breaking scorer |
+| `data/stopwords_th.txt` | Apache-2.0 (PyThaiNLP) | 1,029 words | FTS stopword filter |
 
-A separate frequency table (`kham-core/data/tnc_freq.txt`, CC0) provides raw occurrence counts from the Thai National Corpus (106,125 entries). It is embedded at compile time and loaded into a `FreqMap` at runtime. The newmm DP scorer uses it as the third tiebreaker — after minimising unknown tokens and maximising dictionary matches — so statistically more common segmentations are preferred when multiple paths are otherwise equal. Frequency data is kept separate from `dict.bin`; do not merge them.
+Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
 
-**Constraint:** Never ship BEST corpus data or any non-CC0 material in this repository.
+The frequency table is embedded at compile time and loaded into a `FreqMap` at runtime. The newmm DP scorer uses it as the third tiebreaker — after minimising unknown tokens and maximising dictionary matches — so statistically more common segmentations are preferred when multiple paths are otherwise equal. Frequency data is kept separate from `dict.bin`; do not merge them.
+
+The stopword list is sourced from [PyThaiNLP](https://github.com/PyThaiNLP/pythainlp) (Apache-2.0) and embedded via `include_str!`. Attribution is preserved in the header of `stopwords_th.txt`. The list is sorted and deduplicated at runtime into a `StopwordSet` backed by binary search.
+
+**Constraint:** Never ship BEST corpus data or any non-Apache-2.0/CC0 material in this repository.
 
 ### Pre-compiled DARTS binary (`dict.bin`)
 

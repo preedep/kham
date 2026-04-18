@@ -128,6 +128,13 @@ mod tests {
     }
 
     #[test]
+    fn builtin_has_expected_entry_count() {
+        let m = FreqMap::builtin();
+        let count = m.0.len();
+        assert!(count > 100_000, "expected >100k TNC entries, got {count}");
+    }
+
+    #[test]
     fn builtin_common_words_have_nonzero_freq() {
         let m = FreqMap::builtin();
         for word in &["กิน", "ข้าว", "ไป", "มา", "คน", "ที่", "นี้"]
@@ -143,5 +150,34 @@ mod tests {
     fn builtin_unknown_word_returns_zero() {
         let m = FreqMap::builtin();
         assert_eq!(m.get("กขคงจฉชซ"), 0);
+    }
+
+    #[test]
+    fn builtin_high_freq_words_outrank_rare_words() {
+        let m = FreqMap::builtin();
+        // "ที่" (relativiser, extremely common) should rank above "มะม่วงหิมพานต์"
+        assert!(
+            m.get("ที่") > m.get("มะม่วงหิมพานต์"),
+            "expected 'ที่' to have higher TNC freq than 'มะม่วงหิมพานต์'"
+        );
+    }
+
+    // ── freq influences segmentation (integration) ────────────────────────────
+
+    #[test]
+    fn freq_breaks_tie_toward_common_segmentation() {
+        use crate::Tokenizer;
+        use alloc::vec::Vec;
+        // "ตากลม" can be read as "ตา|กลม" (eye + round, both dict words)
+        // or "ตาก|ลม" (to dry + wind, also both dict words).
+        // TNC freq for "ตา" >> "ตาก", so freq scoring should prefer "ตา|กลม".
+        let tok = Tokenizer::new();
+        let tokens = tok.segment("ตากลม");
+        let words: Vec<&str> = tokens.iter().map(|t| t.text).collect();
+        assert_eq!(
+            words,
+            alloc::vec!["ตา", "กลม"],
+            "freq scoring should prefer 'ตา|กลม' over 'ตาก|ลม' — got {words:?}"
+        );
     }
 }
