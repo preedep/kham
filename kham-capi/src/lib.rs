@@ -90,7 +90,6 @@ pub unsafe extern "C" fn kham_segment(text: *const c_char) -> *mut KhamTokens {
         .collect();
 
     let len = words.len();
-    words.shrink_to_fit();
     let ptr = words.as_mut_ptr();
     std::mem::forget(words);
 
@@ -189,7 +188,6 @@ pub unsafe extern "C" fn kham_segment_tokens(text: *const c_char) -> *mut KhamTo
         .collect();
 
     let len = c_tokens.len();
-    c_tokens.shrink_to_fit();
     let ptr = c_tokens.as_mut_ptr();
     std::mem::forget(c_tokens);
 
@@ -268,10 +266,22 @@ fn strings_to_c_array(strings: Vec<String>) -> (*mut *mut c_char, usize) {
         .map(|s| CString::new(s).unwrap_or_default().into_raw())
         .collect();
     let len = v.len();
-    v.shrink_to_fit();
     let ptr = v.as_mut_ptr();
     std::mem::forget(v);
     (ptr, len)
+}
+
+/// Free a heap-allocated `*mut *mut c_char` array produced by [`strings_to_c_array`].
+///
+/// # Safety
+///
+/// * `ptr` and `len` must match a value previously returned by [`strings_to_c_array`].
+/// * Must not be called more than once for the same allocation.
+unsafe fn free_c_array(ptr: *mut *mut c_char, len: usize) {
+    let v = unsafe { Vec::from_raw_parts(ptr, len, len) };
+    for s in v {
+        drop(unsafe { CString::from_raw(s) });
+    }
 }
 
 /// Segment `text` through the FTS pipeline and return annotated tokens.
@@ -316,7 +326,6 @@ pub unsafe extern "C" fn kham_fts_segment(text: *const c_char) -> *mut KhamFtsTo
         .collect();
 
     let len = c_tokens.len();
-    c_tokens.shrink_to_fit();
     let ptr = c_tokens.as_mut_ptr();
     std::mem::forget(c_tokens);
 
@@ -338,28 +347,10 @@ pub unsafe extern "C" fn kham_fts_token_list_free(list: *mut KhamFtsTokenList) {
     let list = unsafe { Box::from_raw(list) };
     let tokens = unsafe { Vec::from_raw_parts(list.tokens, list.len, list.len) };
     for t in tokens {
-        if !t.text.is_null() {
-            drop(unsafe { CString::from_raw(t.text) });
-        }
-        if !t.kind.is_null() {
-            drop(unsafe { CString::from_raw(t.kind) });
-        }
-        if !t.synonyms.is_null() {
-            let syns = unsafe { Vec::from_raw_parts(t.synonyms, t.synonyms_len, t.synonyms_len) };
-            for s in syns {
-                if !s.is_null() {
-                    drop(unsafe { CString::from_raw(s) });
-                }
-            }
-        }
-        if !t.trigrams.is_null() {
-            let grams = unsafe { Vec::from_raw_parts(t.trigrams, t.trigrams_len, t.trigrams_len) };
-            for g in grams {
-                if !g.is_null() {
-                    drop(unsafe { CString::from_raw(g) });
-                }
-            }
-        }
+        drop(unsafe { CString::from_raw(t.text) });
+        drop(unsafe { CString::from_raw(t.kind) });
+        unsafe { free_c_array(t.synonyms, t.synonyms_len) };
+        unsafe { free_c_array(t.trigrams, t.trigrams_len) };
     }
 }
 
@@ -405,13 +396,7 @@ pub unsafe extern "C" fn kham_fts_lexemes(
 /// * Passing `NULL` is safe (no-op).
 #[no_mangle]
 pub unsafe extern "C" fn kham_fts_lexemes_free(lexemes: *mut *mut c_char, len: usize) {
-    if lexemes.is_null() {
-        return;
-    }
-    let v = unsafe { Vec::from_raw_parts(lexemes, len, len) };
-    for s in v {
-        if !s.is_null() {
-            drop(unsafe { CString::from_raw(s) });
-        }
+    if !lexemes.is_null() {
+        unsafe { free_c_array(lexemes, len) };
     }
 }
