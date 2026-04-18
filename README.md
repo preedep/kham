@@ -14,6 +14,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
+- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations when multiple dictionary paths tie
 - **Pre-compiled DARTS** — Double-Array Trie is built once at compile time (`build.rs`) and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction from text)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Structured CLI logging** — `RUST_LOG`-controlled output with coloured log levels via `env_logger` + `colored`
@@ -75,9 +76,20 @@ pip install kham
 ```python
 import kham
 
+# Simple — list of token strings
 tokens = kham.segment("กินข้าวกับปลา")
 print(tokens)  # ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+# Rich — Token objects with span information
+tokens = kham.segment_tokens("ธนาคาร100แห่ง")
+for t in tokens:
+    print(t.text, t.char_start, t.char_end, t.kind)
+# ธนาคาร  0  6  Thai
+# 100     6  9  Number
+# แห่ง    9  13 Thai
 ```
+
+`Token` attributes: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
 
 ### JavaScript / TypeScript (WASM)
 
@@ -86,12 +98,28 @@ npm install kham-wasm
 ```
 
 ```js
-import init, { segment } from "kham-wasm";
+import init, { segment, segment_tokens } from "kham-wasm";
 await init();
 
-const tokens = segment("กินข้าวกับปลา");
-console.log(tokens); // ["กิน", "ข้าว", "กับ", "ปลา"]
+// Simple — array of token strings
+const words = segment("กินข้าวกับปลา");
+console.log(words); // ["กิน", "ข้าว", "กับ", "ปลา"]
+
+// Rich — Token objects with span information
+const tokens = segment_tokens("ธนาคาร100แห่ง");
+for (const t of tokens) {
+    console.log(t.text, t.char_start, t.char_end, t.kind);
+}
+// ธนาคาร  0  6  Thai
+// 100     6  9  Number
+// แห่ง    9  13 Thai
 ```
+
+`Token` properties: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
+
+> **Note on JS string offsets:** `char_start`/`char_end` are Unicode scalar-value counts.
+> For BMP text these equal JavaScript's `string.slice()` indices. For surrogate-pair
+> emoji, use `byte_start`/`byte_end` with `TextEncoder` for precise byte-level slicing.
 
 ### CLI
 
@@ -111,6 +139,14 @@ kham --sep " / " "สวัสดีชาวโลก"
 # Show token kinds
 kham --kind "ธนาคาร100แห่ง"
 # ธนาคาร:Thai|100:Number|แห่ง:Thai
+
+# Show Unicode char spans
+kham --spans "กินข้าวกับปลา"
+# กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
+
+# Combine kind and spans
+kham --kind --spans "กินข้าว"
+# กิน:Thai:0-3|ข้าว:Thai:3-7
 
 # Normalize before segmenting
 kham --normalize "กิน\u{0E02}\u{0E49}\u{0E49}าว"
@@ -137,6 +173,7 @@ Options:
   -w, --whitespace    Include whitespace tokens in output
   -n, --normalize     Run normalize() before segmenting
   -k, --kind          Append token kind after each token (e.g. กิน:Thai)
+      --spans         Append Unicode char span after each token (e.g. กิน:0-3)
   -h, --help          Print help
   -V, --version       Print version
 ```
@@ -148,19 +185,72 @@ RUST_LOG=debug kham "กินข้าวกับปลา"   # full per-token
 RUST_LOG=info  kham --dict w.txt "..."  # dict-load confirmation only
 ```
 
+### C
+
+Generate the header and link `libkham_capi`:
+
+```bash
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
+cargo build -p kham-capi --release
+```
+
+```c
+#include "kham.h"
+
+// Simple — array of token strings
+KhamTokens *tokens = kham_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < tokens->len; i++) {
+    printf("%s\n", tokens->words[i]);
+}
+kham_tokens_free(tokens);
+
+// Rich — KhamToken structs with full span information
+KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
+for (size_t i = 0; i < list->len; i++) {
+    KhamToken t = list->tokens[i];
+    printf("%s  char %zu..%zu  %s\n", t.text, t.char_start, t.char_end, t.kind);
+}
+// ธนาคาร  char 0..6   Thai
+// 100     char 6..9   Number
+// แห่ง    char 9..13  Thai
+kham_token_list_free(list);
+```
+
+`KhamToken` fields: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind` (all null-terminated UTF-8 strings or `size_t`).
+
 ## Token contract
 
 Every `segment()` call returns `Vec<Token>`:
 
 ```rust
 pub struct Token<'a> {
-    pub text: &'a str,       // zero-copy slice of the input string
-    pub span: Range<usize>,  // byte offsets in the original string
-    pub kind: TokenKind,     // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+    pub text: &'a str,            // zero-copy slice of the input string
+    pub span: Range<usize>,       // byte offsets in the original string
+    pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets
+    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
 }
 ```
 
-Byte spans are always valid UTF-8 boundaries. Joining all `token.text` values (with whitespace kept) reconstructs the original input exactly.
+- `span` — byte offsets; use to slice `&str` directly (`&input[token.span.clone()]`)
+- `char_span` — Unicode scalar-value offsets; use for Python/JavaScript string indexing where strings are char- or code-unit-indexed
+- Both spans are always valid UTF-8 boundaries
+- Joining all `token.text` values (with whitespace kept) reconstructs the original input exactly
+
+```rust
+use kham_core::Tokenizer;
+
+let tok = Tokenizer::new();
+let input = "ธนาคาร100แห่ง";
+let tokens = tok.segment(input);
+
+// ธนาคาร: 6 chars, 18 bytes
+assert_eq!(tokens[0].span,      0..18);
+assert_eq!(tokens[0].char_span, 0..6);
+
+// 100: 3 chars, 3 bytes
+assert_eq!(tokens[1].span,      18..21);
+assert_eq!(tokens[1].char_span, 6..9);
+```
 
 ## Custom dictionary
 
@@ -244,18 +334,30 @@ classDiagram
         built-in CC0 word list
     }
 
+    class freq {
+        +FreqMap::builtin() FreqMap
+        +from_tsv(data) FreqMap
+        +get(word) u32
+        --
+        TNC raw occurrence counts
+        CC0 · 106k entries
+        DP tie-breaking scorer
+    }
+
     class segmenter {
         +segment(text) Vec~Token~
         +normalize(text) String
         --
         newmm DAG algorithm
         DP over TCC boundaries
-        minimises unknowns · max dict words
+        min unknowns · max dict words
+        TNC freq · min token count
     }
 
     class token {
         +text : and str
         +span : Range~usize~
+        +char_span : Range~usize~
         +kind : TokenKind
         --
         Thai · Latin · Number
@@ -267,6 +369,7 @@ classDiagram
     segmenter ..> pre_tokenizer : calls
     segmenter ..> tcc : calls
     segmenter ..> dict : queries
+    segmenter ..> freq : scores
     segmenter ..> token : emits
     pre_tokenizer ..> token : emits
 ```
@@ -290,7 +393,7 @@ flowchart TD
     subgraph THAI_PATH["Thai span processing"]
         TCC["<b>tcc::tcc_boundaries()</b>\nTCC boundary positions\n= legal word-break points"]
         DICT["<b>dict::prefixes()</b>\nDATS prefix search\nat each boundary"]
-        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nfewest total tokens as tiebreaker"]
+        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nTNC frequency score · fewest tokens"]
     end
 
     MERGE(["<b>Vec&lt;Token&lt;'_&gt;&gt;</b>\nzero-copy &amp;str slices"])
@@ -331,6 +434,68 @@ flowchart LR
     C5 --- BEST
 ```
 
+## Prerequisites
+
+### All targets
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Rust toolchain | ≥ 1.85 (MSRV) | `curl -sSf https://sh.rustup.rs \| sh` |
+| Cargo | ships with Rust | — |
+
+Verify: `rustc --version`
+
+---
+
+### WASM (`kham-wasm`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| `wasm32-unknown-unknown` target | — | `rustup target add wasm32-unknown-unknown` |
+| `wasm-pack` | ≥ 0.13 | `cargo install wasm-pack` |
+
+`wasm-pack` wraps `cargo build --target wasm32-unknown-unknown` and `wasm-bindgen-cli` to produce the `.wasm` binary and JavaScript/TypeScript glue in one step.
+
+---
+
+### Python (`kham-python`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Python | ≥ 3.8 | system package manager or [python.org](https://www.python.org/downloads/) |
+| `maturin` | ≥ 1.0 | `pip install maturin` |
+
+`maturin` compiles the PyO3 extension module and installs it into the active virtual environment. Always run inside a `venv` or `conda` environment.
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install maturin
+maturin develop -m kham-python/Cargo.toml
+```
+
+The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel runs on 3.8 through 3.13+.
+
+---
+
+### C (`kham-capi`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| `cbindgen` | ≥ 0.26 | `cargo install cbindgen` |
+| C compiler | any C11-capable compiler | system package manager |
+
+`cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
+
+```bash
+cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
+cargo build -p kham-capi --release
+# macOS: target/release/libkham_capi.dylib
+# Linux: target/release/libkham_capi.so
+# Windows: target/release/kham_capi.dll
+```
+
+---
+
 ## Building
 
 ```bash
@@ -343,11 +508,14 @@ cargo run -p kham-cli -- "ข้อความ"           # run CLI
 
 The `kham-core` build script (`build.rs`) pre-compiles the built-in dictionary into a binary DARTS blob (`$OUT_DIR/dict.bin`) on every `cargo build`. It only reruns when `build.rs` or `data/words_th.txt` change.
 
-Binding targets require additional tooling:
+Binding targets (after installing prerequisites above):
 
 ```bash
-wasm-pack build kham-wasm --target web           # WASM
-maturin develop -m kham-python/Cargo.toml        # Python wheel
+wasm-pack build kham-wasm --target web           # WASM → kham-wasm/pkg/
+maturin develop -m kham-python/Cargo.toml        # Python wheel (active venv)
+cbindgen --config kham-capi/cbindgen.toml \
+    --crate kham-capi --output kham-capi/include/kham.h  # C header
+cargo build -p kham-capi --release               # C shared library
 ```
 
 ## CI / CD
@@ -405,24 +573,87 @@ git push origin v0.1.0
 
 ## Benchmarks
 
-Measured on Apple M-series (release build, LTO, built-in 62k-word dictionary):
+### Environment
 
-| Benchmark | Time | Throughput |
+| Field | Value |
+|---|---|
+| CPU | Apple M-series (arm64) |
+| OS | macOS 26.4.1 |
+| Rust | 1.94.1 (stable) |
+| Profile | release (LTO enabled) |
+| Built-in dictionary | 62,102 words · 669,387 DARTS states · 5.1 MiB |
+| TNC frequency table | 106,125 entries |
+
+### Segmentation throughput (`segment/by_length`)
+
+Pure Thai input, built-in dictionary, no custom dict.
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| short | 37 B | 879 ns | 42.3 MiB/s |
+| medium | 182 B | 3.80 µs | 45.1 MiB/s |
+| long | 546 B | 10.9 µs | 47.1 MiB/s |
+
+### Mixed-script throughput (`segment/mixed`)
+
+Thai + Latin + Number in the same input, measuring pre-tokenizer boundary overhead.
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| sparse (`ธนาคาร100แห่ง`) | 26 B | 744 ns | 42.3 MiB/s |
+| medium (multi-boundary) | 74 B | 1.73 µs | 43.5 MiB/s |
+| dense (alternating script) | 29 B | 535 ns | 55.3 MiB/s |
+
+### Normalize + segment (`normalize_then_segment/medium`)
+
+| Operation | Time (median) |
+|---|---|
+| `normalize()` then `segment()` on medium input | 4.09 µs |
+
+### Normalization throughput (`normalize/thai`)
+
+| Input | Size | Time (median) | Throughput |
+|---|---|---|---|
+| short | 37 B | 79.9 ns | 465 MiB/s |
+| medium | 182 B | 199 ns | 864 MiB/s |
+| long | 546 B | 507 ns | 1.0 GiB/s |
+
+### Dictionary construction (`dict/construction`)
+
+| Operation | Time (median) | Notes |
 |---|---|---|
-| `segment` — short (~37 B) | ~1.0 µs | ~37 MiB/s |
-| `segment` — medium (~182 B) | ~4.0 µs | ~42 MiB/s |
-| `segment` — long (~546 B) | ~11.6 µs | ~44 MiB/s |
-| `dict::contains` (hit) | ~13–32 ns | ~520–690 MiB/s |
-| `dict::contains` (miss) | ~1.3 ns | ~4 GiB/s |
-| `dict::prefixes` | ~65–112 ns | ~275–860 MiB/s |
-| `builtin_dict()` — binary blob load | ~64 µs | — |
-| `Dict::from_word_list` — 62k words (custom merge) | ~960 ms | ~65k words/s |
-| Dict construction (small custom list) | ~4 µs | — |
+| `builtin_dict()` — binary blob load | 78 µs | pay-once startup cost |
+| `Dict::from_word_list` — 62k words | 980 ms | only when merging a custom dict |
+| `Dict::from_word_list` — 8-word list | 3.72 µs | small custom dict |
+| `dict/file/read_and_build` — disk + build | 1.01 s | `kham --dict <file>` startup |
+| `Tokenizer::builder().dict_file().build()` | 1.04 s | full CLI code path with custom dict |
 
-> `Tokenizer::new()` and `TokenizerBuilder::build()` (no custom dict) use `builtin_dict()` which
-> loads the pre-compiled DARTS binary produced by `build.rs` at compile time — ~15,000× faster
-> than constructing from text. `Dict::from_word_list` is only called when a custom dictionary is
-> merged with the built-in word list.
+> `builtin_dict()` is **~12,500×** faster than `Dict::from_word_list` because the DARTS trie is
+> pre-compiled by `build.rs` at compile time; runtime cost is a single O(S) binary decode pass.
+> `Dict::from_word_list` runs only when a user-supplied custom dictionary is merged with the built-in list.
+
+### Dictionary lookup (`dict/contains`, `dict/prefixes`)
+
+| Operation | Time (median) | Throughput |
+|---|---|---|
+| `contains` — hit (3-byte word `กิน`) | 7.1 ns | 1.18 GiB/s |
+| `contains` — hit (12-byte word `สวัสดี`) | 18.3 ns | 940 MiB/s |
+| `contains` — miss (ASCII non-word) | 744 ps | 7.5–8.8 GiB/s |
+| `prefixes` — short anchor (7 B) | 42.3 ns | 473 MiB/s |
+| `prefixes` — medium anchor (60 B) | 36.7 ns | 1.52 GiB/s |
+| `prefixes` — long anchor (97 B) | 74.5 ns | 1.24 GiB/s |
+
+### TNC frequency table (`freq/construction`, `freq/get`)
+
+| Operation | Time (median) | Notes |
+|---|---|---|
+| `FreqMap::builtin()` — parse 106k TSV entries | 22.1 ms | pay-once startup cost |
+| `FreqMap::get` — common word hit (`กิน`) | 67.8 ns | O(log n) BTreeMap |
+| `FreqMap::get` — rare word hit | 48.6 ns | |
+| `FreqMap::get` — miss | 56.5 ns | |
+
+> `FreqMap::builtin()` startup cost (~22 ms) is the dominant component of `Tokenizer::new()` (~20 ms total).
+> It is paid once per tokenizer instance; the returned `FreqMap` is reused across all `segment()` calls.
 
 Run locally:
 
@@ -434,6 +665,8 @@ cargo bench -p kham-core
 ## Dictionary
 
 The built-in word list (`kham-core/data/words_th.txt`) is CC0-licensed and contains 62,102 Thai words. Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
+
+A separate frequency table (`kham-core/data/tnc_freq.txt`, CC0) provides raw occurrence counts from the Thai National Corpus (106,125 entries). It is embedded at compile time and loaded into a `FreqMap` at runtime. The newmm DP scorer uses it as the third tiebreaker — after minimising unknown tokens and maximising dictionary matches — so statistically more common segmentations are preferred when multiple paths are otherwise equal. Frequency data is kept separate from `dict.bin`; do not merge them.
 
 **Constraint:** Never ship BEST corpus data or any non-CC0 material in this repository.
 
@@ -467,6 +700,13 @@ flowchart LR
     BD(["builtin_dict()\nready Dict"])
 
     WL --> BS --> BIN --> IB --> RT --> BD
+
+    FQ(["tnc_freq.txt\n106k entries · CC0"])
+    FM["include_str!\nembedded at compile time"]
+    FP["FreqMap::builtin()\nparse TSV → BTreeMap"]
+    FS(["FreqMap\nDP tie-breaking scorer"])
+
+    FQ --> FM --> FP --> FS
 ```
 
 #### Validity guarantees

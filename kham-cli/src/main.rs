@@ -13,6 +13,7 @@
 //!     -w, --whitespace     Include whitespace tokens in output
 //!     -n, --normalize      Run normalize() before segmenting
 //!     -k, --kind           Append token kind after each token (e.g. กิน:Thai)
+//!         --spans          Append char span after each token (e.g. กิน:0-3)
 //!     -h, --help           Print help information
 //!     -V, --version        Print version information
 //! ```
@@ -55,6 +56,10 @@ struct Cli {
     /// Append the token kind after each token text (e.g. กิน:Thai).
     #[arg(short, long)]
     kind: bool,
+
+    /// Append the Unicode char span after each token text (e.g. กิน:0-3).
+    #[arg(long)]
+    spans: bool,
 }
 
 fn main() {
@@ -199,12 +204,14 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
 
     let parts: Vec<String> = tokens
         .iter()
-        .map(|t| {
-            if cli.kind {
-                format!("{}:{:?}", t.text, t.kind)
-            } else {
-                t.text.to_string()
-            }
+        .map(|t| match (cli.kind, cli.spans) {
+            (true, true) => format!(
+                "{}:{:?}:{}-{}",
+                t.text, t.kind, t.char_span.start, t.char_span.end
+            ),
+            (true, false) => format!("{}:{:?}", t.text, t.kind),
+            (false, true) => format!("{}:{}-{}", t.text, t.char_span.start, t.char_span.end),
+            (false, false) => t.text.to_string(),
         })
         .collect();
 

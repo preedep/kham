@@ -43,27 +43,45 @@ fn bench_tokenizer_new(c: &mut Criterion) {
     });
 }
 
-/// Measure `segment()` for different input sizes.
+/// Measure `segment()` throughput for pure-Thai inputs at three sizes.
+///
+/// Group ID: `segment/by_length` — criterion reports MB/s via `Throughput::Bytes`.
 fn bench_segment_by_length(c: &mut Criterion) {
     let tok = Tokenizer::new();
     let inputs = [("short", SHORT), ("medium", MEDIUM), ("long", LONG)];
 
-    let mut group = c.benchmark_group("segment");
+    let mut group = c.benchmark_group("segment/by_length");
     for (label, text) in inputs {
         group.throughput(Throughput::Bytes(text.len() as u64));
-        group.bench_with_input(BenchmarkId::new("thai", label), text, |b, text| {
+        group.bench_with_input(BenchmarkId::from_parameter(label), text, |b, text| {
             b.iter(|| criterion::black_box(tok.segment(text)));
         });
     }
     group.finish();
 }
 
-/// Measure `segment()` on mixed-script input specifically.
-fn bench_segment_mixed_script(c: &mut Criterion) {
+/// Measure `segment()` throughput for mixed-script inputs.
+///
+/// Group ID: `segment/mixed` — exercises the pre-tokenizer split overhead
+/// (Thai→Latin→Number boundary detection) in addition to DP cost.
+fn bench_segment_mixed(c: &mut Criterion) {
     let tok = Tokenizer::new();
-    c.bench_function("segment/mixed_script", |b| {
-        b.iter(|| criterion::black_box(tok.segment(MIXED)));
-    });
+
+    // Three inputs at increasing density of script-boundary crossings.
+    let inputs: &[(&str, &str)] = &[
+        ("sparse", "ธนาคาร100แห่ง"),
+        ("medium", MIXED),
+        ("dense", "a1ก2b3ข4c5ค6d7ง8e9จ10"),
+    ];
+
+    let mut group = c.benchmark_group("segment/mixed");
+    for &(label, text) in inputs {
+        group.throughput(Throughput::Bytes(text.len() as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(label), text, |b, text| {
+            b.iter(|| criterion::black_box(tok.segment(text)));
+        });
+    }
+    group.finish();
 }
 
 /// Measure `normalize()` — tone dedup + Sara Am composition pass.
@@ -101,7 +119,7 @@ criterion_group!(
     benches,
     bench_tokenizer_new,
     bench_segment_by_length,
-    bench_segment_mixed_script,
+    bench_segment_mixed,
     bench_normalize,
     bench_normalize_then_segment,
 );

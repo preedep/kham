@@ -11,23 +11,33 @@ Workspace with multiple crates:
     - `pre_tokenizer` — Unicode script classification (Thai/Latin/Number/Emoji/URL)
     - `tcc` — Thai Character Cluster boundaries (Theeramunkong et al. 2000)
     - `dict` — Double-Array Trie (DARTS), built-in `words_th.txt` via `include_bytes!`
+    - `freq` — TNC frequency table (`tnc_freq.txt`), `FreqMap` used by DP scorer
     - `segmenter` — DAG-based maximal matching (newmm algorithm)
     - `token` — `Token` struct with text, byte span, char span, `TokenKind`
-- `kham-python/` — PyO3 bindings
-- `kham-wasm/` — wasm-bindgen bindings
-- `kham-capi/` — C FFI with cbindgen
+- `kham-python/` — PyO3 bindings; exposes `segment()` → `list[str]` and `segment_tokens()` → `list[Token]`
+- `kham-wasm/` — wasm-bindgen bindings; exposes `segment()` → `string[]` and `segment_tokens()` → `Token[]`
+- `kham-capi/` — C FFI with cbindgen; exposes `kham_segment()` (legacy `KhamTokens`) and `kham_segment_tokens()` (`KhamTokenList` with `KhamToken` structs)
 - `kham-cli/` — CLI binary using clap
 
 ## Commands
 
 ```bash
+cargo fmt --all                      # format (run before every commit)
+cargo fmt --all -- --check           # verify formatting (CI gate)
+cargo clippy --all-targets -- -D warnings  # lint (CI gate)
 cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
 cargo run -p kham-cli -- "ข้อความ"    # run CLI
-wasm-pack build kham-wasm --target web  # build WASM
-maturin develop -m kham-python/Cargo.toml  # build Python wheel
+
+# Binding targets (see Prerequisites in README.md for tooling)
+wasm-pack build kham-wasm --target web                          # build WASM
+maturin develop -m kham-python/Cargo.toml                       # build Python wheel
+source .venv/bin/activate && pytest kham-python/tests/ -v       # run Python tests
+cbindgen --config kham-capi/cbindgen.toml \
+    --crate kham-capi --output kham-capi/include/kham.h         # regenerate C header
+cargo build -p kham-capi --release                              # build C shared library
 ```
 
 ## Code Style
@@ -40,27 +50,58 @@ maturin develop -m kham-python/Cargo.toml  # build Python wheel
 - For general Rust conventions, follow the `rust-engineer` skill
 - For wasm build Rust, follow the `rust-wasm-build` skill
 
+### Formatting — run before every commit
+
+```bash
+cargo fmt --all                  # format
+cargo fmt --all -- --check       # verify (what CI runs)
+```
+
+The CI `fmt` job fails if any diff exists. Common triggers:
+- Long function signatures or call-sites not broken across lines (`rustfmt` wraps at 100 chars)
+- Struct literals with 3+ fields left on one line
+- `assert!` / `assert_eq!` with a message argument not split onto its own line
+
+**Always run `cargo fmt --all` before pushing.** If you edit any `.rs` file, format before committing — do not rely on CI to catch it.
+
+### Clippy — run before every commit
+
+```bash
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --all-targets -- -D warnings
+```
+
+Common clippy failures in this codebase:
+- `map_or(false, |x| …)` → use `is_some_and(|x| …)` instead
+- `map_or(true, |x| …)` → use `is_none_or(|x| …)` instead
+- Needless `return`, redundant closures, or unused `mut` bindings
+
 ## Token Output Contract
 
 Every segmentation returns `Vec<Token>` where:
 
 ```rust
 pub struct Token<'a> {
-    pub text: &'a str,       // zero-copy reference to input
-    pub span: Range<usize>,  // byte offset in original text
-    pub kind: TokenKind,     // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+    pub text: &'a str,            // zero-copy reference to input
+    pub span: Range<usize>,       // byte offsets in original text
+    pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets in original text
+    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
 }
 ```
 
-Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+Number input.
+Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/JavaScript string indexing. Always test both `span` and `char_span` with mixed Thai+English+Number+Emoji input.
 
 ## Testing
 
 - Unit tests co-located in each module
 - Integration tests in `kham-core/tests/` with real Thai text
 - Benchmark suite in `benches/` using criterion — compare against nlpO3
-- Test data: `testdata/` directory with `.txt` files (one test case per line, pipe-separated expected output)
+- Test data: `kham-core/testdata/` — one `.txt` file per scenario, loaded by `kham-core/tests/integration.rs`
+  - `basic.txt` — pure Thai sentences, all tokens must be `TokenKind::Thai`
+  - `mixed_script.txt` — Thai + Latin + Number combinations
+  - `normalization.txt` — canonical inputs; asserts `normalize()` is idempotent then segments correctly
+  - Format: `input|tok1|tok2|…` (one case per line; lines starting with `#` are comments; whitespace tokens excluded)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
+- Python binding tests: `kham-python/tests/test_kham.py` — 30 pytest cases covering `segment_tokens()` char_span round-trip, byte_span UTF-8 decoding, kind labels, contiguity, and edge cases; run after every `maturin develop`
 
 ## Dictionary
 
@@ -72,6 +113,52 @@ Byte spans must be valid UTF-8 boundaries. Always test with mixed Thai+English+N
 - Keep memory usage predictable and efficient
 - Avoid unnecessary allocations during dictionary loading and token lookup
 - Prefer compact trie/node representations for large-scale dictionaries
+- Frequency data: `tnc_freq.txt` (CC0, Thai National Corpus raw counts) embedded separately from `dict.bin` — loaded into `FreqMap` at runtime, used by the newmm DP scorer to break ties between equally-matched segmentation paths; do not merge into the trie binary
+
+## Segmenter DP scoring
+
+The newmm forward DP uses a 4-field lexicographic score (`DpScore`) to select the best segmentation path. Priority order is fixed — do not reorder the fields:
+
+1. **Minimise unknowns** (`neg_unknowns`) — fewest out-of-vocabulary tokens, primary criterion
+2. **Maximise dict matches** (`dict_words`) — more recognised words is better
+3. **Maximise TNC frequency** (`freq_score`) — cumulative raw corpus counts break ties between equally-matched paths; unknown edges contribute 0
+4. **Minimise token count** (`neg_tokens`) — final tiebreaker; fewer, longer tokens preferred
+
+When adding a new scoring dimension, insert it at the correct priority position and update the `DpScore` struct field order (the `Ord` derive compares fields in declaration order).
+
+## Binding crates
+
+All three bindings expose two functions:
+
+| Function | Returns | Use when |
+|---|---|---|
+| `segment(text)` | token strings only | simple tokenisation, backward-compatible |
+| `segment_tokens(text)` | rich token objects | span information needed |
+
+**Token field mapping** — `Token.char_span: Range<usize>` is flattened into two integer fields in every binding: `char_start` and `char_end`. The same pattern applies to `span` → `byte_start` / `byte_end`. Follow this convention for any future `Token` field additions.
+
+**Rule: adding a field to `Token` requires updating all three bindings.** The binding layer is the boundary where Rust types are serialised for the target language — a field that exists in `kham-core` but not in the binding is silently invisible to callers.
+
+**C FFI legacy API** — `KhamTokens` / `kham_segment()` / `kham_tokens_free()` exist for backward compatibility and return only token strings. Do not remove them. New span-aware callers should use `kham_segment_tokens()` / `kham_token_list_free()`.
+
+**C FFI safety** — `kham-capi` is the only crate in this workspace that uses `unsafe`. This is intentional (FFI boundary). Do not add `unsafe` to any other crate.
+
+**C header location** — `kham-capi/include/kham.h` is generated by cbindgen and is gitignored. Regenerate it with `cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h` whenever `KhamToken`, `KhamTokenList`, or any exported symbol changes. The `[export] include` list in `cbindgen.toml` must be kept in sync with the public `#[repr(C)]` structs in `src/lib.rs`.
+
+## CLI design
+
+`kham-cli` exposes options that map to **user-facing runtime inputs** — things that vary per invocation and that a non-developer user can reasonably author:
+
+- `--dict <FILE>` — custom word list (plain text, one word per line); users have domain vocabulary
+- `--sep`, `--whitespace`, `--normalize`, `--kind`, `--spans` — output formatting
+  - `--kind` appends token kind: `กิน:Thai`
+  - `--spans` appends Unicode char span: `กิน:0-3`
+  - Combined `--kind --spans`: `กิน:Thai:0-3`
+
+**Do not add** a `--freq-file` or `--no-freq` flag. Frequency data is an internal scorer detail, not a user input:
+- It is a tiebreaker that only activates when unknown count and dict match count are identical
+- Users cannot meaningfully author replacement frequency data (requires corpus counts)
+- If domain-tuned frequencies are ever needed, add `freq_tsv(data: &str)` to `TokenizerBuilder` first, then reconsider the CLI
 
 ## Important
 
@@ -108,12 +195,13 @@ cargo bench
 
 ### Benchmark Scope
 
-- Dictionary build time
-- Dictionary lookup throughput
-- Prefix lookup throughput
-- End-to-end segmentation throughput
-- Mixed-script segmentation performance
-- Memory footprint of built-in dictionary
+- Dictionary build time (`dict/construction/from_binary_blob`, `from_builtin_word_list`)
+- Dictionary lookup throughput (`dict/contains/hit`, `dict/contains/miss`)
+- Prefix lookup throughput (`dict/prefixes`)
+- FreqMap startup cost (`freq/construction/builtin`) — compare against `dict/construction/from_binary_blob` to see relative weight
+- FreqMap lookup throughput (`freq/get`) — hit, rare-hit, and miss cases
+- End-to-end segmentation throughput (`segment/by_length/short`, `medium`, `long`) — pure Thai, reports MB/s
+- Mixed-script segmentation performance (`segment/mixed/sparse`, `medium`, `dense`) — exercises pre-tokenizer boundary overhead
 
 ### Benchmark Rules
 

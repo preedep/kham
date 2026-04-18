@@ -10,6 +10,7 @@ use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
 use kham_core::dict::{builtin_dict, Dict, BUILTIN_WORDS};
+use kham_core::freq::FreqMap;
 use kham_core::Tokenizer;
 
 /// Absolute path to the bundled word list, resolved at compile time.
@@ -200,6 +201,52 @@ fn bench_tokenizer_dict_file(c: &mut Criterion) {
     group.finish();
 }
 
+// ---------------------------------------------------------------------------
+// FreqMap benchmarks
+// ---------------------------------------------------------------------------
+
+/// `FreqMap::builtin()` — parse 106k TSV entries into a BTreeMap.
+///
+/// This is the startup cost paid on every `Tokenizer::new()` call.
+/// Compare against `dict/construction/from_binary_blob` to see the relative
+/// weight of freq loading vs. dict loading.
+fn bench_freqmap_builtin(c: &mut Criterion) {
+    let mut group = c.benchmark_group("freq/construction");
+    group
+        .sample_size(20)
+        .warm_up_time(Duration::from_secs(1))
+        .measurement_time(Duration::from_secs(10));
+    group.bench_function("builtin", |b| {
+        b.iter(|| {
+            let m = FreqMap::builtin();
+            criterion::black_box(m);
+        });
+    });
+    group.finish();
+}
+
+/// `FreqMap::get()` — single word lookup in the built-in BTreeMap.
+///
+/// Tests hit (word in TNC), miss (word not in TNC), and a common Thai word
+/// to profile BTreeMap O(log n) traversal on the 106k-entry table.
+fn bench_freqmap_get(c: &mut Criterion) {
+    let freq = FreqMap::builtin();
+
+    let cases: &[(&str, &str)] = &[
+        ("hit_common", "กิน"),
+        ("hit_rare", "มะม่วงหิมพานต์"),
+        ("miss", "xxxxxxnotaword"),
+    ];
+
+    let mut group = c.benchmark_group("freq/get");
+    for &(label, word) in cases {
+        group.bench_with_input(BenchmarkId::from_parameter(label), word, |b, w| {
+            b.iter(|| criterion::black_box(freq.get(w)));
+        });
+    }
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_dict_from_binary,
@@ -211,5 +258,7 @@ criterion_group!(
     bench_contains_hit,
     bench_contains_miss,
     bench_prefixes,
+    bench_freqmap_builtin,
+    bench_freqmap_get,
 );
 criterion_main!(benches);

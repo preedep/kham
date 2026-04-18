@@ -182,11 +182,12 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
     // `text.len() / 4` avoids most reallocations without over-allocating.
     let mut tokens: Vec<Token<'_>> = Vec::with_capacity(text.len() / 4 + 1);
 
-    // `span_start` is the byte offset where the current span began.
-    // `span_kind` is the `TokenKind` shared by all chars in the current span.
-    // Both are `None` only before the very first character is processed.
+    // `span_start`/`char_span_start` track the byte/char offset where the
+    // current span began. `span_kind` is `None` only before the first char.
     let mut span_start = 0usize;
+    let mut char_span_start = 0usize;
     let mut span_kind: Option<TokenKind> = None;
+    let mut char_pos = 0usize;
 
     for (byte_pos, c) in text.char_indices() {
         let kind = classify_char(c);
@@ -195,6 +196,7 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
             // No span open yet — start the first one.
             None => {
                 span_start = byte_pos;
+                char_span_start = char_pos;
                 span_kind = Some(kind);
             }
 
@@ -203,35 +205,57 @@ pub fn pre_tokenize(text: &str) -> Vec<Token<'_>> {
 
             // Different kind — flush the completed span and open a new one.
             Some(k) => {
-                push_token(&mut tokens, text, span_start, byte_pos, k);
+                push_token(
+                    &mut tokens,
+                    text,
+                    span_start,
+                    byte_pos,
+                    char_span_start,
+                    char_pos,
+                    k,
+                );
                 span_start = byte_pos;
+                char_span_start = char_pos;
                 span_kind = Some(kind);
             }
         }
+
+        char_pos += 1;
     }
 
     // Flush the final span (always non-empty because text is non-empty).
     if let Some(k) = span_kind {
-        push_token(&mut tokens, text, span_start, text.len(), k);
+        push_token(
+            &mut tokens,
+            text,
+            span_start,
+            text.len(),
+            char_span_start,
+            char_pos,
+            k,
+        );
     }
 
     tokens
 }
 
-/// Construct a [`Token`] from a byte range of `text` and push it onto `out`.
-///
-/// This helper centralises the slice construction so that the main loop stays
-/// free of repetitive indexing. The byte range `start..end` must be valid
-/// UTF-8 boundaries within `text`.
+/// Construct a [`Token`] from byte and char ranges of `text` and push it onto `out`.
 #[inline]
 fn push_token<'t>(
     out: &mut Vec<Token<'t>>,
     text: &'t str,
     start: usize,
     end: usize,
+    char_start: usize,
+    char_end: usize,
     kind: TokenKind,
 ) {
-    out.push(Token::new(&text[start..end], start..end, kind));
+    out.push(Token::new(
+        &text[start..end],
+        start..end,
+        char_start..char_end,
+        kind,
+    ));
 }
 
 // ---------------------------------------------------------------------------
@@ -508,6 +532,49 @@ mod tests {
                 pair[0], pair[1]
             );
         }
+    }
+
+    #[test]
+    fn char_spans_are_contiguous() {
+        let text = "กิน hello 123!😀";
+        let tokens = pre_tokenize(text);
+        for pair in tokens.windows(2) {
+            assert_eq!(
+                pair[0].char_span.end, pair[1].char_span.start,
+                "char_span gap between {:?} and {:?}",
+                pair[0].text, pair[1].text
+            );
+        }
+    }
+
+    #[test]
+    fn char_span_len_matches_char_count() {
+        let text = "ธนาคาร100แห่ง";
+        for tok in pre_tokenize(text) {
+            assert_eq!(
+                tok.char_span.end - tok.char_span.start,
+                tok.text.chars().count(),
+                "char_span mismatch for {:?}",
+                tok.text
+            );
+        }
+    }
+
+    #[test]
+    fn char_span_mixed_script_offsets() {
+        // "ธนาคาร100แห่ง": ธนาคาร=6 chars, 100=3 chars, แห่ง=4 chars
+        let tokens = pre_tokenize("ธนาคาร100แห่ง");
+        assert_eq!(tokens[0].char_span, 0..6);
+        assert_eq!(tokens[1].char_span, 6..9);
+        assert_eq!(tokens[2].char_span, 9..13);
+    }
+
+    #[test]
+    fn char_span_emoji_counts_as_one_char() {
+        // 😀 is 4 bytes but 1 Unicode scalar value.
+        let tokens = pre_tokenize("😀");
+        assert_eq!(tokens[0].char_span, 0..1);
+        assert_eq!(tokens[0].span, 0..4);
     }
 
     // ── classify_char direct tests ────────────────────────────────────────────

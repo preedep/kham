@@ -5,4 +5,4 @@ documentation = true
 documentation_style = "doxy"
 
 [export]
-include = ["KhamTokens"]
+include = ["KhamTokens", "KhamToken", "KhamTokenList"]
