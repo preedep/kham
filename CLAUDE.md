@@ -228,6 +228,7 @@ tagger.tag(word: &str) -> Option<PosTag>    // None if OOV; PosTag is Copy
 
 PosTag::from_tag("VERB") -> Option<PosTag>  // parse TSV tag string
 PosTag::Verb.as_tag() -> &'static str       // "VERB"
+PosTag::Verb.as_str() -> &'static str       // "Verb" (human-readable label, title case)
 ```
 
 Data file: `kham-core/data/pos_th.tsv` — tab-separated, sections grouped by tag with `# ── NOUN ──` comments.
@@ -430,6 +431,7 @@ All three bindings expose two functions:
   - `--kind` appends token kind: `กิน:Thai`
   - `--spans` appends Unicode char span: `กิน:0-3`
   - Combined `--kind --spans`: `กิน:Thai:0-3`
+- `--fts` — switches to `FtsTokenizer`; prints one token per line with tab-separated fields: `text kind=KIND pos=POS ne=NE stop=BOOL`. Intended for testing and inspecting the FTS pipeline output (POS, NE, stopword). Incompatible with `--dict` (warns and ignores it).
 
 **Do not add** a `--freq-file` or `--no-freq` flag. Frequency data is an internal scorer detail, not a user input:
 - It is a tiebreaker that only activates when unknown count and dict match count are identical

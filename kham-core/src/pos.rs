@@ -128,6 +128,25 @@ impl PosTag {
             Self::Preposition => "PREP",
         }
     }
+
+    /// A human-readable label for use in output and bindings.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Noun => "Noun",
+            Self::Verb => "Verb",
+            Self::Adj => "Adj",
+            Self::Adv => "Adv",
+            Self::Particle => "Particle",
+            Self::ProperNoun => "ProperNoun",
+            Self::Pronoun => "Pronoun",
+            Self::Numeral => "Numeral",
+            Self::Classifier => "Classifier",
+            Self::Conjunction => "Conjunction",
+            Self::Auxiliary => "Auxiliary",
+            Self::Determiner => "Determiner",
+            Self::Preposition => "Preposition",
+        }
+    }
 }
 
 /// Table-driven POS tagger backed by a `BTreeMap<word, PosTag>`.

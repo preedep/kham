@@ -225,6 +225,21 @@ kham --dict my_words.txt "มะม่วงหิมพานต์"
 # Pipeline / stdin
 echo "กินข้าว" | kham
 cat corpus.txt | kham --sep " "
+
+# FTS pipeline — kind, POS, NE, and stopword metadata (one token per line)
+kham --fts "ทักษิณเดินทางไปไทย"
+# ทักษิณ   kind=Person  pos=-            ne=Person  stop=false
+# เดิน     kind=Thai    pos=Verb         ne=-       stop=false
+# ทาง     kind=Thai    pos=-            ne=-       stop=true
+# ไป      kind=Thai    pos=Verb         ne=-       stop=true
+# ไทย     kind=Place   pos=-            ne=Place   stop=false
+
+# Pipe through column -t for aligned output
+kham --fts "กินข้าวกับปลา" | column -t
+# กิน   kind=Thai  pos=Verb         ne=-  stop=false
+# ข้าว  kind=Thai  pos=Noun         ne=-  stop=false
+# กับ   kind=Thai  pos=Conjunction  ne=-  stop=true
+# ปลา  kind=Thai  pos=Noun         ne=-  stop=false
 ```
 
 Full options:
@@ -242,6 +257,8 @@ Options:
   -n, --normalize     Run normalize() before segmenting
   -k, --kind          Append token kind after each token (e.g. กิน:Thai)
       --spans         Append Unicode char span after each token (e.g. กิน:0-3)
+      --fts           Run FTS pipeline; print one token per line with kind,
+                      POS, NE, and stopword metadata (tab-separated)
   -h, --help          Print help
   -V, --version       Print version
 ```
