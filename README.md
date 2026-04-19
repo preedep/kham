@@ -29,7 +29,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
 | `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header; includes FTS API |
-| `kham-pg` | — | PostgreSQL extension: custom text search parser for Thai |
+| `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) (coming soon) | PostgreSQL extension: custom text search parser for Thai |
 
 ## Quick start
 
@@ -130,15 +130,15 @@ for (const t of tokens) {
 **Prerequisites:** Docker with BuildKit (for the test runner), or PostgreSQL dev headers and `pg_config` for a local install.
 
 ```bash
-# Build and run pg_regress tests in Docker
+# Build and run pg_regress tests in Docker (67 tests across 4 suites)
 make -C kham-pg regress
 
 # Manual install (if pg_config is in PATH)
-cargo build -p kham-pg --release
-cp target/release/libkham_pg.so $(pg_config --pkglibdir)/kham_pg.so
-cp kham-pg/kham_pg.control $(pg_config --sharedir)/extension/
-cp kham-pg/sql/kham_pg--0.1.0.sql $(pg_config --sharedir)/extension/
+make -C kham-pg install
 psql -c "CREATE EXTENSION kham_pg;"
+
+# PGXN distribution zip (for upload to pgxn.org)
+make -C kham-pg dist       # produces kham-pg/kham_pg-0.1.3.zip
 ```
 
 Once installed:
@@ -163,18 +163,31 @@ SELECT * FROM ts_parse('kham', 'กินข้าวกับปลา');
 -- 1  กับ
 -- 1  ปลา
 
--- Build a tsvector (stopwords removed, lexemes normalised)
+-- Build a tsvector (all token types indexed; kham_dict uses simple template)
 SELECT to_tsvector('kham', 'กินข้าวกับปลา');
--- 'กิน':1 'ข้าว':2 'ปลา':3
+-- 'กิน':1 'กับ':3 'ข้าว':2 'ปลา':4
 
--- Full-text search
+-- Full-text search (AND)
 SELECT title FROM articles
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าวกับปลา');
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าว ปลา');
 
--- Phrase search
+-- Phrase search (adjacent tokens)
 SELECT title FROM articles
-WHERE to_tsvector('kham', body) @@ phraseto_tsquery('kham', 'ข้าว ปลา');
+WHERE to_tsvector('kham', body) @@ phraseto_tsquery('kham', 'กิน ข้าว');
+
+-- GIN index for large tables
+CREATE INDEX articles_fts_idx ON articles
+    USING GIN (to_tsvector('kham', body));
+
+-- Ranked results
+SELECT title,
+       ts_rank(to_tsvector('kham', body), plainto_tsquery('kham', 'ปลา')) AS rank
+FROM articles
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา')
+ORDER BY rank DESC;
 ```
+
+> **Note:** `ts_headline` is not supported — the kham parser has no HEADLINE callback. This is a known limitation of custom parsers in PostgreSQL.
 
 ### CLI
 
@@ -777,6 +790,7 @@ Two GitHub Actions workflows run automatically:
 | `wasm` | `wasm-pack build --target web` succeeds |
 | `python` | `maturin develop` on Python 3.8 and 3.12 |
 | `bench_compile` | Benchmark suite compiles without errors |
+| `pg_regress` | 67 SQL correctness tests across 4 suites (`kham_fts`, `kham_thai`, `kham_operators`, `kham_ranking`) inside Docker PostgreSQL 17 |
 
 ### Release (`release.yml`) — on `v*.*.*` tag push
 
