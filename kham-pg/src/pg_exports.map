@@ -1,0 +1,11 @@
+{
+    Pg_magic_func;
+    kham_start;
+    kham_gettoken;
+    kham_end;
+    kham_lextypes;
+    pg_finfo_kham_start;
+    pg_finfo_kham_gettoken;
+    pg_finfo_kham_end;
+    pg_finfo_kham_lextypes;
+};

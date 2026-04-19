@@ -28,7 +28,8 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-cli` | [crates.io](https://crates.io/crates/kham-cli) | `kham` binary (clap) |
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
-| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header |
+| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header; includes FTS API |
+| `kham-pg` | — | PostgreSQL extension: custom text search parser for Thai |
 
 ## Quick start
 
@@ -121,6 +122,59 @@ for (const t of tokens) {
 > **Note on JS string offsets:** `char_start`/`char_end` are Unicode scalar-value counts.
 > For BMP text these equal JavaScript's `string.slice()` indices. For surrogate-pair
 > emoji, use `byte_start`/`byte_end` with `TextEncoder` for precise byte-level slicing.
+
+### PostgreSQL
+
+`kham-pg` is a PostgreSQL extension that registers a custom text search parser so you can index and query Thai text with `tsvector` / `tsquery`.
+
+**Prerequisites:** Docker with BuildKit (for the test runner), or PostgreSQL dev headers and `pg_config` for a local install.
+
+```bash
+# Build and run pg_regress tests in Docker
+make -C kham-pg regress
+
+# Manual install (if pg_config is in PATH)
+cargo build -p kham-pg --release
+cp target/release/libkham_pg.so $(pg_config --pkglibdir)/kham_pg.so
+cp kham-pg/kham_pg.control $(pg_config --sharedir)/extension/
+cp kham-pg/sql/kham_pg--0.1.0.sql $(pg_config --sharedir)/extension/
+psql -c "CREATE EXTENSION kham_pg;"
+```
+
+Once installed:
+
+```sql
+-- Register the extension
+CREATE EXTENSION kham_pg;
+
+-- Inspect token types produced by the parser
+SELECT * FROM ts_token_type('kham');
+-- 1  thai     Thai word
+-- 2  latin    Latin script token
+-- 3  number   Numeric token
+-- 4  punct    Punctuation
+-- 5  emoji    Emoji token
+-- 6  unknown  Unknown / OOV token
+
+-- Tokenise a document
+SELECT * FROM ts_parse('kham', 'กินข้าวกับปลา');
+-- 1  กิน
+-- 1  ข้าว
+-- 1  กับ
+-- 1  ปลา
+
+-- Build a tsvector (stopwords removed, lexemes normalised)
+SELECT to_tsvector('kham', 'กินข้าวกับปลา');
+-- 'กิน':1 'ข้าว':2 'ปลา':3
+
+-- Full-text search
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าวกับปลา');
+
+-- Phrase search
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ phraseto_tsquery('kham', 'ข้าว ปลา');
+```
 
 ### CLI
 
@@ -219,6 +273,35 @@ kham_token_list_free(list);
 
 `KhamToken` fields: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind` (all null-terminated UTF-8 strings or `size_t`).
 
+#### FTS API (C)
+
+Run the full Thai FTS pipeline from C to get stopword flags, synonym expansions, and OOV trigrams:
+
+```c
+#include "kham.h"
+
+// Annotated FTS tokens (all non-whitespace, with metadata)
+KhamFtsTokenList *fts = kham_fts_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < fts->len; i++) {
+    KhamFtsToken t = fts->tokens[i];
+    printf("%s  pos=%zu  stop=%d  synonyms=%zu  trigrams=%zu\n",
+           t.text, t.position, t.is_stop, t.synonyms_len, t.trigrams_len);
+}
+// กิน  pos=0  stop=0  synonyms=0  trigrams=0
+// ข้าว pos=1  stop=0  synonyms=0  trigrams=0
+// กับ  pos=2  stop=1  synonyms=0  trigrams=0
+// ปลา  pos=3  stop=0  synonyms=0  trigrams=0
+kham_fts_token_list_free(fts);
+
+// Flat lexeme array for tsvector population (stopwords removed)
+size_t n = 0;
+char **lexemes = kham_fts_lexemes("กินข้าวกับปลา", &n);
+// lexemes[0] = "กิน", lexemes[1] = "ข้าว", lexemes[2] = "ปลา"  (n = 3)
+kham_fts_lexemes_free(lexemes, n);
+```
+
+`KhamFtsToken` fields: `text`, `position` (`size_t`), `kind`, `is_stop` (`bool`), `synonyms`/`synonyms_len`, `trigrams`/`trigrams_len`.
+
 ## Token contract
 
 Every `segment()` call returns `Vec<Token>`:
@@ -274,7 +357,7 @@ let tok = Tokenizer::builder()
 
 ## Full-Text Search (FTS)
 
-`kham-core` ships a complete Thai FTS pipeline on top of the segmenter, ready for PostgreSQL `tsvector` integration (see `kham-pg`, Phase 2).
+`kham-core` ships a complete Thai FTS pipeline on top of the segmenter. The `kham-pg` PostgreSQL extension (Phase 2) wraps this pipeline as a custom text search parser — see the [PostgreSQL quick start](#postgresql) above.
 
 ### Basic indexing
 
@@ -364,12 +447,15 @@ graph LR
     cli["<b>kham-cli</b><br/>kham binary<br/>(clap)"]
     python["<b>kham-python</b><br/>Python wheel<br/>(PyO3 · maturin)"]
     wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
-    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)"]
+    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)<br/>segment · FTS · lexemes"]
+
+    pg["<b>kham-pg</b><br/>PostgreSQL extension<br/>(C shim · cdylib)"]
 
     core --> cli
     core --> python
     core --> wasm
     core --> capi
+    core --> pg
 ```
 
 ### Core module responsibilities
@@ -610,6 +696,24 @@ The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel run
 | `cbindgen` | ≥ 0.26 | `cargo install cbindgen` |
 | C compiler | any C11-capable compiler | system package manager |
 
+---
+
+### PostgreSQL (`kham-pg`)
+
+| Tool | Version | Install |
+|------|---------|---------|
+| Docker with BuildKit | ≥ 24 | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| `make` | any | system package manager |
+
+For local (non-Docker) builds, also install:
+
+| Tool | Version | Install |
+|------|---------|---------|
+| PostgreSQL dev headers | 14–17 | Linux: `apt install postgresql-server-dev-17` · macOS: `brew install postgresql@17` |
+| `pg_config` | ships with dev headers | — |
+| C compiler | any C11-capable compiler | system package manager |
+| GNU gettext | any | macOS only: `brew install gettext` (provides `libintl.h` required by PG headers) |
+
 `cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
 
 ```bash
@@ -642,6 +746,7 @@ cd kham-python && maturin develop                # Python wheel (active venv)
 cbindgen --config kham-capi/cbindgen.toml \
     --crate kham-capi --output kham-capi/include/kham.h  # C header
 cargo build -p kham-capi --release               # C shared library
+make -C kham-pg regress                          # PostgreSQL: build + run pg_regress in Docker
 ```
 
 ### Deploy script
@@ -799,6 +904,59 @@ Run locally:
 ```bash
 cargo bench -p kham-core
 # HTML report: target/criterion/report/index.html
+```
+
+### PostgreSQL extension (`kham-pg`)
+
+The kham-pg extension is benchmarked at the SQL level using `pgbench` inside the Docker test container, plus system-level CPU/memory via `docker stats`.
+
+#### 1 · Latency — psql `\timing`
+
+```sql
+\timing on
+SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
+
+-- Per-node breakdown
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT to_tsvector('kham', body) FROM documents LIMIT 1000;
+```
+
+#### 2 · Throughput — `pgbench`
+
+Create `bench_fts.sql`:
+
+```sql
+SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
+```
+
+Run via Docker:
+
+```bash
+# Terminal 1 — watch CPU/memory while bench runs
+docker stats docker-regress-1
+
+# Terminal 2 — throughput bench (4 clients, 30 seconds)
+docker exec docker-regress-1 pgbench \
+  -n -c 4 -j 4 -T 30 \
+  -f /bench_fts.sql \
+  -h /var/run/postgresql -p 15432 kham_test
+# Output: TPS, latency avg/stddev
+```
+
+#### 3 · Index build time — realistic workload
+
+```sql
+CREATE TABLE docs (id serial, body text);
+INSERT INTO docs (body)
+  SELECT 'กินข้าวกับปลา Python ' || g
+  FROM generate_series(1, 100000) g;
+
+\timing on
+CREATE INDEX ON docs USING gin(to_tsvector('kham', body));
+
+-- Query latency against the index
+SELECT count(*) FROM docs
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
 ```
 
 ## Dictionary and corpus data

@@ -22,6 +22,7 @@ Workspace with multiple crates:
 - `kham-wasm/` — wasm-bindgen bindings; exposes `segment()` → `string[]` and `segment_tokens()` → `Token[]`
 - `kham-capi/` — C FFI with cbindgen; exposes `kham_segment()` (legacy `KhamTokens`) and `kham_segment_tokens()` (`KhamTokenList` with `KhamToken` structs)
 - `kham-cli/` — CLI binary using clap
+- `kham-pg/` — PostgreSQL text search extension (`cdylib`). C shim (`src/shim.c`) bridges PG's fmgr API to Rust parser callbacks. Requires `pg_config` in `PATH` (or `PG_CONFIG` env var) to build. Tests run in Docker.
 
 ## Commands
 
@@ -42,6 +43,11 @@ source .venv/bin/activate && pytest kham-python/tests/ -v       # run Python tes
 cbindgen --config kham-capi/cbindgen.toml \
     --crate kham-capi --output kham-capi/include/kham.h         # regenerate C header
 cargo build -p kham-capi --release                              # build C shared library
+
+# kham-pg (requires pg_config in PATH or PG_CONFIG env var)
+cargo build -p kham-pg --release                               # build PG extension .so
+make -C kham-pg install                                        # copy .so + control + SQL to PG install
+make -C kham-pg regress                                        # run pg_regress in Docker (PG 17)
 ```
 
 ## Code Style
@@ -71,8 +77,10 @@ The CI `fmt` job fails if any diff exists. Common triggers:
 ### Clippy — run before every commit
 
 ```bash
-cargo clippy --workspace --exclude kham-python --exclude kham-wasm --all-targets -- -D warnings
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg --all-targets -- -D warnings
 ```
+
+`kham-pg` is excluded because it requires PostgreSQL server headers (`pg_config`) that are not available in all environments. Build it explicitly with `cargo build -p kham-pg` when PG headers are present.
 
 Common clippy failures in this codebase:
 - `map_or(false, |x| …)` → use `is_some_and(|x| …)` instead
@@ -107,7 +115,8 @@ Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/Ja
   - Format: `input|tok1|tok2|…` (one case per line; lines starting with `#` are comments; whitespace tokens excluded)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, mixed script "ธนาคาร100แห่ง", empty string, single char
 - Python binding tests: `kham-python/tests/test_kham.py` — 30 pytest cases covering `segment_tokens()` char_span round-trip, byte_span UTF-8 decoding, kind labels, contiguity, and edge cases; run after every `maturin develop`
-
+- kham-pg tests run inside Docker (PostgreSQL 17). Use `make -C kham-pg regress` — this builds the image and runs `pg_regress` in a single container. See `kham-pg/docker/` for Dockerfile and entrypoint. Expected output files live in `kham-pg/regress/expected/`; `results/` is gitignored.
+  
 ## Dictionary
 
 - Built-in: `words_th.txt` (Apache-2.0, sourced from PyThaiNLP) embedded at compile time
@@ -196,6 +205,88 @@ fts.lexemes(text)         -> Vec<String>    // flat list: text + synonyms + trig
 - `trigrams` is only populated for `TokenKind::Unknown` tokens; `TokenKind::Thai` tokens never receive trigrams.
 - Do not add `std`-only code to any of these modules. If FST support is ever needed (synonym sets > 5k), gate it behind `#[cfg(feature = "std")]`.
 
+## kham-pg Extension
+
+`kham-pg` is a PostgreSQL text search parser (`cdylib`) for Thai, wrapping `kham-core`'s `FtsTokenizer`.
+
+### Architecture
+
+```
+PostgreSQL fmgr  ──▶  src/shim.c (C)  ──▶  kham_*_impl() (Rust, src/lib.rs)
+                       PG_MODULE_MAGIC
+                       PG_FUNCTION_INFO_V1
+                       PG_GETARG_POINTER / PG_GETARG_INT32 / PG_RETURN_*
+                       palloc / pfree / pstrdup / ereport
+```
+
+### Parser callback signatures (what PostgreSQL actually passes)
+
+| Callback    | SQL signature                         | PG call site                        |
+|-------------|---------------------------------------|-------------------------------------|
+| `kham_start`    | `(internal, int4) → internal`     | `OidFunctionCall2(start, PointerGetDatum(buf), Int32GetDatum(len))` |
+| `kham_gettoken` | `(internal, internal, internal) → int4` | state + char** + int* output pointers |
+| `kham_end`      | `(internal) → void`               | state pointer                       |
+| `kham_lextypes` | `(internal) → internal`           | returns palloc'd `LexDescr[]`       |
+
+**Critical:** `kham_start` receives a raw `char*` + `int4` length — NOT a varlena `text*`. Use `PG_GETARG_POINTER(0)` + `PG_GETARG_INT32(1)`, never `PG_GETARG_TEXT_PP`.
+
+### Token type integers
+
+| PG type | Name      | `TokenKind`          |
+|---------|-----------|----------------------|
+| 1       | `thai`    | `TokenKind::Thai`    |
+| 2       | `latin`   | `TokenKind::Latin`   |
+| 3       | `number`  | `TokenKind::Number`  |
+| 4       | `punct`   | `TokenKind::Punctuation` |
+| 5       | `emoji`   | `TokenKind::Emoji`   |
+| 6       | `unknown` | `TokenKind::Unknown` |
+
+### SQL install objects
+
+Created by `kham_pg--0.1.0.sql` in this order:
+1. `CREATE FUNCTION kham_start/gettoken/end/lextypes` — registers the C symbols from `MODULE_PATHNAME`
+2. `CREATE TEXT SEARCH PARSER kham` — wires up the four functions
+3. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through)
+4. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
+5. `ALTER TEXT SEARCH CONFIGURATION kham ADD MAPPING FOR thai, latin, number, unknown WITH kham_dict`
+
+Punctuation and emoji have no mapping — PG discards those token types at index time.
+
+### Build requirements
+
+- `pg_config` in `PATH` **or** `PG_CONFIG=/path/to/pg_config`
+- C compiler (clang or gcc) — `cc` crate compiles `src/shim.c`
+- For regress tests: Docker with BuildKit
+- **macOS only**: `brew install gettext` — PostgreSQL headers include `libintl.h` from GNU gettext. `build.rs` auto-detects the Homebrew prefix via `brew --prefix gettext`.
+
+### Required C headers (include order matters)
+
+```c
+#include "postgres.h"        // must be first
+#include "fmgr.h"            // PG_FUNCTION_INFO_V1, PG_GETARG_*, PG_RETURN_*
+#include "tsearch/ts_public.h"  // LexDescr
+#include "utils/palloc.h"    // palloc, pfree, pstrdup
+```
+
+`varatt.h` (VARDATA_ANY / VARSIZE_ANY_EXHDR) is only needed if reading varlena arguments. `kham_start` uses raw pointer args, so it is not included.
+
+### Docker test environment
+
+Multi-stage build (`kham-pg/docker/Dockerfile.test`):
+- **Stage 1 (builder)**: `debian:bookworm-slim` + `postgresql-server-dev-17` + Rust → `libkham_pg.so`
+- **Stage 2 (runner)**: `debian:bookworm-slim` + `postgresql-17` only — no Rust toolchain (~200 MB vs ~2 GB single-stage)
+
+Do **not** use Alpine/musl: Rust musl targets are static-only and do not support `cdylib`.
+
+Key constraints:
+- `dynamic_shared_memory_type = mmap` must be set before `pg_ctl start` (PG 17 removed `none`)
+- pg_ctl/initdb run as `postgres` via `gosu`; entrypoint uses `pg_config` for all paths
+- `pg_regress` binary: `$(pg_config --pgxs | dirname | dirname)/test/regress/pg_regress`
+- Use `--outputdir=.` in pg_regress so output lands at `regress/output/` and `regress/results/`
+- Linux cdylib symbol export: all PG-facing symbols (`Pg_magic_func`, `kham_start`, etc.) are defined as `#[no_mangle] pub extern "C"` in `lib.rs` — Rust trampolines are always in the dynamic table
+- `PG_MODULE_MAGIC_DATA` portability: PGDG PG17 uses the object-like form; Homebrew/PG18+ uses a variadic function-like form. `shim.c` guards with `#ifdef PG_MODULE_ABI_DATA`
+- macOS linker: `build.rs` emits `-undefined dynamic_lookup` so PG server symbols (`palloc`, `ereport`) are resolved at dlopen time
+
 ## Segmenter DP scoring
 
 The newmm forward DP uses a 4-field lexicographic score (`DpScore`) to select the best segmentation path. Priority order is fixed — do not reorder the fields:
@@ -222,7 +313,7 @@ All three bindings expose two functions:
 
 **C FFI legacy API** — `KhamTokens` / `kham_segment()` / `kham_tokens_free()` exist for backward compatibility and return only token strings. Do not remove them. New span-aware callers should use `kham_segment_tokens()` / `kham_token_list_free()`.
 
-**C FFI safety** — `kham-capi` is the only crate in this workspace that uses `unsafe`. This is intentional (FFI boundary). Do not add `unsafe` to any other crate.
+**C FFI safety** — `kham-capi` and `kham-pg` are the only crates that use `unsafe` (FFI boundaries). Do not add `unsafe` to any other crate. In `kham-pg`, unsafe is confined to `src/lib.rs`; `src/shim.c` is plain C with no unsafe Rust.
 
 **C header location** — `kham-capi/include/kham.h` is generated by cbindgen and is gitignored. Regenerate it with `cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h` whenever `KhamToken`, `KhamTokenList`, or any exported symbol changes. The `[export] include` list in `cbindgen.toml` must be kept in sync with the public `#[repr(C)]` structs in `src/lib.rs`.
 
