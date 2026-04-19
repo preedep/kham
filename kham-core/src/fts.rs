@@ -189,10 +189,7 @@ impl FtsTokenizer {
             }
 
             let is_stop = self.stopwords.contains(token.text);
-            let is_thai_or_named = matches!(
-                token.kind,
-                TokenKind::Thai | TokenKind::Named(_)
-            );
+            let is_thai_or_named = matches!(token.kind, TokenKind::Thai | TokenKind::Named(_));
             let mut synonyms = self
                 .synonyms
                 .expand(token.text)

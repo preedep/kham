@@ -93,3 +93,105 @@ fn ne_token_has_no_pos() {
         assert!(t.pos.is_none(), "NE token should not have a POS tag");
     }
 }
+
+// ── Gap 1: tag_tokens passes through all non-Thai kinds ──────────────────────
+
+#[test]
+fn tag_tokens_passes_through_all_non_thai_kinds() {
+    use kham_core::token::{Token, TokenKind};
+    let tagger = NeTagger::from_tsv("hello\tPERSON\nกิน\tPLACE\n");
+    // Craft one token of each non-Thai kind using the same text so a gazetteer
+    // hit would be possible if the tagger incorrectly matched them.
+    let kinds = [
+        TokenKind::Latin,
+        TokenKind::Number,
+        TokenKind::Punctuation,
+        TokenKind::Emoji,
+        TokenKind::Whitespace,
+        TokenKind::Unknown,
+    ];
+    for kind in kinds {
+        let tok = Token::new("hello", 0..5, 0..5, kind);
+        let result = tagger.tag_tokens(vec![tok]);
+        assert_eq!(
+            result[0].kind, kind,
+            "kind {:?} should pass through tag_tokens unchanged",
+            kind
+        );
+    }
+}
+
+// ── Gap 2: romanization synonym injected for Named tokens ─────────────────────
+
+#[test]
+fn ne_token_gets_rtgs_synonym_when_romanization_enabled() {
+    use kham_core::romanizer::RomanizationMap;
+    use kham_core::stopwords::StopwordSet;
+
+    // Use custom maps so the test does not depend on the built-in tables
+    // containing the same word. กิน is a single-token common verb — it will
+    // segment as Thai, get relabelled to Named(Place) by the custom tagger,
+    // then pick up "kin" from the custom romanization map, exercising the
+    // Thai|Named(_) branch in fts.rs.
+    let ne = NeTagger::from_tsv("กิน\tPLACE\n");
+    let rom = RomanizationMap::from_tsv("กิน\tkin\n");
+    let fts = FtsTokenizer::builder()
+        .ne_tagger(ne)
+        .romanization(rom)
+        .stopwords(StopwordSet::from_text(""))
+        .build();
+    let tokens = fts.segment_for_fts("กิน");
+    let t = tokens.iter().find(|t| t.text == "กิน");
+    assert!(t.is_some(), "expected 'กิน' token");
+    let t = t.unwrap();
+    assert_eq!(
+        t.kind,
+        TokenKind::Named(NamedEntityKind::Place),
+        "กิน should be Named(Place) via custom tagger"
+    );
+    assert!(
+        t.synonyms.iter().any(|s| s == "kin"),
+        "expected RTGS synonym 'kin' for Named token, got {:?}",
+        t.synonyms
+    );
+}
+
+// ── Gap 3: NE token text survives into lexemes() ─────────────────────────────
+
+#[test]
+fn ne_token_text_appears_in_lexemes() {
+    let fts = FtsTokenizer::new();
+    // ไทย is PLACE in the gazetteer and is not a stopword
+    let lexemes = fts.lexemes("ไทย");
+    assert!(
+        lexemes.iter().any(|l| l == "ไทย"),
+        "NE token 'ไทย' should appear in lexemes(), got {:?}",
+        lexemes
+    );
+}
+
+// ── Gap 4: NE token can also be a stopword ────────────────────────────────────
+
+#[test]
+fn ne_token_is_stop_when_in_stopword_list() {
+    use kham_core::stopwords::StopwordSet;
+
+    // Force ไทย into the stopword list to test that is_stop and ne can both be
+    // set simultaneously — the pipeline should not short-circuit on one or the other.
+    let stops = StopwordSet::from_text("ไทย\n");
+    let fts = FtsTokenizer::builder().stopwords(stops).build();
+    let tokens = fts.segment_for_fts("ไทย");
+    let t = tokens.iter().find(|t| t.text == "ไทย");
+    assert!(t.is_some(), "expected 'ไทย' token");
+    let t = t.unwrap();
+    assert_eq!(
+        t.kind,
+        TokenKind::Named(NamedEntityKind::Place),
+        "kind should still be Named(Place) even when is_stop"
+    );
+    assert_eq!(t.ne, Some(NamedEntityKind::Place), "ne field should be set");
+    assert!(
+        t.is_stop,
+        "is_stop should be true when word is in stopword list"
+    );
+}
