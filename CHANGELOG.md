@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-04-19
+
+### Added
+
+**pg_regress test suite (`kham-pg`) — 67 tests across 4 suites**
+- `kham_fts.sql` (19 tests): extension load, `ts_token_type`, `ts_parse` (pure Thai, stopwords, mixed script, empty), `to_tsvector` with exact lexeme positions, `plainto_tsquery`/`to_tsquery` match and no-match, Latin lowercasing, GIN index table search, `ts_rank`
+- `kham_thai.sql` (20 tests): single-char Unknown, Thai numerals, mixed Thai+numeral, OOV tokens, punctuation, compound word segmentation (`โรงพยาบาล`, `สวัสดีครับ`, `นักพัฒนา`), stopword presence in `ts_parse` and `tsvector`, mixed scripts, whitespace filter, compound FTS, determinism
+- `kham_operators.sql` (15 tests): AND / OR / NOT operators, phrase queries (`phraseto_tsquery`), `websearch_to_tsquery` (space-AND and minus exclusion), `ts_debug` alias and lexemes
+- `kham_ranking.sql` (13 tests): `ts_rank` and `ts_rank_cd` non-zero for match, `ts_rank` zero for no-match, frequency-based ranking (ปลา×2 > ปลา×1), `ts_stat` lexeme statistics, ORDER BY rank DESC, product catalogue GIN search (10 Thai food items, 4 ingredient queries), NULL document and NULL tsvector handling
+
+### Notes
+- `ts_headline` is not supported by the kham parser (no HEADLINE callback); documented as a known limitation
+
 ## [0.1.2] - 2026-04-19
 
 ### Added
@@ -90,6 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.1.3]: https://github.com/preedep/kham/releases/tag/v0.1.3
 [0.1.2]: https://github.com/preedep/kham/releases/tag/v0.1.2
 [0.1.1]: https://github.com/preedep/kham/releases/tag/v0.1.1
 [0.1.0]: https://github.com/preedep/kham/releases/tag/v0.1.0
