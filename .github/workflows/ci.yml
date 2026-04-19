@@ -35,6 +35,10 @@ jobs:
         with:
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install PostgreSQL dev headers (required by kham-pg build.rs)
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-server-dev-17
       # Exclude binding crates: kham-python needs Python headers,
       # kham-wasm needs the wasm32 target — neither is available here.
       - run: >
@@ -44,6 +48,8 @@ jobs:
           --exclude kham-wasm
           --all-targets
           -- -D warnings
+        env:
+          PG_CONFIG: /usr/lib/postgresql/17/bin/pg_config
 
   test:
     name: Test (${{ matrix.toolchain }})
@@ -60,18 +66,26 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}
+      - name: Install PostgreSQL dev headers (required by kham-pg build.rs)
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-server-dev-17
       - name: Build
         run: >
           cargo build
           --workspace
           --exclude kham-python
           --exclude kham-wasm
+        env:
+          PG_CONFIG: /usr/lib/postgresql/17/bin/pg_config
       - name: Unit + integration tests
         run: >
           cargo test
           --workspace
           --exclude kham-python
           --exclude kham-wasm
+        env:
+          PG_CONFIG: /usr/lib/postgresql/17/bin/pg_config
       - name: Doc tests
         run: >
           cargo test --doc
@@ -86,7 +100,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install PostgreSQL dev headers (required by kham-pg build.rs)
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-server-dev-17
       - run: cargo bench -p kham-core --no-run
+        env:
+          PG_CONFIG: /usr/lib/postgresql/17/bin/pg_config
 
   # ---------------------------------------------------------------------------
   # EXTENDED CHECKS — informational; failures don't block CI
@@ -157,8 +177,12 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Install PostgreSQL dev headers (required by kham-pg build.rs)
+        run: brew install postgresql@17
       - run: >
           cargo test
           --workspace
           --exclude kham-python
           --exclude kham-wasm
+        env:
+          PG_CONFIG: /opt/homebrew/opt/postgresql@17/bin/pg_config

@@ -51,5 +51,11 @@ kham-wasm/node_modules/
 .env
 .env.*
 
+# kham-pg — pg_regress runtime output (generated; not committed)
+kham-pg/regress/results/
+
+# Claude Code — personal memory (per-developer, not shared)
+.claude/projects/
+
 # macOS
 .DS_Store
