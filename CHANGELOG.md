@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-04-19
+
+### Added
+
+**PostgreSQL extension (`kham-pg`)**
+- New `kham-pg` cdylib crate: Thai text search parser for PostgreSQL 17
+- C shim (`src/shim.c`) bridges PostgreSQL fmgr API to Rust parser callbacks via `#[no_mangle]` trampolines
+- Parser callbacks: `kham_start`, `kham_gettoken`, `kham_end`, `kham_lextypes`
+- 6 token types registered: `thai` (1), `latin` (2), `number` (3), `punct` (4), `emoji` (5), `unknown` (6)
+- SQL install script `kham_pg--0.1.2.sql`: creates parser, dictionary, configuration, and token mappings
+- `make -C kham-pg install` — installs `.so`, control file, and SQL into the host PostgreSQL
+- `make -C kham-pg regress` — runs `pg_regress` integration tests inside Docker (PostgreSQL 17)
+- Two-stage Docker build (`Dockerfile.test`): builder with Rust + pg headers, runner with postgresql-17 only (~200 MB)
+- macOS `build.rs`: auto-detects Homebrew gettext prefix for `libintl.h`
+- `PG_MODULE_MAGIC_DATA` portability guard (`#ifdef PG_MODULE_ABI_DATA`) for PGDG PG17 vs Homebrew/PG18+
+
+**FTS modules (`kham-core`)**
+- `stopwords` — `StopwordSet`: 1 029-entry built-in list (PyThaiNLP Apache-2.0), O(log n) lookup
+- `synonym` — `SynonymMap`: TSV-based canonical → synonym expansion, `BTreeMap` backed
+- `ngram` — `char_ngrams` (zero-alloc `&str` iterator) and `token_ngrams` (owned `String` iterator)
+- `fts` — `FtsTokenizer` / `FtsToken`: normalize → segment → stopword tag → synonym expand → OOV trigrams
+- `FtsTokenizer::lexemes()` — flat lexeme list consumed by `kham-pg` to populate `tsvector`
+
+**C FFI (`kham-capi`)**
+- `kham_fts_lexemes()` / `kham_fts_lexemes_free()` — exposes `FtsTokenizer::lexemes()` across the C boundary
+
+### Fixed
+- `PG_MODULE_MAGIC_DATA` macro portability between PGDG PG17 and Homebrew builds
+- macOS CI: Homebrew gettext include path added to `build.rs` for `libintl.h`
+- `kham_gettoken` SQL return type changed from `int4` to `internal` (required by PG17)
+
+## [0.1.1] - 2026-04-18
+
+### Added
+- Dual `MIT OR Apache-2.0` licensing (`LICENSE-MIT`, `LICENSE-APACHE`)
+- `scripts/deploy.sh` — publish script for crates.io, npm, and PyPI
+- `pyproject.toml` for `kham-python` maturin builds
+- `readme` field added to workspace and all crate manifests for crates.io display
+- FreqMap unit tests: entry count, frequency ordering, and segmentation tie-breaking
+
 ## [0.1.0] - 2026-04-18
 
 ### Added
@@ -50,4 +90,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.1.2]: https://github.com/preedep/kham/releases/tag/v0.1.2
+[0.1.1]: https://github.com/preedep/kham/releases/tag/v0.1.1
 [0.1.0]: https://github.com/preedep/kham/releases/tag/v0.1.0
