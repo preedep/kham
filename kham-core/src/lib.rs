@@ -26,6 +26,7 @@ pub mod fts;
 pub mod ngram;
 pub mod normalizer;
 pub mod pre_tokenizer;
+pub mod romanizer;
 pub mod segmenter;
 pub mod stopwords;
 pub mod synonym;

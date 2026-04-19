@@ -11,61 +11,81 @@ metadata:
 
 Specialist for `kham-core/src/romanizer` — table-driven RTGS transliteration of segmented Thai words.
 
-## Standard: RTGS
+## Standard: RTGS (1999)
 
-**Royal Thai General System of Transcription** is the Thai government official romanization standard:
+**Royal Thai General System of Transcription** (ราชบัณฑิตยสถาน, B.E. 2542 / 1999) is the Thai government official standard:
 - Consonant-by-consonant mapping (initial vs. final position differ)
 - No tone marks in output
 - No vowel-length distinction in output (long/short vowels map identically)
-- Diphthongs and vowel clusters have explicit multi-character mappings
+- **Romanization reflects actual pronunciation, not spelling** — e.g. ทราบ /saːp/ = `sap`, ศรี /siː/ = `si`
+- No diacritics on Roman letters (ü, ā, etc. are NOT RTGS — use two-letter sequences instead)
 - Used in road signs, passports, official documents
 
-Reference: [Royal Institute of Thailand RTGS table](http://www.royin.go.th)
+Reference: ราชบัณฑิตยสถาน หลักเกณฑ์การถอดอักษรไทยเป็นอักษรโรมัน พ.ศ. 2542
 
 ## RTGS Consonant Table (initial / final)
 
 | Thai | Initial | Final |
 |------|---------|-------|
 | ก | k | k |
-| ข ค | kh | k |
+| ข ค ฆ | kh | k |
 | ง | ng | ng |
-| จ | ch | t |
-| ช | ch | t |
-| ซ ส | s | t |
-| ญ ย | y | n/y |
+| จ ฉ ช ฌ | ch | t |
+| ซ ศ ษ ส | s | t |
+| ญ | y | n |
+| ณ น | n | n |
 | ด ฎ | d | t |
 | ต ฏ | t | t |
-| ถ ท | th | t |
-| น | n | n |
+| ถ ท ธ ฐ ฑ ฒ | th | t |
 | บ | b | p |
 | ป | p | p |
-| ผ พ | ph | p |
-| ฝ ฟ | f | f |
+| ผ พ ภ | ph | p |
+| ฝ ฟ | f | — (rare as final) |
 | ม | m | m |
+| ย | y | i (part of diphthong) |
 | ร | r | n |
-| ล | l | n |
-| ว | w | o/w |
-| ห | h | — |
-| อ | — | — |
-| ฮ | h | — |
+| ล ฬ | l | n |
+| ว | w | o or w (part of diphthong) |
+| ห ฮ | h | — |
+| อ | — (glottal/vowel carrier) | — |
+
+**Note:** ห นำ (leading ห) is a tone marker — silent in romanization. ร ร (ร หัน) with no following consonant = an (อัน).
 
 ## RTGS Vowel Table
 
-| Thai vowel | RTGS |
-|-----------|------|
-| สระ อา / อ (short) | a |
-| สระ อิ / อี | i |
-| สระ อุ / อู | u |
-| สระ เอ | e |
-| สระ แอ | ae |
-| สระ โอ | o |
-| สระ เอา | ao |
-| สระ เอีย | ia |
-| สระ เอือ | uea |
-| สระ อัว | ua |
-| สระ ไ ใ | ai |
-| สระ เอา | ao |
-| สระ อำ | am |
+| Thai vowel form | RTGS | Notes |
+|----------------|------|-------|
+| –ะ / –ั / –า / อ (inherent) | a | short and long both = a |
+| –ิ / –ี | i | short and long both = i |
+| –ึ / –ื | ue | short and long both = ue |
+| –ุ / –ู | u | short and long both = u |
+| เ–ะ / เ– | e | |
+| แ–ะ / แ– | ae | |
+| เ–อะ / เ–อ | oe | e.g. เธอ = thoe, เบอร์ = boe |
+| โ–ะ / โ– / –อ / เ–าะ | o | |
+| ไ– / ใ– | ai | |
+| เ–า | ao | |
+| –ำ | am | |
+| เ–ีย / เ–ียะ | ia | |
+| เ–ือ / เ–ือะ | uea | |
+| –ัว / อัว / –วะ | ua | |
+
+## Special Rules
+
+1. **Pronunciation-based**: Romanize the spoken form, not the spelled form.
+   - ทราบ /saːp/ → `sap` (ทร cluster becomes ส sound)
+   - ศรี /siː/ → `si` (ศร cluster becomes ส sound, ร silent)
+   - จันทร์ /t͡ɕan/ → `chan` (final ร is silent before ์)
+
+2. **Hyphenation**: Use a hyphen when ambiguity arises from a vowel-initial syllable following a vowel-final syllable, or when ⟨ng⟩ would be misread.
+   - สะอาด → `sa-at` (not `saat`)
+
+3. **Compound words / proper names**: Written together without spaces.
+   - รถไฟ → `rotfai`
+   - กรุงเทพ → `krungthep`
+
+4. **Double consonants**: Written as a single consonant in RTGS (gemination not marked).
+   - บัตร /bat/ → `bat` (final cluster simplified)
 
 ## Module Layout
 
@@ -94,9 +114,24 @@ kham-core/
 Rules:
 - Tab-separated, exactly 2 columns
 - Thai word is post-normalize (same form as segmenter output)
-- RTGS output is lowercase Latin only — no diacritics, no uppercase
+- RTGS output is lowercase Latin only — **no diacritics** (ü → ue, ā → a)
 - Do not include whitespace tokens
 - Sort entries alphabetically by Thai word for readability
+
+## Common ue/uea Romanizations (frequent error source)
+
+| Thai | Wrong (uses ü) | Correct RTGS |
+|------|---------------|--------------|
+| มือ | müe | mue |
+| ซื้อ | sü / sue | sue |
+| ยืน | yün | yuen |
+| ดึง | düng | dueng |
+| ดื่ม | düm | duem |
+| กึ่ง | küng | kueng |
+| ฝึก | fük | fuek |
+| เรื่อง | rüang | rueang |
+| เสือ | süa | suea |
+| เครื่อง | khrüang | khrueang |
 
 ## API
 
@@ -156,6 +191,13 @@ fn test_builtin_common_words() {
 }
 
 #[test]
+fn test_ue_vowel_no_diacritics() {
+    let map = RomanizationMap::builtin();
+    assert_eq!(map.romanize("มือ"), Some("mue"));    // not "müe"
+    assert_eq!(map.romanize("เรื่อง"), Some("rueang")); // not "rüang"
+}
+
+#[test]
 fn test_unknown_word_returns_none() {
     let map = RomanizationMap::builtin();
     assert_eq!(map.romanize("เปปซี่"), None);
@@ -172,32 +214,27 @@ fn test_from_tsv_last_duplicate_wins() {
     let map = RomanizationMap::from_tsv("กิน\tkin\nกิน\tgin\n");
     assert_eq!(map.romanize("กิน"), Some("gin"));
 }
-
-#[test]
-fn test_romanize_tokens_aligned() {
-    let map = RomanizationMap::from_tsv("กิน\tkin\nปลา\tpla\n");
-    let tokens = vec!["กิน", "ปลา"];
-    assert_eq!(map.romanize_tokens(&tokens), vec!["kin", "pla"]);
-}
 ```
 
 ## Common Pitfalls
 
 | Pitfall | Fix |
 |---------|-----|
+| Using ü for สระ อึ/อื | Use `ue` — RTGS has zero diacritics |
+| Using ā, ī, etc. for long vowels | RTGS ignores vowel length — same output as short |
 | Tone marks in TSV key don't match segmenter output | Always run `normalize()` on input before lookup |
-| Long vs. short vowel mismatch | RTGS collapses both — use same output for อิ and อี |
-| ร at word-final maps to `n` not `r` | Check consonant position (initial vs. final) |
-| อ as vowel carrier is silent | No output for silent อ |
+| ร at word-final maps to `n` not `r` | Final position consonant rules differ from initial |
+| อ as vowel carrier is silent | No RTGS output for silent อ |
+| Romanizing spelling instead of pronunciation | ทราบ = `sap`, ศรี = `si` — always use spoken form |
 | Building rule-based engine instead of table | Start with table; gate rule engine behind feature flag |
 
 ## Implementation Checklist
 
-- [ ] Create `kham-core/data/romanization_th.tsv` with ~200 high-frequency words
-- [ ] Implement `kham-core/src/romanizer.rs` (`RomanizationMap` struct, `from_tsv`, `builtin`, `romanize`, `romanize_or_raw`, `romanize_tokens`)
-- [ ] Register module in `kham-core/src/lib.rs` (`pub mod romanizer`)
-- [ ] Unit tests in `romanizer.rs`
-- [ ] Integration tests in `kham-core/tests/romanization.rs`
-- [ ] Doc comments with Thai+English examples on all public APIs
+- [x] Create `kham-core/data/romanization_th.tsv` with ~200 high-frequency words
+- [x] Implement `kham-core/src/romanizer.rs` (`RomanizationMap` struct, `from_tsv`, `builtin`, `romanize`, `romanize_or_raw`, `romanize_tokens`)
+- [x] Register module in `kham-core/src/lib.rs` (`pub mod romanizer`)
+- [x] Unit tests in `romanizer.rs`
+- [x] Integration tests in `kham-core/tests/romanization.rs`
+- [x] Doc comments with Thai+English examples on all public APIs
 - [ ] Update `Architecture` section in README
 - [ ] Add `romanization` to `FtsTokenizer::builder()` (optional, can be Phase 2)
