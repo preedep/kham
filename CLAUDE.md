@@ -205,6 +205,60 @@ fts.lexemes(text)         -> Vec<String>    // flat list: text + synonyms + trig
 - `trigrams` is only populated for `TokenKind::Unknown` tokens; `TokenKind::Thai` tokens never receive trigrams.
 - Do not add `std`-only code to any of these modules. If FST support is ever needed (synonym sets > 5k), gate it behind `#[cfg(feature = "std")]`.
 
+## Romanization Module (`kham-core/src/romanizer`)
+
+Converts segmented Thai words to their Roman (Latin) phonetic equivalents using RTGS (Royal Thai General System of Transcription) — the Thai government standard.
+
+### Standard
+
+**RTGS** (ราชบัณฑิตยสภา): consonant-by-consonant transliteration. No tone marks in output. Vowel clusters map to Latin vowel sequences. This is the standard used in road signs, passports, and official Thai documents.
+
+### Data file
+
+`kham-core/data/romanization_th.tsv` — TSV format, one entry per line:
+
+```
+# Thai word → RTGS romanization
+กิน\tkin
+ข้าว\tkhao
+ปลา\tpla
+```
+
+- Column 1: Thai word (as segmented by kham, post-normalize)
+- Column 2: RTGS romanization (lowercase Latin only, no diacritics)
+- Lines starting with `#` are comments
+- Duplicate entries: last wins (allows override files)
+- Source: build from RTGS consonant/vowel mapping tables + common-word list
+
+### API contract
+
+```rust
+// Lookup a single pre-segmented word
+RomanizationMap::builtin()                    // built-in table embedded via include_str!
+RomanizationMap::from_tsv(data: &str)        // parse TSV; last duplicate wins
+map.romanize(word: &str) -> Option<&str>     // None if word not in table
+map.romanize_or_raw(word: &str) -> &str      // returns word unchanged if not in table
+
+// Romanize a full segmented sentence
+map.romanize_tokens(tokens: &[&str]) -> Vec<String>  // one romanization per token
+```
+
+### Architecture rules
+
+- `no_std` / `alloc`-only — same constraint as all other `kham-core` modules
+- Backed by `BTreeMap<String, String>` (same pattern as `SynonymMap`)
+- `romanize()` returns `Option<&str>` borrowing from the map — zero-copy for hits
+- Tone marks and vowel length distinctions are NOT preserved in RTGS output (by standard)
+- Do not implement a full rule-based phonetic engine — table lookup only; rule-based can be a future `#[cfg(feature = "phonetic")]` extension
+- Integration with `FtsTokenizer`: romanizations can optionally be added to `FtsToken.synonyms` so Thai words match Latin-script queries in PostgreSQL FTS
+
+### Data build process
+
+The built-in TSV is hand-curated from the RTGS consonant table + high-frequency words from TNC. It is NOT auto-generated. When adding entries:
+1. Edit `kham-core/data/romanization_th.tsv`
+2. Run `cargo test -p kham-core` to verify no duplicate keys conflict
+3. Commit the updated TSV alongside any API changes
+
 ## kham-pg Extension
 
 `kham-pg` is a PostgreSQL text search parser (`cdylib`) for Thai, wrapping `kham-core`'s `FtsTokenizer`.
