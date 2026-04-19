@@ -6,6 +6,7 @@
 //! HTML reports are written to target/criterion/.
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use kham_core::fts::FtsTokenizer;
 use kham_core::Tokenizer;
 
 // ---------------------------------------------------------------------------
@@ -115,6 +116,58 @@ fn bench_normalize_then_segment(c: &mut Criterion) {
     });
 }
 
+// ---------------------------------------------------------------------------
+// FTS pipeline benchmarks
+// ---------------------------------------------------------------------------
+
+/// Measure `FtsTokenizer::new()` — construction cost of the full FTS stack.
+///
+/// Loads stopwords, POS table, NE gazetteer, and synonym map on top of the
+/// base `Tokenizer`. Compare against `tokenizer_new` to quantify the overhead
+/// of the extra tables.
+fn bench_fts_new(c: &mut Criterion) {
+    c.bench_function("fts/new", |b| {
+        b.iter(|| {
+            let fts = FtsTokenizer::new();
+            criterion::black_box(fts);
+        });
+    });
+}
+
+/// Measure `segment_for_fts()` throughput for pure-Thai inputs.
+///
+/// Group ID: `fts/segment_for_fts` — compare against `segment/by_length` to
+/// quantify the overhead of NE tagging + POS tagging + stopword lookup added
+/// by the FTS pipeline on every call.
+fn bench_fts_segment_for_fts(c: &mut Criterion) {
+    let fts = FtsTokenizer::new();
+    let inputs = [("short", SHORT), ("medium", MEDIUM), ("long", LONG)];
+
+    let mut group = c.benchmark_group("fts/segment_for_fts");
+    for (label, text) in inputs {
+        group.throughput(Throughput::Bytes(text.len() as u64));
+        group.bench_with_input(BenchmarkId::from_parameter(label), text, |b, text| {
+            b.iter(|| criterion::black_box(fts.segment_for_fts(text)));
+        });
+    }
+    group.finish();
+}
+
+/// Measure `index_tokens()` — `segment_for_fts` + stopword filter.
+///
+/// The difference between this and `fts/segment_for_fts` isolates the cost
+/// of the filter pass (expected to be negligible).
+fn bench_fts_index_tokens(c: &mut Criterion) {
+    let fts = FtsTokenizer::new();
+
+    let mut group = c.benchmark_group("fts/index_tokens");
+    group.throughput(Throughput::Bytes(MEDIUM.len() as u64));
+    group.bench_with_input(BenchmarkId::from_parameter("medium"), MEDIUM, |b, text| {
+        b.iter(|| criterion::black_box(fts.index_tokens(text)));
+    });
+    group.finish();
+}
+
 criterion_group!(
     benches,
     bench_tokenizer_new,
@@ -122,5 +175,8 @@ criterion_group!(
     bench_segment_mixed,
     bench_normalize,
     bench_normalize_then_segment,
+    bench_fts_new,
+    bench_fts_segment_for_fts,
+    bench_fts_index_tokens,
 );
 criterion_main!(benches);

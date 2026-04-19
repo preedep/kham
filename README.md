@@ -324,7 +324,7 @@ pub struct Token<'a> {
     pub text: &'a str,            // zero-copy slice of the input string
     pub span: Range<usize>,       // byte offsets in the original string
     pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets
-    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+    pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown | Named(NamedEntityKind)
 }
 ```
 
@@ -444,10 +444,12 @@ let fts = FtsTokenizer::builder().ngram_size(0).build();
 |---|---|---|
 | `text` | `String` | Token text (normalised) |
 | `position` | `usize` | Ordinal index in non-whitespace sequence (0-based) |
-| `kind` | `TokenKind` | Thai / Latin / Number / … / Unknown |
+| `kind` | `TokenKind` | Thai / Latin / Number / … / Unknown / Named(NamedEntityKind) |
 | `is_stop` | `bool` | Matched the stopword list |
-| `synonyms` | `Vec<String>` | Synonym expansions (empty if none) |
+| `synonyms` | `Vec<String>` | Synonym expansions (empty if none); RTGS romanization appended when romanization map is configured |
 | `trigrams` | `Vec<String>` | Char n-grams for `Unknown` tokens only |
+| `pos` | `Option<PosTag>` | POS tag from lookup table; `None` for OOV or non-Thai tokens |
+| `ne` | `Option<NamedEntityKind>` | Named entity category (`Person`, `Place`, `Org`); set iff `kind == Named(k)` |
 
 ## Architecture
 

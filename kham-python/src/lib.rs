@@ -56,6 +56,8 @@ fn kind_str(kind: TokenKind) -> &'static str {
 ///     char_end (int): End character offset (Unicode scalar values).
 ///     kind (str): Token kind — one of ``"Thai"``, ``"Latin"``, ``"Number"``,
 ///         ``"Punctuation"``, ``"Emoji"``, ``"Whitespace"``, ``"Unknown"``.
+///         Named entity tokens (reachable via the FTS API) use ``"Person"``,
+///         ``"Place"``, or ``"Org"`` in place of ``"Thai"``.
 ///
 /// Example:
 ///

@@ -69,7 +69,15 @@ class TestTokenAttributes:
             assert isinstance(t.text, str)
 
     def test_kind_is_known_value(self):
-        known = {"Thai", "Latin", "Number", "Punctuation", "Emoji", "Whitespace", "Unknown"}
+        # segment_tokens() never produces Named kinds ("Person"/"Place"/"Org")
+        # because NE tagging is not part of the basic pipeline — those are FTS-only.
+        # They are included here so the assertion stays valid if a future API
+        # exposes NE-tagged tokens through this binding.
+        known = {
+            "Thai", "Latin", "Number", "Punctuation",
+            "Emoji", "Whitespace", "Unknown",
+            "Person", "Place", "Org",
+        }
         for t in tokens("กินข้าว100hello"):
             assert t.kind in known, f"unexpected kind {t.kind!r}"
 

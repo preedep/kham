@@ -478,6 +478,9 @@ cargo bench
 - FreqMap lookup throughput (`freq/get`) — hit, rare-hit, and miss cases
 - End-to-end segmentation throughput (`segment/by_length/short`, `medium`, `long`) — pure Thai, reports MB/s
 - Mixed-script segmentation performance (`segment/mixed/sparse`, `medium`, `dense`) — exercises pre-tokenizer boundary overhead
+- FTS pipeline construction (`fts/new`) — `FtsTokenizer::new()` startup cost; compare against `tokenizer_new` to quantify NE + POS + stopword table loading overhead
+- FTS pipeline throughput (`fts/segment_for_fts/short`, `medium`, `long`) — compare against `segment/by_length` to measure NE tagging + POS tagging overhead per call
+- FTS index filter (`fts/index_tokens/medium`) — `segment_for_fts` plus stopword filter; isolates filter pass cost
 
 ### Benchmark Rules
 
