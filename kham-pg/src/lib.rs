@@ -17,6 +17,10 @@
 //! | 5       | emoji   | [`TokenKind::Emoji`]       |
 //! | 6       | unknown | [`TokenKind::Unknown`]     |
 
+// PostgreSQL fmgr trampolines are C-ABI entry points called by the PG backend.
+// They have no Rust callers, so Safety docs would be noise.
+#![allow(clippy::missing_safety_doc)]
+
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
 
@@ -153,7 +157,7 @@ extern "C" {
 }
 
 #[repr(C)]
-struct PgFinfoRecord {
+pub struct PgFinfoRecord {
     api_version: c_int,
 }
 

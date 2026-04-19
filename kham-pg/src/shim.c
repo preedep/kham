@@ -20,7 +20,7 @@
 const Pg_magic_struct *
 kham_pg_magic_impl(void)
 {
-    static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA;
+    static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA();
     return &d;
 }
 

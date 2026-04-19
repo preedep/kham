@@ -24,13 +24,18 @@ fn main() {
         .file("src/shim.c")
         .include(&includedir_server)
         .include(&includedir)
-        // Default symbol visibility so PG_MODULE_MAGIC / Pg_magic_func and
-        // all PG_FUNCTION_INFO_V1 symbols compile as T (global) in the object.
-        // The version script below then controls what goes into the dynamic table.
         .flag("-Wno-unused-parameter")
         .flag("-Wno-declaration-after-statement")
         .flag("-Wno-missing-field-initializers")
         .compile("kham_pg_shim");
-    // No extra linker flags needed: all PG-facing symbols are defined as
-    // #[no_mangle] Rust functions in lib.rs and are always exported.
+
+    // On macOS the linker requires explicit permission to leave PG server
+    // symbols (palloc, ereport, etc.) unresolved at link time.  They are
+    // resolved by the PostgreSQL backend at dlopen time.
+    // On Linux these symbols are left UNDEF by default — no flag needed.
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-cdylib-link-arg=-undefined");
+        println!("cargo:rustc-cdylib-link-arg=dynamic_lookup");
+    }
 }
