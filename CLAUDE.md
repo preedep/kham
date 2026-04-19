@@ -17,7 +17,8 @@ Workspace with multiple crates:
     - `stopwords` — `StopwordSet`: sorted `Vec<String>` with binary-search lookup; built-in 1 029-entry list from PyThaiNLP (Apache-2.0) embedded via `include_str!`
     - `synonym` — `SynonymMap`: `BTreeMap<canonical → Vec<synonym>>` loaded from TSV; used by `FtsTokenizer` for query-time expansion
     - `ngram` — `char_ngrams(text, n)` (zero-alloc `&str` iterator) and `token_ngrams(tokens, n)` (owned `String` iterator); OOV fallback indexing
-    - `fts` — `FtsTokenizer` / `FtsToken`: orchestrates normalize → segment → stopword tag → synonym expand → OOV trigrams; entry point for `kham-pg` (Phase 2)
+    - `pos` — `PosTagger` / `PosTag`: table-driven POS tagging (13 categories); `BTreeMap` lookup from `pos_th.tsv`; populates `FtsToken.pos`
+    - `fts` — `FtsTokenizer` / `FtsToken`: orchestrates normalize → segment → stopword tag → POS tag → synonym expand → OOV trigrams; entry point for `kham-pg` (Phase 2)
 - `kham-python/` — PyO3 bindings; exposes `segment()` → `list[str]` and `segment_tokens()` → `list[Token]`
 - `kham-wasm/` — wasm-bindgen bindings; exposes `segment()` → `string[]` and `segment_tokens()` → `Token[]`
 - `kham-capi/` — C FFI with cbindgen; exposes `kham_segment()` (legacy `KhamTokens`) and `kham_segment_tokens()` (`KhamTokenList` with `KhamToken` structs)
@@ -132,7 +133,7 @@ Byte spans must be valid UTF-8 boundaries. `char_span` is suitable for Python/Ja
 
 ## FTS Modules
 
-Four modules in `kham-core` implement Phase 1 of Thai full-text search support. All are `no_std` / `alloc`-only.
+Six modules in `kham-core` implement Phase 1 of Thai full-text search support. All are `no_std` / `alloc`-only.
 
 ### `stopwords` — `StopwordSet`
 
@@ -180,15 +181,17 @@ pub struct FtsToken {
     pub is_stop: bool,        // matched StopwordSet
     pub synonyms: Vec<String>,// from SynonymMap (empty if no match)
     pub trigrams: Vec<String>,// char n-grams for TokenKind::Unknown tokens only
+    pub pos: Option<PosTag>,  // POS tag from PosTagger; None for OOV or non-Thai tokens
 }
 ```
 
 ```rust
-FtsTokenizer::new()                          // built-in stopwords, no synonyms, ngram_size=3
+FtsTokenizer::new()                          // built-in stopwords, no synonyms, ngram_size=3, builtin pos_tagger
 FtsTokenizer::builder()
     .stopwords(StopwordSet)
     .synonyms(SynonymMap)
     .ngram_size(usize)                       // 0 = disable n-gram generation
+    .pos_tagger(PosTagger)                   // override built-in POS table
     .build()
 
 fts.segment_for_fts(text) -> Vec<FtsToken>  // all non-whitespace tokens, with metadata
@@ -203,7 +206,27 @@ fts.lexemes(text)         -> Vec<String>    // flat list: text + synonyms + trig
 - `segment_for_fts` always calls `normalize()` internally before `segment()` — callers do not need to normalise first.
 - Stopword positions are preserved in `index_tokens` output so phrase-distance scoring remains correct.
 - `trigrams` is only populated for `TokenKind::Unknown` tokens; `TokenKind::Thai` tokens never receive trigrams.
+- `pos` is only populated for `TokenKind::Thai` tokens — Latin, Number, and other non-Thai tokens always get `None`.
 - Do not add `std`-only code to any of these modules. If FST support is ever needed (synonym sets > 5k), gate it behind `#[cfg(feature = "std")]`.
+
+### `pos` — `PosTagger` / `PosTag`
+
+Table-driven part-of-speech tagging. Assigns the primary POS to pre-segmented Thai words via `BTreeMap` lookup. Context-sensitive (ML) tagging is a future `#[cfg(feature = "ml")]` extension.
+
+**13 variants:** `Noun Verb Adj Adv Particle ProperNoun Pronoun Numeral Classifier Conjunction Auxiliary Determiner Preposition`
+
+**TSV tags:** `NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP`
+
+```rust
+PosTagger::builtin()                         // built-in table (~230 entries, hand-curated)
+PosTagger::from_tsv(data: &str)             // parse TSV; last duplicate wins; unknown tags skipped
+tagger.tag(word: &str) -> Option<PosTag>    // None if OOV; PosTag is Copy
+
+PosTag::from_tag("VERB") -> Option<PosTag>  // parse TSV tag string
+PosTag::Verb.as_tag() -> &'static str       // "VERB"
+```
+
+Data file: `kham-core/data/pos_th.tsv` — tab-separated, sections grouped by tag with `# ── NOUN ──` comments.
 
 ## Romanization Module (`kham-core/src/romanizer`)
 
