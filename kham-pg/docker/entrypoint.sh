@@ -88,7 +88,8 @@ $RUNAS "$PG_REGRESS" \
     --port="$PGPORT" \
     --user="$PGUSER" \
     kham_fts \
-    kham_thai
+    kham_thai \
+    kham_operators
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then
