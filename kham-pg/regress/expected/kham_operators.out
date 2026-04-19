@@ -1,0 +1,141 @@
+-- kham_operators — FTS operator coverage for the kham-pg extension.
+--
+-- Run via:  make -C kham-pg regress   (uses Docker PostgreSQL 17)
+--
+-- Covers: AND, OR, NOT, phrase (phraseto_tsquery), websearch_to_tsquery,
+-- ts_debug configuration verification.
+--
+-- Reference document: 'กินข้าวกับปลา' tokenises as:
+--   กิน:1  ข้าว:2  กับ:3  ปลา:4  (all tokid=1, Thai)
+CREATE EXTENSION IF NOT EXISTS kham_pg;
+NOTICE:  extension "kham_pg" already exists, skipping
+-- ── AND operator ──────────────────────────────────────────────────────────────
+-- 1. AND — both tokens present → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน & ปลา') AS and_both_present;
+ and_both_present 
+------------------
+ t
+(1 row)
+
+-- 2. AND — one token missing → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน & หมู') AS and_one_missing;
+ and_one_missing 
+-----------------
+ f
+(1 row)
+
+-- 3. AND — neither token present → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'หมู & วัว') AS and_neither_present;
+ and_neither_present 
+---------------------
+ f
+(1 row)
+
+-- ── OR operator ───────────────────────────────────────────────────────────────
+-- 4. OR — one token present → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน | หมู') AS or_one_present;
+ or_one_present 
+----------------
+ t
+(1 row)
+
+-- 5. OR — both tokens present → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน | ปลา') AS or_both_present;
+ or_both_present 
+-----------------
+ t
+(1 row)
+
+-- 6. OR — neither token present → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'หมู | วัว') AS or_neither_present;
+ or_neither_present 
+--------------------
+ f
+(1 row)
+
+-- ── NOT operator ──────────────────────────────────────────────────────────────
+-- 7. NOT — required token present, excluded token absent → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน & !หมู') AS not_excluded_absent;
+ not_excluded_absent 
+---------------------
+ t
+(1 row)
+
+-- 8. NOT — required token present, excluded token also present → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ to_tsquery('kham', 'กิน & !ปลา') AS not_excluded_present;
+ not_excluded_present 
+----------------------
+ f
+(1 row)
+
+-- ── Phrase operator (phraseto_tsquery) ───────────────────────────────────────
+-- กินข้าวกับปลา: กิน=pos1, ข้าว=pos2, กับ=pos3, ปลา=pos4
+-- 9. Phrase — adjacent tokens (pos 1 & 2) → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ phraseto_tsquery('kham', 'กิน ข้าว') AS phrase_adjacent;
+ phrase_adjacent 
+-----------------
+ t
+(1 row)
+
+-- 10. Phrase — non-adjacent tokens (pos 1 & 4, gap of 3) → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ phraseto_tsquery('kham', 'กิน ปลา') AS phrase_non_adjacent;
+ phrase_non_adjacent 
+---------------------
+ f
+(1 row)
+
+-- 11. Phrase — second pair adjacent (pos 3 & 4) → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ phraseto_tsquery('kham', 'กับ ปลา') AS phrase_second_pair;
+ phrase_second_pair 
+--------------------
+ t
+(1 row)
+
+-- ── websearch_to_tsquery ──────────────────────────────────────────────────────
+-- 12. websearch — space-separated terms → AND match
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ websearch_to_tsquery('kham', 'กิน ปลา') AS websearch_and_match;
+ websearch_and_match 
+---------------------
+ t
+(1 row)
+
+-- 13. websearch — term present but excluded with minus → false
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ websearch_to_tsquery('kham', 'กิน -ปลา') AS websearch_exclusion;
+ websearch_exclusion 
+---------------------
+ f
+(1 row)
+
+-- 14. websearch — excluded term absent → true
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')
+    @@ websearch_to_tsquery('kham', 'กิน -หมู') AS websearch_exclusion_absent;
+ websearch_exclusion_absent 
+----------------------------
+ t
+(1 row)
+
+-- ── ts_debug — verify kham configuration ─────────────────────────────────────
+-- 15. ts_debug: alias and lexemes for pure Thai input
+SELECT alias, lexemes
+FROM ts_debug('kham', 'กินข้าว')
+WHERE alias IS NOT NULL
+ORDER BY alias;
+ alias | lexemes 
+-------+---------
+ thai  | {กิน}
+ thai  | {ข้าว}
+(2 rows)
+

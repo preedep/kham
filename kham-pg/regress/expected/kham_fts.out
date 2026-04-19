@@ -87,3 +87,89 @@ SELECT to_tsvector('kham', 'โปรแกรม Python') IS NOT NULL AS ok;
  t
 (1 row)
 
+-- ── 11. tsvector lexeme content — pure Thai (exact positions) ────────────────
+SELECT to_tsvector('kham', 'กินข้าว')::text;
+  to_tsvector   
+----------------
+ 'กิน':1 'ข้าว':2
+(1 row)
+
+-- ── 12. tsvector lexeme content — sentence with stopword ────────────────────
+SELECT to_tsvector('kham', 'กินข้าวกับปลา')::text;
+          to_tsvector          
+-------------------------------
+ 'กับ':3 'กิน':1 'ข้าว':2 'ปลา':4
+(1 row)
+
+-- ── 13. to_tsquery — single word match ───────────────────────────────────────
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'กิน') AS found;
+ found 
+-------
+ t
+(1 row)
+
+-- ── 14. to_tsquery — no match ────────────────────────────────────────────────
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'หมู') AS found;
+ found 
+-------
+ f
+(1 row)
+
+-- ── 15. to_tsquery — Latin token match (simple dict lowercases) ──────────────
+SELECT to_tsvector('kham', 'Python สำหรับ AI') @@ to_tsquery('kham', 'python') AS found;
+ found 
+-------
+ t
+(1 row)
+
+-- ── 16. Table FTS with GIN index ─────────────────────────────────────────────
+CREATE TABLE kham_docs (
+    id   integer,
+    body text
+);
+INSERT INTO kham_docs VALUES
+    (1, 'กินข้าวที่บ้าน'),
+    (2, 'ดื่มน้ำสะอาด'),
+    (3, 'Python สำหรับนักพัฒนา');
+CREATE INDEX kham_docs_fts_idx ON kham_docs
+    USING GIN (to_tsvector('kham', body));
+-- search Thai token — must return only row 1
+SELECT id
+FROM kham_docs
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'กิน')
+ORDER BY id;
+ id 
+----
+  1
+(1 row)
+
+-- ── 17. GIN index — Latin token search ───────────────────────────────────────
+-- search Latin token — must return only row 3
+SELECT id
+FROM kham_docs
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'Python')
+ORDER BY id;
+ id 
+----
+  3
+(1 row)
+
+-- ── 18. GIN index — no match ─────────────────────────────────────────────────
+SELECT id
+FROM kham_docs
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'หมู')
+ORDER BY id;
+ id 
+----
+(0 rows)
+
+-- ── 19. ts_rank — non-zero for matching document ─────────────────────────────
+SELECT ts_rank(
+    to_tsvector('kham', 'กินข้าวกับปลา'),
+    plainto_tsquery('kham', 'ปลา')
+) > 0 AS ranked;
+ ranked 
+--------
+ t
+(1 row)
+

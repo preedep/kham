@@ -1,0 +1,202 @@
+-- kham_thai — Thai language edge cases for the kham-pg extension.
+--
+-- Run via:  make -C kham-pg regress   (uses Docker PostgreSQL 17)
+--
+-- Covers: single char, Thai numerals, OOV/Unknown tokens, compound words,
+-- stopword indexing, mixed scripts, punctuation, whitespace filtering.
+CREATE EXTENSION IF NOT EXISTS kham_pg;
+NOTICE:  extension "kham_pg" already exists, skipping
+-- ── 1. Single Thai character → tokid=6 (Unknown, below TCC threshold) ────────
+SELECT tokid, token
+FROM ts_parse('kham', 'ก')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     6 | ก
+(1 row)
+
+-- ── 2. Thai numeral string → tokid=3 (Number) ────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', '๑๒๓')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     3 | ๑๒๓
+(1 row)
+
+-- ── 3. Thai numeral mixed with Thai words ─────────────────────────────────────
+-- ราคา segments as รา+คา (dict behaviour); ๑๕๐ is Number; บาท is Thai
+SELECT tokid, token
+FROM ts_parse('kham', 'ราคา๑๕๐บาท')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | คา
+     1 | บาท
+     1 | รา
+     3 | ๑๕๐
+(4 rows)
+
+-- ── 4. OOV brand name → Unknown tokens ───────────────────────────────────────
+-- เปปซี่ is not in the built-in dictionary → เป+ป are Unknown; ซี่ is Thai
+SELECT tokid, token
+FROM ts_parse('kham', 'เปปซี่')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ซี่
+     6 | ป
+     6 | เป
+(3 rows)
+
+-- ── 5. OOV tokens appear in tsvector (Unknown type is mapped in kham config) ──
+SELECT to_tsvector('kham', 'เปปซี่') @@ plainto_tsquery('kham', 'ซี่') AS found;
+ found 
+-------
+ t
+(1 row)
+
+-- ── 6. Punctuation: % sign → tokid=4 ─────────────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'ลด10%')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ลด
+     3 | 10
+     4 | %
+(3 rows)
+
+-- ── 7. 3-word Thai sentence — correct segmentation ───────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'แมวกินปลา')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | กิน
+     1 | ปลา
+     1 | แมว
+(3 rows)
+
+-- ── 8. Compound word: โรงพยาบาล → โรง + พยาบาล ───────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'โรงพยาบาล')
+ORDER BY tokid, token;
+ tokid | token  
+-------+--------
+     1 | พยาบาล
+     1 | โรง
+(2 rows)
+
+-- ── 9. Common greeting: สวัสดีครับ → สวัสดี + ครับ ──────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'สวัสดีครับ')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ครับ
+     1 | สวัสดี
+(2 rows)
+
+-- ── 10. Developer compound: นักพัฒนา → นัก + พัฒนา ──────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'นักพัฒนา')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | นัก
+     1 | พัฒนา
+(2 rows)
+
+-- ── 11. Whitespace is filtered — never appears in ts_parse output ─────────────
+SELECT count(*)
+FROM ts_parse('kham', 'กิน ปลา')
+WHERE tokid = 0;
+ count 
+-------
+     0
+(1 row)
+
+-- ── 12. Stopword กับ: appears in ts_parse (parser does not filter stopwords) ──
+SELECT tokid, token
+FROM ts_parse('kham', 'กับ')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | กับ
+(1 row)
+
+-- ── 13. Stopword ที่: appears in ts_parse ────────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'ที่')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ที่
+(1 row)
+
+-- ── 14. Stopword ของ: appears in ts_parse ────────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'ของ')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ของ
+(1 row)
+
+-- ── 15. Stopwords appear in tsvector (kham_dict=simple, no PG-level filtering)
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'กับ') AS stopword_indexed;
+ stopword_indexed 
+------------------
+ t
+(1 row)
+
+-- ── 16. Thai + Arabic number: กินข้าว 3 มื้อ ────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'กินข้าว 3 มื้อ')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | กิน
+     1 | ข้าว
+     1 | มื้อ
+     3 | 3
+(4 rows)
+
+-- ── 17. Thai + Latin: Python สำหรับ AI ───────────────────────────────────────
+SELECT tokid, token
+FROM ts_parse('kham', 'Python สำหรับ AI')
+ORDER BY tokid, token;
+ tokid | token  
+-------+--------
+     1 | สำ
+     1 | หรับ
+     2 | AI
+     2 | Python
+(4 rows)
+
+-- ── 18. Mixed Thai + number + percent ────────────────────────────────────────
+SELECT count(*) FILTER (WHERE tokid = 1) AS thai_count,
+       count(*) FILTER (WHERE tokid = 3) AS number_count,
+       count(*) FILTER (WHERE tokid = 4) AS punct_count
+FROM ts_parse('kham', 'ราคา 500 บาท ลด 10%');
+ thai_count | number_count | punct_count 
+------------+--------------+-------------
+          4 |            2 |           1
+(1 row)
+
+-- ── 19. FTS search on compound word ──────────────────────────────────────────
+-- โรงพยาบาล segments as โรง+พยาบาล; search for พยาบาล must match
+SELECT to_tsvector('kham', 'โรงพยาบาลใกล้บ้าน') @@ plainto_tsquery('kham', 'พยาบาล') AS found;
+ found 
+-------
+ t
+(1 row)
+
+-- ── 20. Normalisation: to_tsvector is deterministic for same input ────────────
+SELECT to_tsvector('kham', 'กินข้าว')::text = to_tsvector('kham', 'กินข้าว')::text AS stable;
+ stable 
+--------
+ t
+(1 row)
+

@@ -59,3 +59,6 @@ kham-pg/regress/results/
 
 # macOS
 .DS_Store
+
+./.claude/projects
+/.claude/projects/-Users-preedee-Projects-Rust-kham/memory/project_docker_pg.md
