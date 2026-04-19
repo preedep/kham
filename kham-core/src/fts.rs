@@ -28,6 +28,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use crate::ngram::char_ngrams;
+use crate::pos::{PosTag, PosTagger};
 use crate::stopwords::StopwordSet;
 use crate::synonym::SynonymMap;
 use crate::token::TokenKind;
@@ -48,6 +49,9 @@ pub struct FtsToken {
     pub synonyms: Vec<String>,
     /// Character trigrams — populated only for [`TokenKind::Unknown`] tokens.
     pub trigrams: Vec<String>,
+    /// Primary part-of-speech tag from the lookup table, or `None` if the word
+    /// is not in the table (OOV) or is not a Thai token.
+    pub pos: Option<PosTag>,
 }
 
 /// Builder for [`FtsTokenizer`].
@@ -56,6 +60,7 @@ pub struct FtsTokenizerBuilder {
     stopwords: Option<StopwordSet>,
     synonyms: Option<SynonymMap>,
     ngram_size: Option<usize>,
+    pos_tagger: Option<PosTagger>,
 }
 
 impl FtsTokenizerBuilder {
@@ -79,6 +84,12 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Use a custom POS tagger instead of the built-in table.
+    pub fn pos_tagger(mut self, t: PosTagger) -> Self {
+        self.pos_tagger = Some(t);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -86,6 +97,7 @@ impl FtsTokenizerBuilder {
             stopwords: self.stopwords.unwrap_or_else(StopwordSet::builtin),
             synonyms: self.synonyms.unwrap_or_else(SynonymMap::empty),
             ngram_size: self.ngram_size.unwrap_or(3),
+            pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
         }
     }
 }
@@ -109,6 +121,7 @@ pub struct FtsTokenizer {
     stopwords: StopwordSet,
     synonyms: SynonymMap,
     ngram_size: usize,
+    pos_tagger: PosTagger,
 }
 
 impl FtsTokenizer {
@@ -157,6 +170,11 @@ impl FtsTokenizer {
             } else {
                 Vec::new()
             };
+            let pos = if token.kind == TokenKind::Thai {
+                self.pos_tagger.tag(token.text)
+            } else {
+                None
+            };
 
             result.push(FtsToken {
                 text: String::from(token.text),
@@ -165,6 +183,7 @@ impl FtsTokenizer {
                 is_stop,
                 synonyms,
                 trigrams,
+                pos,
             });
 
             position += 1;

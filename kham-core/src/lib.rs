@@ -25,6 +25,7 @@ pub mod freq;
 pub mod fts;
 pub mod ngram;
 pub mod normalizer;
+pub mod pos;
 pub mod pre_tokenizer;
 pub mod romanizer;
 pub mod segmenter;
