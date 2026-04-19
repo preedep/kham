@@ -709,9 +709,10 @@ For local (non-Docker) builds, also install:
 
 | Tool | Version | Install |
 |------|---------|---------|
-| PostgreSQL dev headers | 14–17 | `apt install postgresql-server-dev-17` |
+| PostgreSQL dev headers | 14–17 | Linux: `apt install postgresql-server-dev-17` · macOS: `brew install postgresql@17` |
 | `pg_config` | ships with dev headers | — |
 | C compiler | any C11-capable compiler | system package manager |
+| GNU gettext | any | macOS only: `brew install gettext` (provides `libintl.h` required by PG headers) |
 
 `cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
 
