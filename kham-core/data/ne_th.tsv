@@ -1,0 +1,247 @@
+# Thai named entity gazetteer
+# Format: <thai_word><TAB><NE_TAG>
+# Tags: PERSON PLACE ORG
+# Source: hand-curated high-precision entries (prefer unambiguous NEs)
+# Lines starting with # are comments; blank lines ignored
+# Duplicate keys: last entry wins
+
+# ── PLACE: Thai provinces & cities ───────────────────────────────────────────
+กระบี่	PLACE
+กาญจนบุรี	PLACE
+กาฬสินธุ์	PLACE
+กำแพงเพชร	PLACE
+กรุงเทพ	PLACE
+กรุงเทพมหานคร	PLACE
+ขอนแก่น	PLACE
+จันทบุรี	PLACE
+ฉะเชิงเทรา	PLACE
+ชลบุรี	PLACE
+ชัยนาท	PLACE
+ชัยภูมิ	PLACE
+ชุมพร	PLACE
+เชียงราย	PLACE
+เชียงใหม่	PLACE
+ตรัง	PLACE
+ตราด	PLACE
+ตาก	PLACE
+นครนายก	PLACE
+นครปฐม	PLACE
+นครพนม	PLACE
+นครราชสีมา	PLACE
+นครศรีธรรมราช	PLACE
+นครสวรรค์	PLACE
+นนทบุรี	PLACE
+นราธิวาส	PLACE
+น่าน	PLACE
+บึงกาฬ	PLACE
+บุรีรัมย์	PLACE
+ปทุมธานี	PLACE
+ประจวบคีรีขันธ์	PLACE
+ปราจีนบุรี	PLACE
+ปัตตานี	PLACE
+พระนครศรีอยุธยา	PLACE
+พะเยา	PLACE
+พังงา	PLACE
+พัทลุง	PLACE
+พิจิตร	PLACE
+พิษณุโลก	PLACE
+เพชรบุรี	PLACE
+เพชรบูรณ์	PLACE
+แพร่	PLACE
+ภูเก็ต	PLACE
+มหาสารคาม	PLACE
+มุกดาหาร	PLACE
+แม่ฮ่องสอน	PLACE
+ยโสธร	PLACE
+ยะลา	PLACE
+ร้อยเอ็ด	PLACE
+ระนอง	PLACE
+ระยอง	PLACE
+ราชบุรี	PLACE
+ลพบุรี	PLACE
+ลำปาง	PLACE
+ลำพูน	PLACE
+เลย	PLACE
+ศรีสะเกษ	PLACE
+สกลนคร	PLACE
+สงขลา	PLACE
+สตูล	PLACE
+สมุทรปราการ	PLACE
+สมุทรสงคราม	PLACE
+สมุทรสาคร	PLACE
+สระแก้ว	PLACE
+สระบุรี	PLACE
+สิงห์บุรี	PLACE
+สุโขทัย	PLACE
+สุพรรณบุรี	PLACE
+สุราษฎร์ธานี	PLACE
+สุรินทร์	PLACE
+หนองคาย	PLACE
+หนองบัวลำภู	PLACE
+อ่างทอง	PLACE
+อำนาจเจริญ	PLACE
+อุดรธานี	PLACE
+อุตรดิตถ์	PLACE
+อุทัยธานี	PLACE
+อุบลราชธานี	PLACE
+พัทยา	PLACE
+หัวหิน	PLACE
+อยุธยา	PLACE
+
+# ── PLACE: Countries ──────────────────────────────────────────────────────────
+กัมพูชา	PLACE
+เกาหลี	PLACE
+เกาหลีเหนือ	PLACE
+เกาหลีใต้	PLACE
+แคนาดา	PLACE
+จีน	PLACE
+ญี่ปุ่น	PLACE
+ไทย	PLACE
+ไต้หวัน	PLACE
+นิวซีแลนด์	PLACE
+บราซิล	PLACE
+พม่า	PLACE
+เมียนมา	PLACE
+เม็กซิโก	PLACE
+ฝรั่งเศส	PLACE
+ฟิลิปปินส์	PLACE
+มาเลเซีย	PLACE
+รัสเซีย	PLACE
+ลาว	PLACE
+เวียดนาม	PLACE
+สิงคโปร์	PLACE
+สเปน	PLACE
+อเมริกา	PLACE
+อังกฤษ	PLACE
+อินเดีย	PLACE
+อินโดนีเซีย	PLACE
+อิตาลี	PLACE
+อิสราเอล	PLACE
+ออสเตรเลีย	PLACE
+เยอรมนี	PLACE
+
+# ── PLACE: World cities ───────────────────────────────────────────────────────
+กรุงโตเกียว	PLACE
+นิวยอร์ก	PLACE
+ปักกิ่ง	PLACE
+ปารีส	PLACE
+เบอร์ลิน	PLACE
+ลอนดอน	PLACE
+ซิดนีย์	PLACE
+มอสโก	PLACE
+เซี่ยงไฮ้	PLACE
+ฮ่องกง	PLACE
+ดูไบ	PLACE
+กัวลาลัมเปอร์	PLACE
+จาการ์ตา	PLACE
+มะนิลา	PLACE
+
+# ── PLACE: Regions ────────────────────────────────────────────────────────────
+เอเชีย	PLACE
+เอเชียตะวันออกเฉียงใต้	PLACE
+ยุโรป	PLACE
+แอฟริกา	PLACE
+อเมริกาเหนือ	PLACE
+อเมริกาใต้	PLACE
+ตะวันออกกลาง	PLACE
+อาเซียน	PLACE
+
+# ── ORG: Thai government ──────────────────────────────────────────────────────
+กระทรวงการคลัง	ORG
+กระทรวงการต่างประเทศ	ORG
+กระทรวงคมนาคม	ORG
+กระทรวงดิจิทัล	ORG
+กระทรวงพาณิชย์	ORG
+กระทรวงมหาดไทย	ORG
+กระทรวงยุติธรรม	ORG
+กระทรวงสาธารณสุข	ORG
+กระทรวงศึกษาธิการ	ORG
+กระทรวงอุตสาหกรรม	ORG
+กระทรวงเกษตร	ORG
+รัฐสภา	ORG
+วุฒิสภา	ORG
+สภาผู้แทนราษฎร	ORG
+ศาลฎีกา	ORG
+ศาลรัฐธรรมนูญ	ORG
+สำนักงานตำรวจแห่งชาติ	ORG
+กองทัพบก	ORG
+กองทัพเรือ	ORG
+กองทัพอากาศ	ORG
+กองทัพไทย	ORG
+ธนาคารแห่งประเทศไทย	ORG
+ก.ล.ต.	ORG
+สำนักงานคณะกรรมการกำกับหลักทรัพย์	ORG
+
+# ── ORG: State enterprises & major Thai companies ────────────────────────────
+การบินไทย	ORG
+ไทยแอร์เวย์	ORG
+ปตท	ORG
+การไฟฟ้านครหลวง	ORG
+การไฟฟ้าส่วนภูมิภาค	ORG
+การประปานครหลวง	ORG
+ธนาคารกรุงไทย	ORG
+ธนาคารกรุงเทพ	ORG
+ธนาคารกสิกรไทย	ORG
+ธนาคารไทยพาณิชย์	ORG
+บีทีเอส	ORG
+เอ็มอาร์ที	ORG
+เซ็นทรัล	ORG
+เซ็นทรัลพัฒนา	ORG
+ซีพี	ORG
+เครือซีพี	ORG
+ทรู	ORG
+เอไอเอส	ORG
+ดีแทค	ORG
+ปูนซิเมนต์ไทย	ORG
+เอสซีจี	ORG
+ไอทีวี	ORG
+ช่อง3	ORG
+ช่อง7	ORG
+ช่องวัน	ORG
+
+# ── ORG: Universities ─────────────────────────────────────────────────────────
+จุฬาลงกรณ์	ORG
+มหิดล	ORG
+ธรรมศาสตร์	ORG
+เกษตรศาสตร์	ORG
+รามคำแหง	ORG
+สุโขทัยธรรมาธิราช	ORG
+เชียงใหม่มหาวิทยาลัย	ORG
+ขอนแก่นมหาวิทยาลัย	ORG
+
+# ── ORG: International ────────────────────────────────────────────────────────
+สหประชาชาติ	ORG
+ยูเอ็น	ORG
+อาเซียน	ORG
+ไอเอ็มเอฟ	ORG
+ธนาคารโลก	ORG
+องค์การอนามัยโลก	ORG
+นาโต	ORG
+กูเกิล	ORG
+เฟซบุ๊ก	ORG
+เมตา	ORG
+แอปเปิล	ORG
+ไมโครซอฟต์	ORG
+อเมซอน	ORG
+เทสลา	ORG
+
+# ── PERSON: Royal family titles (used as standalone tokens) ──────────────────
+ในหลวง	PERSON
+พระราชา	PERSON
+พระราชินี	PERSON
+รัชกาล	PERSON
+สมเด็จ	PERSON
+
+# ── PERSON: Political titles ──────────────────────────────────────────────────
+นายกรัฐมนตรี	PERSON
+รัฐมนตรี	PERSON
+ประธานาธิบดี	PERSON
+นายก	PERSON
+
+# ── PERSON: Well-known Thai public figures (unambiguous) ─────────────────────
+ทักษิณ	PERSON
+ยิ่งลักษณ์	PERSON
+อภิสิทธิ์	PERSON
+สมัคร	PERSON
+สุรยุทธ์	PERSON
+เปรม	PERSON

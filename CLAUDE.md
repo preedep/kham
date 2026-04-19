@@ -182,16 +182,18 @@ pub struct FtsToken {
     pub synonyms: Vec<String>,// from SynonymMap (empty if no match)
     pub trigrams: Vec<String>,// char n-grams for TokenKind::Unknown tokens only
     pub pos: Option<PosTag>,  // POS tag from PosTagger; None for OOV or non-Thai tokens
+    pub ne: Option<NamedEntityKind>, // NE category; Some(k) iff kind == TokenKind::Named(k)
 }
 ```
 
 ```rust
-FtsTokenizer::new()                          // built-in stopwords, no synonyms, ngram_size=3, builtin pos_tagger
+FtsTokenizer::new()                          // built-in stopwords, no synonyms, ngram_size=3, builtin pos/ne taggers
 FtsTokenizer::builder()
     .stopwords(StopwordSet)
     .synonyms(SynonymMap)
     .ngram_size(usize)                       // 0 = disable n-gram generation
     .pos_tagger(PosTagger)                   // override built-in POS table
+    .ne_tagger(NeTagger)                     // override built-in NE gazetteer
     .build()
 
 fts.segment_for_fts(text) -> Vec<FtsToken>  // all non-whitespace tokens, with metadata
@@ -206,7 +208,9 @@ fts.lexemes(text)         -> Vec<String>    // flat list: text + synonyms + trig
 - `segment_for_fts` always calls `normalize()` internally before `segment()` — callers do not need to normalise first.
 - Stopword positions are preserved in `index_tokens` output so phrase-distance scoring remains correct.
 - `trigrams` is only populated for `TokenKind::Unknown` tokens; `TokenKind::Thai` tokens never receive trigrams.
-- `pos` is only populated for `TokenKind::Thai` tokens — Latin, Number, and other non-Thai tokens always get `None`.
+- `pos` is only populated for `TokenKind::Thai` tokens — Latin, Number, Named, and other non-Thai tokens always get `None`.
+- `ne` is only populated for `TokenKind::Named(k)` tokens — corresponds 1:1 with `kind`.
+- NE tagging runs before POS tagging in the pipeline; Named tokens skip POS lookup.
 - Do not add `std`-only code to any of these modules. If FST support is ever needed (synonym sets > 5k), gate it behind `#[cfg(feature = "std")]`.
 
 ### `pos` — `PosTagger` / `PosTag`
@@ -227,6 +231,29 @@ PosTag::Verb.as_tag() -> &'static str       // "VERB"
 ```
 
 Data file: `kham-core/data/pos_th.tsv` — tab-separated, sections grouped by tag with `# ── NOUN ──` comments.
+
+### `ne` — `NeTagger` / `NamedEntityKind`
+
+Gazetteer-based named entity recognition. Post-processing pass that relabels `TokenKind::Thai` tokens to `TokenKind::Named(kind)` for words that appear in the NE word list.
+
+**Three categories:** `Person Place Org` — **TSV tags:** `PERSON PLACE ORG`
+
+`NamedEntityKind` is defined in `token.rs` (not `ne.rs`) to avoid circular imports.
+
+```rust
+NeTagger::builtin()                          // built-in gazetteer (~200 entries, hand-curated)
+NeTagger::from_tsv(data: &str)              // parse TSV; last duplicate wins; unknown tags skipped
+tagger.tag(word: &str) -> Option<NamedEntityKind>   // None if not in gazetteer; Copy return
+tagger.tag_tokens(tokens: Vec<Token>) -> Vec<Token> // relabels Thai→Named for gazetteer hits
+
+NamedEntityKind::from_tag("PLACE") -> Option<NamedEntityKind>
+NamedEntityKind::Place.as_tag() -> &'static str     // "PLACE"
+NamedEntityKind::Place.as_str() -> &'static str     // "Place"
+```
+
+**Limitation:** Only single-token NEs match — compound names that the segmenter splits into multiple tokens (e.g. กรุงเทพมหานคร → กรุง+เทพ+มหา+นคร) are not tagged. Verify entries with `Tokenizer::new().segment("candidate")` before adding to the TSV.
+
+Data file: `kham-core/data/ne_th.tsv` — Thai provinces (77), countries (30+), world cities (14), regions (8), government ministries/state enterprises, universities, international orgs, public figures (~200 total).
 
 ## Romanization Module (`kham-core/src/romanizer`)
 

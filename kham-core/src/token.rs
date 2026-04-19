@@ -2,6 +2,53 @@
 
 use core::ops::Range;
 
+/// Named entity category assigned by the NE gazetteer.
+///
+/// Used as the payload of [`TokenKind::Named`]. Stored here (rather than in
+/// `ne.rs`) to keep [`TokenKind`] self-contained and avoid circular module
+/// dependencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum NamedEntityKind {
+    /// A person — individual, title used as name, or prominent public figure.
+    Person,
+    /// A place — country, province, city, or geographic region.
+    Place,
+    /// An organisation — company, government body, institution, or brand.
+    Org,
+}
+
+impl NamedEntityKind {
+    /// Parse the TSV tag string (`"PERSON"`, `"PLACE"`, `"ORG"`).
+    ///
+    /// Returns `None` for unrecognised strings.
+    pub fn from_tag(s: &str) -> Option<Self> {
+        match s {
+            "PERSON" => Some(Self::Person),
+            "PLACE" => Some(Self::Place),
+            "ORG" => Some(Self::Org),
+            _ => None,
+        }
+    }
+
+    /// The canonical TSV tag string for this variant.
+    pub fn as_tag(self) -> &'static str {
+        match self {
+            Self::Person => "PERSON",
+            Self::Place => "PLACE",
+            Self::Org => "ORG",
+        }
+    }
+
+    /// A human-readable label for use in bindings (`"Person"`, `"Place"`, `"Org"`).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Person => "Person",
+            Self::Place => "Place",
+            Self::Org => "Org",
+        }
+    }
+}
+
 /// Classification of a [`Token`]'s script / category.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenKind {
@@ -19,6 +66,12 @@ pub enum TokenKind {
     Whitespace,
     /// Anything that does not fit the above categories.
     Unknown,
+    /// A named entity identified by the NE gazetteer.
+    ///
+    /// The segmenter emits [`Thai`](TokenKind::Thai) for all Thai tokens;
+    /// [`NeTagger::tag_tokens`](crate::ne::NeTagger::tag_tokens) relabels
+    /// gazetteer matches to `Named(kind)` in a post-processing pass.
+    Named(NamedEntityKind),
 }
 
 /// A single token produced by [`crate::Tokenizer::segment`].

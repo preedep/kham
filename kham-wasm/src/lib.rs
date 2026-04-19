@@ -40,6 +40,7 @@ fn kind_str(kind: TokenKind) -> &'static str {
         TokenKind::Emoji => "Emoji",
         TokenKind::Whitespace => "Whitespace",
         TokenKind::Unknown => "Unknown",
+        TokenKind::Named(ne) => ne.as_str(),
     }
 }
 

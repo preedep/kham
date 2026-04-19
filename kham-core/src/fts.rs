@@ -27,11 +27,12 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::ne::NeTagger;
 use crate::ngram::char_ngrams;
 use crate::pos::{PosTag, PosTagger};
 use crate::stopwords::StopwordSet;
 use crate::synonym::SynonymMap;
-use crate::token::TokenKind;
+use crate::token::{NamedEntityKind, TokenKind};
 use crate::Tokenizer;
 
 /// A token produced by the FTS pipeline, ready for lexeme indexing.
@@ -52,6 +53,9 @@ pub struct FtsToken {
     /// Primary part-of-speech tag from the lookup table, or `None` if the word
     /// is not in the table (OOV) or is not a Thai token.
     pub pos: Option<PosTag>,
+    /// Named entity category, or `None` if the token is not in the NE
+    /// gazetteer. When set, `kind` is [`TokenKind::Named`]`(ne)`.
+    pub ne: Option<NamedEntityKind>,
 }
 
 /// Builder for [`FtsTokenizer`].
@@ -61,6 +65,7 @@ pub struct FtsTokenizerBuilder {
     synonyms: Option<SynonymMap>,
     ngram_size: Option<usize>,
     pos_tagger: Option<PosTagger>,
+    ne_tagger: Option<NeTagger>,
 }
 
 impl FtsTokenizerBuilder {
@@ -90,6 +95,12 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Use a custom NE gazetteer instead of the built-in table.
+    pub fn ne_tagger(mut self, t: NeTagger) -> Self {
+        self.ne_tagger = Some(t);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -98,6 +109,7 @@ impl FtsTokenizerBuilder {
             synonyms: self.synonyms.unwrap_or_else(SynonymMap::empty),
             ngram_size: self.ngram_size.unwrap_or(3),
             pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
+            ne_tagger: self.ne_tagger.unwrap_or_else(NeTagger::builtin),
         }
     }
 }
@@ -122,6 +134,7 @@ pub struct FtsTokenizer {
     synonyms: SynonymMap,
     ngram_size: usize,
     pos_tagger: PosTagger,
+    ne_tagger: NeTagger,
 }
 
 impl FtsTokenizer {
@@ -147,7 +160,9 @@ impl FtsTokenizer {
     /// [`index_tokens`]: FtsTokenizer::index_tokens
     pub fn segment_for_fts(&self, text: &str) -> Vec<FtsToken> {
         let normalized = self.tokenizer.normalize(text);
-        let raw_tokens = self.tokenizer.segment(&normalized);
+        let raw_tokens = self
+            .ne_tagger
+            .tag_tokens(self.tokenizer.segment(&normalized));
 
         let mut result = Vec::with_capacity(raw_tokens.len());
         let mut position = 0usize;
@@ -170,6 +185,11 @@ impl FtsTokenizer {
             } else {
                 Vec::new()
             };
+            let ne = if let TokenKind::Named(k) = token.kind {
+                Some(k)
+            } else {
+                None
+            };
             let pos = if token.kind == TokenKind::Thai {
                 self.pos_tagger.tag(token.text)
             } else {
@@ -184,6 +204,7 @@ impl FtsTokenizer {
                 synonyms,
                 trigrams,
                 pos,
+                ne,
             });
 
             position += 1;

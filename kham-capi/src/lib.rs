@@ -44,6 +44,7 @@ fn kind_cstring(kind: TokenKind) -> CString {
         TokenKind::Emoji => "Emoji",
         TokenKind::Whitespace => "Whitespace",
         TokenKind::Unknown => "Unknown",
+        TokenKind::Named(ne) => ne.as_str(),
     })
     .unwrap()
 }
