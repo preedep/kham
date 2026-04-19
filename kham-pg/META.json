@@ -1,0 +1,45 @@
+{
+  "name": "kham_pg",
+  "abstract": "Thai full-text search parser for PostgreSQL",
+  "description": "A PostgreSQL text search parser for the Thai language, powered by the kham word segmentation engine. Enables to_tsvector, plainto_tsquery, ts_rank, and GIN indexes on Thai text.",
+  "version": "0.1.3",
+  "maintainer": [
+    "Preedee Ponchevin <nickmsft@mac.com>"
+  ],
+  "license": "mit",
+  "prereqs": {
+    "runtime": {
+      "requires": {
+        "PostgreSQL": "17.0"
+      }
+    },
+    "build": {
+      "requires": {
+        "Rust": "1.85"
+      }
+    }
+  },
+  "provides": {
+    "kham_pg": {
+      "abstract": "Thai full-text search parser for PostgreSQL",
+      "file": "sql/kham_pg--0.1.3.sql",
+      "version": "0.1.3"
+    }
+  },
+  "resources": {
+    "homepage": "https://github.com/preedep/kham",
+    "bugtracker": {
+      "web": "https://github.com/preedep/kham/issues"
+    },
+    "repository": {
+      "url": "https://github.com/preedep/kham.git",
+      "web": "https://github.com/preedep/kham",
+      "type": "git"
+    }
+  },
+  "generated_by": "Preedee Ponchevin",
+  "meta-spec": {
+    "version": "1.0.0",
+    "url": "http://pgxn.org/meta/spec.txt"
+  }
+}
