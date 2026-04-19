@@ -28,7 +28,7 @@ CREATE FUNCTION kham_start(internal, int4)
     LANGUAGE c STRICT;
 
 CREATE FUNCTION kham_gettoken(internal, internal, internal)
-    RETURNS int4
+    RETURNS internal
     AS 'MODULE_PATHNAME', 'kham_gettoken'
     LANGUAGE c STRICT;
 

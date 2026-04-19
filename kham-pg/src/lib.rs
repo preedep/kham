@@ -130,3 +130,73 @@ pub unsafe extern "C" fn kham_end_impl(state: *mut c_void) {
         unsafe { drop(Box::from_raw(state as *mut KhamState)) };
     }
 }
+
+// ---------------------------------------------------------------------------
+// PostgreSQL fmgr exported symbols
+//
+// These #[no_mangle] functions are guaranteed to appear in the dynamic symbol
+// table of the cdylib regardless of Rust's linker version-script.  They
+// trampoline into the C shim functions (*_shim) that handle PG macro
+// boilerplate, and provide the module magic and finfo records PG resolves
+// via dlsym at extension load time.
+// ---------------------------------------------------------------------------
+
+type Datum = usize;
+type Fcinfo = *mut c_void;
+
+extern "C" {
+    fn kham_pg_magic_impl() -> *const c_void;
+    fn kham_start_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_gettoken_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_end_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_lextypes_shim(fcinfo: Fcinfo) -> Datum;
+}
+
+#[repr(C)]
+struct PgFinfoRecord {
+    api_version: c_int,
+}
+
+static FINFO_V1: PgFinfoRecord = PgFinfoRecord { api_version: 1 };
+
+#[no_mangle]
+pub unsafe extern "C" fn Pg_magic_func() -> *const c_void {
+    kham_pg_magic_impl()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn kham_start(fcinfo: Fcinfo) -> Datum {
+    kham_start_shim(fcinfo)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn kham_gettoken(fcinfo: Fcinfo) -> Datum {
+    kham_gettoken_shim(fcinfo)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn kham_end(fcinfo: Fcinfo) -> Datum {
+    kham_end_shim(fcinfo)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn kham_lextypes(fcinfo: Fcinfo) -> Datum {
+    kham_lextypes_shim(fcinfo)
+}
+
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_start() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_gettoken() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_end() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_lextypes() -> *const PgFinfoRecord {
+    &FINFO_V1
+}

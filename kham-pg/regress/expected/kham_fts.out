@@ -1,18 +1,14 @@
 -- kham_fts — pg_regress integration tests for the kham-pg extension.
 --
 -- Run via:  make -C kham-pg regress   (uses Docker PostgreSQL 17)
-
 -- ── 1. Load extension ────────────────────────────────────────────────────────
-
 CREATE EXTENSION kham_pg;
-
 -- ── 2. Verify lextypes ───────────────────────────────────────────────────────
-
 SELECT tokid, alias, description
 FROM ts_token_type('kham')
 ORDER BY tokid;
- tokid |  alias  |      description
--------+---------+-----------------------
+ tokid |  alias  |     description     
+-------+---------+---------------------
      1 | thai    | Thai word
      2 | latin   | Latin script token
      3 | number  | Numeric token
@@ -22,22 +18,20 @@ ORDER BY tokid;
 (6 rows)
 
 -- ── 3. ts_parse — pure Thai ──────────────────────────────────────────────────
-
 SELECT tokid, token
 FROM ts_parse('kham', 'กินข้าว')
 ORDER BY tokid, token;
- tokid | token
+ tokid | token 
 -------+-------
      1 | กิน
      1 | ข้าว
 (2 rows)
 
 -- ── 4. ts_parse — Thai sentence with stopword ────────────────────────────────
-
 SELECT tokid, token
 FROM ts_parse('kham', 'กินข้าวกับปลา')
 ORDER BY tokid, token;
- tokid | token
+ tokid | token 
 -------+-------
      1 | กับ
      1 | กิน
@@ -46,12 +40,11 @@ ORDER BY tokid, token;
 (4 rows)
 
 -- ── 5. ts_parse — mixed Thai + Latin + number ────────────────────────────────
-
 SELECT tokid, token
 FROM ts_parse('kham', 'Python 3 สำหรับ AI')
 ORDER BY tokid, token;
- tokid |  token
--------+---------
+ tokid | token  
+-------+--------
      1 | สำ
      1 | หรับ
      2 | AI
@@ -60,41 +53,36 @@ ORDER BY tokid, token;
 (5 rows)
 
 -- ── 6. ts_parse — empty string returns no rows ───────────────────────────────
-
 SELECT count(*) FROM ts_parse('kham', '');
- count
+ count 
 -------
      0
 (1 row)
 
 -- ── 7. to_tsvector — non-null result ────────────────────────────────────────
-
 SELECT to_tsvector('kham', 'กินข้าวกับปลา') IS NOT NULL AS ok;
- ok
+ ok 
 ----
  t
 (1 row)
 
 -- ── 8. Phrase search — token present in document ────────────────────────────
-
 SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'ปลา') AS found;
- found
+ found 
 -------
  t
 (1 row)
 
 -- ── 9. Phrase search — token NOT in document ────────────────────────────────
-
 SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'หมา') AS found;
- found
+ found 
 -------
  f
 (1 row)
 
 -- ── 10. to_tsvector — mixed script ───────────────────────────────────────────
-
 SELECT to_tsvector('kham', 'โปรแกรม Python') IS NOT NULL AS ok;
- ok
+ ok 
 ----
  t
 (1 row)
