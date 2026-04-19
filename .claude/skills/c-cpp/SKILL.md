@@ -37,7 +37,12 @@ C functions are renamed to `*_shim` and called from Rust trampolines:
 
 /* Magic data — compiled against target PG headers for correct version fields */
 const Pg_magic_struct *kham_pg_magic_impl(void) {
+    /* PG_MODULE_MAGIC_DATA is object-like on PGDG PG17, function-like on PG18+/Homebrew */
+#ifdef PG_MODULE_ABI_DATA
     static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA();
+#else
+    static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA;
+#endif
     return &d;
 }
 

@@ -20,7 +20,14 @@
 const Pg_magic_struct *
 kham_pg_magic_impl(void)
 {
+    /* PG_MODULE_MAGIC_DATA is function-like (variadic) when PG_MODULE_ABI_DATA
+     * is defined (PG 17 Homebrew / PG 18+).  PGDG PG 17 uses the object-like
+     * form without parentheses. */
+#ifdef PG_MODULE_ABI_DATA
     static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA();
+#else
+    static const Pg_magic_struct d = PG_MODULE_MAGIC_DATA;
+#endif
     return &d;
 }
 
