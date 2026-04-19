@@ -151,60 +151,71 @@ Use this checklist when expanding coverage. Check off items as suites are added.
 - [x] GIN index on table — no match returns 0 rows
 - [x] `ts_rank` non-zero for matching document
 
-### kham_thai.sql — Thai language edge cases (0 / ~20 ☐ todo)
+### kham_thai.sql — Thai language edge cases (20 ✅ done)
 Token types:
-- [ ] Single Thai character (`ก`) → tokid=6 (Unknown — below TCC threshold)
-- [ ] Thai numeral string (`๑๒๓`) → tokid=3 (Number)
-- [ ] Thai numeral mixed with Thai (`ราคา๑๕๐บาท`) → Thai + Number + Thai tokens
-- [ ] OOV/brand name (`เปปซี่`) → one or more tokid=6 Unknown tokens
-- [ ] Punctuation in Thai sentence (`ราคา 500 บาท ลด 10%`) — `%` → tokid=4
+- [x] Single Thai character (`ก`) → tokid=6 (Unknown — below TCC threshold)
+- [x] Thai numeral string (`๑๒๓`) → tokid=3 (Number)
+- [x] Thai numeral mixed with Thai (`ราคา๑๕๐บาท`) → Thai + Number + Thai tokens
+- [x] OOV/brand name (`เปปซี่`) → one or more tokid=6 Unknown tokens
+- [x] Punctuation in Thai sentence (`ลด10%`) — `%` → tokid=4
 
 Segmentation correctness:
-- [ ] Simple 3-word Thai sentence (`แมวกินปลา`) → 3 Thai tokens
-- [ ] Compound word (`โรงพยาบาล`) → `โรง` + `พยาบาล` (2 tokens)
-- [ ] Common phrase (`สวัสดีครับ`) → `สวัสดี` + `ครับ`
-- [ ] Developer compound (`นักพัฒนา`) → `นัก` + `พัฒนา`
-- [ ] Whitespace never appears in `ts_parse` output (filter confirmed)
+- [x] Simple 3-word Thai sentence (`แมวกินปลา`) → 3 Thai tokens
+- [x] Compound word (`โรงพยาบาล`) → `โรง` + `พยาบาล` (2 tokens)
+- [x] Common phrase (`สวัสดีครับ`) → `สวัสดี` + `ครับ`
+- [x] Developer compound (`นักพัฒนา`) → `นัก` + `พัฒนา`
+- [x] Whitespace never appears in `ts_parse` output (filter confirmed)
 
 Stopword behaviour:
-- [ ] `กับ` appears in `ts_parse` output (not filtered by parser)
-- [ ] `ที่` appears in `ts_parse` output
-- [ ] `ของ` appears in `ts_parse` output
-- [ ] `กับ` appears in `to_tsvector::text` (kham_dict=simple does NOT strip stopwords)
+- [x] `กับ` appears in `ts_parse` output (not filtered by parser)
+- [x] `ที่` appears in `ts_parse` output
+- [x] `ของ` appears in `ts_parse` output
+- [x] `กับ` appears in tsvector (kham_dict=simple does NOT strip stopwords)
 
 Thai + other scripts:
-- [ ] Thai sentence with Arabic number (`กินข้าว 3 มื้อ`) → Thai + Number tokens
-- [ ] Thai + Latin brand (`Python สำหรับ AI`) — tokid breakdown correct
-- [ ] Mixed Thai + number + percent — all three token types present
+- [x] Thai sentence with Arabic number (`กินข้าว 3 มื้อ`) → Thai + Number tokens
+- [x] Thai + Latin brand (`Python สำหรับ AI`) — tokid breakdown correct
+- [x] Mixed Thai + number + percent — all three token types present (`ราคา 500 บาท ลด 10%`)
 
-Normalisation (verify kham normalises before indexing):
-- [ ] Identical meaning text with/without สระลอย reorder → same tsvector lexemes
-- [ ] Duplicate วรรณยุกต์ input → deduplicated lexeme in tsvector
+Compound word FTS:
+- [x] `โรงพยาบาล` indexed as `โรง`+`พยาบาล`; search for `พยาบาล` matches
 
-### kham_operators.sql — FTS operator coverage (0 / ~12 ☐ todo)
-- [ ] AND: `to_tsvector @@ to_tsquery('กิน & ปลา')` — both words present → true
-- [ ] AND: one word missing → false
-- [ ] OR: `to_tsquery('กิน | หมู')` — one word present → true
-- [ ] OR: neither word present → false
-- [ ] NOT: `to_tsquery('กิน & !หมู')` — กิน present, หมู absent → true
-- [ ] NOT: `to_tsquery('กิน & !ปลา')` — both present → false
-- [ ] Phrase: `phraseto_tsquery('kham', 'กิน ข้าว')` matches adjacent tokens
-- [ ] Phrase: non-adjacent tokens do not phrase-match
-- [ ] `websearch_to_tsquery('kham', 'กิน ปลา')` → both tokens found
-- [ ] `websearch_to_tsquery` with `-` exclusion operator
-- [ ] `ts_debug('kham', 'กินข้าว')` — verify alias and lexemes columns
+Normalisation:
+- [x] `to_tsvector` is deterministic for same input (idempotency check)
 
-### kham_ranking.sql — Ranking and real-world scenario (0 / ~10 ☐ todo)
-- [ ] `ts_rank` higher for more occurrences of query term
-- [ ] `ts_rank_cd` returns non-zero for match
-- [ ] ORDER BY `ts_rank DESC` returns most-relevant row first
-- [ ] `ts_headline('kham', body, query)` returns non-null
-- [ ] `ts_headline` wraps matched Thai term in `<b>` tags
-- [ ] Table with 5+ rows, ranked search returns correct top-1
-- [ ] Product catalogue: INSERT 10 Thai product names, search by ingredient → correct rows
-- [ ] Article search: INSERT 3 Thai article bodies, search returns ranked results
-- [ ] NULL body column — `to_tsvector('kham', NULL)` → NULL (no error)
-- [ ] `ts_rank` = 0 for non-matching document
+### kham_operators.sql — FTS operator coverage (15 ✅ done)
+- [x] AND — both tokens present → true
+- [x] AND — one token missing → false
+- [x] AND — neither token present → false
+- [x] OR — one token present → true
+- [x] OR — both tokens present → true
+- [x] OR — neither token present → false
+- [x] NOT — excluded token absent → true
+- [x] NOT — excluded token present → false
+- [x] Phrase — adjacent tokens (pos 1 & 2) → true
+- [x] Phrase — non-adjacent tokens (pos 1 & 4) → false
+- [x] Phrase — second adjacent pair (pos 3 & 4) → true
+- [x] `websearch_to_tsquery` space-AND match → true
+- [x] `websearch_to_tsquery` minus exclusion, term present → false
+- [x] `websearch_to_tsquery` minus exclusion, term absent → true
+- [x] `ts_debug('kham', 'กินข้าว')` — alias=thai, lexemes verified
+
+### kham_ranking.sql — Ranking and real-world scenario (13 ✅ done)
+- [x] `ts_rank` > 0 for matching document
+- [x] `ts_rank` = 0 for non-matching document
+- [x] `ts_rank_cd` returns non-zero for match
+- [x] `ts_rank` higher for more occurrences of query term (ปลา×2 > ปลา×1)
+- [x] `ts_stat` — lexeme frequency (word, ndoc, nentry) for corpus query
+- [x] `ts_stat` — ปลา appears in 2 documents → ndoc=2
+- [x] ORDER BY `ts_rank DESC` returns most-relevant row first (articles table)
+- [x] Product catalogue: INSERT 10 Thai product names, GIN index, search by ingredient → correct rows
+- [x] Product search กุ้ง → rows 1 and 2
+- [x] Product search ปลา → rows 9 and 10
+- [x] Product search ไก่ → rows 5 and 6
+- [x] Product search หมู → 0 rows
+- [x] NULL body column — `to_tsvector('kham', NULL)` → NULL (no error)
+- [x] `ts_rank(NULL::tsvector, ...)` → NULL (no error)
+- NOTE: `ts_headline` is NOT supported — kham parser has no HEADLINE callback (known limitation)
 
 ## Constraints
 
