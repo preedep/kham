@@ -30,6 +30,7 @@ use alloc::vec::Vec;
 use crate::ne::NeTagger;
 use crate::ngram::char_ngrams;
 use crate::pos::{PosTag, PosTagger};
+use crate::romanizer::RomanizationMap;
 use crate::stopwords::StopwordSet;
 use crate::synonym::SynonymMap;
 use crate::token::{NamedEntityKind, TokenKind};
@@ -66,6 +67,7 @@ pub struct FtsTokenizerBuilder {
     ngram_size: Option<usize>,
     pos_tagger: Option<PosTagger>,
     ne_tagger: Option<NeTagger>,
+    romanization: Option<RomanizationMap>,
 }
 
 impl FtsTokenizerBuilder {
@@ -101,6 +103,18 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Attach a romanization map so RTGS forms are added to [`FtsToken::synonyms`].
+    ///
+    /// When set, each Thai and Named token whose text is found in the map gets its
+    /// RTGS romanization appended to `synonyms`, enabling Latin-script queries
+    /// (e.g. `kin`) to match Thai-script documents (e.g. `กิน`) in PostgreSQL FTS.
+    ///
+    /// Disabled by default — call this method to opt in.
+    pub fn romanization(mut self, m: RomanizationMap) -> Self {
+        self.romanization = Some(m);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -110,6 +124,7 @@ impl FtsTokenizerBuilder {
             ngram_size: self.ngram_size.unwrap_or(3),
             pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
             ne_tagger: self.ne_tagger.unwrap_or_else(NeTagger::builtin),
+            romanization: self.romanization,
         }
     }
 }
@@ -135,6 +150,7 @@ pub struct FtsTokenizer {
     ngram_size: usize,
     pos_tagger: PosTagger,
     ne_tagger: NeTagger,
+    romanization: Option<RomanizationMap>,
 }
 
 impl FtsTokenizer {
@@ -173,11 +189,22 @@ impl FtsTokenizer {
             }
 
             let is_stop = self.stopwords.contains(token.text);
-            let synonyms = self
+            let is_thai_or_named = matches!(
+                token.kind,
+                TokenKind::Thai | TokenKind::Named(_)
+            );
+            let mut synonyms = self
                 .synonyms
                 .expand(token.text)
                 .map(|s| s.to_vec())
                 .unwrap_or_default();
+            if is_thai_or_named {
+                if let Some(ref rom) = self.romanization {
+                    if let Some(rtgs) = rom.romanize(token.text) {
+                        synonyms.push(String::from(rtgs));
+                    }
+                }
+            }
             let trigrams = if token.kind == TokenKind::Unknown && self.ngram_size > 0 {
                 char_ngrams(token.text, self.ngram_size)
                     .map(String::from)
