@@ -906,6 +906,59 @@ cargo bench -p kham-core
 # HTML report: target/criterion/report/index.html
 ```
 
+### PostgreSQL extension (`kham-pg`)
+
+The kham-pg extension is benchmarked at the SQL level using `pgbench` inside the Docker test container, plus system-level CPU/memory via `docker stats`.
+
+#### 1 · Latency — psql `\timing`
+
+```sql
+\timing on
+SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
+
+-- Per-node breakdown
+EXPLAIN (ANALYZE, BUFFERS)
+SELECT to_tsvector('kham', body) FROM documents LIMIT 1000;
+```
+
+#### 2 · Throughput — `pgbench`
+
+Create `bench_fts.sql`:
+
+```sql
+SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
+```
+
+Run via Docker:
+
+```bash
+# Terminal 1 — watch CPU/memory while bench runs
+docker stats docker-regress-1
+
+# Terminal 2 — throughput bench (4 clients, 30 seconds)
+docker exec docker-regress-1 pgbench \
+  -n -c 4 -j 4 -T 30 \
+  -f /bench_fts.sql \
+  -h /var/run/postgresql -p 15432 kham_test
+# Output: TPS, latency avg/stddev
+```
+
+#### 3 · Index build time — realistic workload
+
+```sql
+CREATE TABLE docs (id serial, body text);
+INSERT INTO docs (body)
+  SELECT 'กินข้าวกับปลา Python ' || g
+  FROM generate_series(1, 100000) g;
+
+\timing on
+CREATE INDEX ON docs USING gin(to_tsvector('kham', body));
+
+-- Query latency against the index
+SELECT count(*) FROM docs
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
+```
+
 ## Dictionary and corpus data
 
 | File | License | Entries | Purpose |
