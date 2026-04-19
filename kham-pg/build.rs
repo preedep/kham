@@ -20,14 +20,26 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=PG_CONFIG");
 
-    cc::Build::new()
+    let mut build = cc::Build::new();
+    build
         .file("src/shim.c")
         .include(&includedir_server)
         .include(&includedir)
         .flag("-Wno-unused-parameter")
         .flag("-Wno-declaration-after-statement")
-        .flag("-Wno-missing-field-initializers")
-        .compile("kham_pg_shim");
+        .flag("-Wno-missing-field-initializers");
+
+    // On macOS, PostgreSQL headers require libintl.h from Homebrew gettext.
+    // Add its include path when brew is available.
+    #[cfg(target_os = "macos")]
+    if let Ok(out) = Command::new("brew").args(["--prefix", "gettext"]).output() {
+        if out.status.success() {
+            let prefix = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            build.include(format!("{prefix}/include"));
+        }
+    }
+
+    build.compile("kham_pg_shim");
 
     // On macOS the linker requires explicit permission to leave PG server
     // symbols (palloc, ereport, etc.) unresolved at link time.  They are
