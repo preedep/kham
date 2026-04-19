@@ -1,47 +1,94 @@
-# Dockerfile.test — builds kham-pg and runs pg_regress inside a PostgreSQL 17
-# container.  Used by `make regress` in kham-pg/Makefile.
+# Dockerfile.test — multi-stage build for kham-pg pg_regress tests.
 #
-# Build context: repository root (so the full Cargo workspace is available).
+# Stage 1 (builder): Debian slim + postgresql-server-dev-17 + Rust → libkham_pg.so
+# Stage 2 (runner):  Debian slim + postgresql-17 only             → pg_regress
+#
+# Alpine/musl is NOT used: Rust's musl targets are static-only and do not
+# support cdylib (required for PostgreSQL shared-library extensions).
+# Both stages use the same glibc (bookworm) so the .so ABI matches.
+#
+# Build context: repository root (full Cargo workspace must be available).
 
-FROM postgres:17-bookworm
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS builder
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# ── System dependencies ──────────────────────────────────────────────────────
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         curl \
         ca-certificates \
         pkg-config \
+        gnupg \
+        lsb-release \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
         postgresql-server-dev-17 \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Rust toolchain ───────────────────────────────────────────────────────────
+# Install Rust stable
 ENV RUSTUP_HOME=/usr/local/rustup \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:$PATH
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-        | sh -s -- -y --default-toolchain stable --no-modify-path \
+    | sh -s -- -y --default-toolchain stable --no-modify-path \
     && chmod -R a+w /usr/local/rustup /usr/local/cargo
 
-# ── Copy workspace ───────────────────────────────────────────────────────────
 WORKDIR /kham
 COPY . .
 
-# ── Build kham-pg with PG 17 headers ────────────────────────────────────────
 ENV PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
-
 RUN cargo build -p kham-pg --release
 
-# ── Install extension files ──────────────────────────────────────────────────
-RUN PG_PKGLIBDIR=$($PG_CONFIG --pkglibdir) && \
-    PG_SHAREDIR=$($PG_CONFIG --sharedir) && \
-    cp target/release/libkham_pg.so "$PG_PKGLIBDIR/kham_pg.so" && \
-    cp kham-pg/kham_pg.control "$PG_SHAREDIR/extension/" && \
-    cp kham-pg/sql/kham_pg--0.1.0.sql "$PG_SHAREDIR/extension/"
+# Smoke-test: verify PG-facing symbols are in the dynamic table.
+# Fails the build early if the version-script in build.rs is misconfigured.
+RUN echo "=== exported PG symbols ===" \
+    && nm -D target/release/libkham_pg.so \
+       | grep -E 'Pg_magic_func|kham_start\b|kham_gettoken\b|kham_end\b|kham_lextypes\b' \
+    || { echo "ERROR: expected PG symbols missing from dynamic table"; exit 1; }
 
-# ── Entrypoint: start PG, run pg_regress, report result ─────────────────────
+# ── Stage 2: runner ───────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS runner
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        curl \
+        gosu \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-17 \
+        postgresql-server-dev-17 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install extension files into PG's directories (paths via pg_config)
+COPY --from=builder /kham/target/release/libkham_pg.so /tmp/kham_pg.so
+COPY kham-pg/kham_pg.control                           /tmp/kham_pg.control
+COPY kham-pg/sql/kham_pg--0.1.0.sql                   /tmp/kham_pg--0.1.0.sql
+
+RUN set -e; \
+    PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config; \
+    PG_PKGLIBDIR=$($PG_CONFIG --pkglibdir); \
+    PG_EXTDIR=$($PG_CONFIG --sharedir)/extension; \
+    install -m 755 /tmp/kham_pg.so             "$PG_PKGLIBDIR/kham_pg.so"; \
+    install -m 644 /tmp/kham_pg.control        "$PG_EXTDIR/kham_pg.control"; \
+    install -m 644 /tmp/kham_pg--0.1.0.sql     "$PG_EXTDIR/kham_pg--0.1.0.sql"
+
+# Regression test input files
+COPY kham-pg/regress /kham/kham-pg/regress
+
 COPY kham-pg/docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

@@ -269,11 +269,18 @@ Punctuation and emoji have no mapping — PG discards those token types at index
 
 ### Docker test environment
 
-- Base image: `postgres:17-bookworm` + `postgresql-server-dev-17`
-- Rust installed inside the image; extension built against PG 17 headers
+Multi-stage build (`kham-pg/docker/Dockerfile.test`):
+- **Stage 1 (builder)**: `debian:bookworm-slim` + `postgresql-server-dev-17` + Rust → `libkham_pg.so`
+- **Stage 2 (runner)**: `debian:bookworm-slim` + `postgresql-17` only — no Rust toolchain (~200 MB vs ~2 GB single-stage)
+
+Do **not** use Alpine/musl: Rust musl targets are static-only and do not support `cdylib`.
+
+Key constraints:
 - `dynamic_shared_memory_type = mmap` must be set before `pg_ctl start` (PG 17 removed `none`)
-- pg_ctl runs as the `postgres` OS user via `gosu`; root runs Rust build and directory setup
-- `pg_regress` binary is at `$(pg_config --pgxs | xargs dirname)/../../src/test/regress/pg_regress`
+- pg_ctl/initdb run as `postgres` via `gosu`; entrypoint uses `pg_config` for all paths
+- `pg_regress` binary: `$(pg_config --pgxs | dirname | dirname)/test/regress/pg_regress`
+- Use `--outputdir=.` in pg_regress so output lands at `regress/output/` and `regress/results/`
+- Linux cdylib symbol export: `build.rs` provides `src/pg_exports.map` version script so `Pg_magic_func`, `kham_start`, and all `pg_finfo_*` symbols appear in the dynamic table
 
 ## Segmenter DP scoring
 

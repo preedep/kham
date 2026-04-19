@@ -1,9 +1,9 @@
 ---
 name: docker-pg
-description: Run PostgreSQL extensions inside Docker containers for testing. Use when writing Dockerfiles or entrypoint scripts that start a PostgreSQL server, install a .so extension, and run pg_regress — especially when debugging shared-memory errors, gosu user-switching, socket paths, trust auth, or pg_ctl startup failures.
+description: Run PostgreSQL extensions inside Docker containers for testing. Use when writing Dockerfiles or entrypoint scripts that start a PostgreSQL server, install a .so extension, and run pg_regress — especially when debugging shared-memory errors, gosu/su-exec user-switching, socket paths, trust auth, pg_ctl startup failures, or symbol export issues.
 metadata:
   domain: infrastructure
-  triggers: docker postgres extension, pg_regress docker, initdb in container, gosu postgres, dynamic_shared_memory_type, postgresql entrypoint, pg_ctl could not start, trust auth, kham-pg docker test
+  triggers: docker postgres extension, pg_regress docker, initdb in container, gosu postgres, su-exec postgres, dynamic_shared_memory_type, postgresql entrypoint, pg_ctl could not start, trust auth, kham-pg docker test, missing magic block, cdylib symbol export
   role: specialist
 ---
 
@@ -11,14 +11,32 @@ metadata:
 
 Specialist for running PostgreSQL extensions (`.so` / `cdylib`) inside Docker containers for integration testing with `pg_regress`.
 
-## Base Image
+## Multi-Stage Build (recommended)
 
-Always use `postgres:17-bookworm` (or `postgres:16-bookworm`).  
-The image ships `gosu`, `pg_config`, `initdb`, `pg_ctl`, `pg_isready`, `pg_regress` at `/usr/lib/postgresql/<ver>/bin/`.
+Split builder (Rust + pg dev headers) from runner (PG only). Removes ~1.5 GB Rust toolchain from the test image.
 
 ```dockerfile
-FROM postgres:17-bookworm
+# Stage 1: builder
+FROM debian:bookworm-slim AS builder
+RUN apt-get update && apt-get install -y build-essential curl ca-certificates \
+    gnupg lsb-release pkg-config \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y postgresql-server-dev-17 \
+    && rm -rf /var/lib/apt/lists/*
+# ... install Rust, cargo build ...
+
+# Stage 2: runner
+FROM debian:bookworm-slim AS runner
+# install postgresql-17 + postgresql-server-dev-17 (for pg_regress) + gosu
+COPY --from=builder /path/to/libkham_pg.so ...
 ```
+
+**Do NOT use Alpine** for PostgreSQL extensions: Rust's musl targets (`*-unknown-linux-musl`)
+are static-only and **do not support `cdylib`**. Use Debian/glibc for both stages.
 
 ## Shared Memory — the most common pitfall
 
@@ -26,201 +44,117 @@ PostgreSQL 17+ only supports `posix`, `sysv`, `mmap` — **`none` was removed in
 
 | Value   | Works in Docker? | Notes                                    |
 |---------|-----------------|------------------------------------------|
-| `posix` | Usually yes      | Default; needs `/dev/shm` ≥ `shared_buffers` |
 | `mmap`  | **Always yes**   | Uses files in `$PGDATA`; safest for CI   |
+| `posix` | Usually yes      | Needs `/dev/shm` ≥ `shared_buffers`     |
 | `sysv`  | Needs `--ipc=host` | Avoid in CI                            |
 
-**Always add to `postgresql.conf` before starting the server:**
+**Always add before starting the server:**
 ```bash
 echo "dynamic_shared_memory_type = mmap" >> "$PGDATA/postgresql.conf"
 ```
-OR pass as a startup flag:
-```bash
-pg_ctl start ... -o "-c dynamic_shared_memory_type=mmap"
+
+## User Switching
+
+Container runs as root; PostgreSQL refuses to run as root.
+
+| Distro  | Package   | Command                   |
+|---------|-----------|---------------------------|
+| Debian  | `gosu`    | `gosu postgres <cmd>`     |
+| Alpine  | `su-exec` | `su-exec postgres <cmd>`  |
+
+Detect at runtime for portability:
+```sh
+if command -v su-exec >/dev/null 2>&1; then RUNAS="su-exec postgres"
+elif command -v gosu   >/dev/null 2>&1; then RUNAS="gosu postgres"
+fi
 ```
 
-## User Switching with gosu
+Directories postgres must own: `$PGDATA` (700), socket dir (775), log file.
 
-The `postgres:17` image runs as `root`. PostgreSQL refuses to run as root.  
-Use `gosu postgres <command>` for all DB operations.
+## pg_config — resolve paths dynamically
 
-```bash
-# initdb — must run as postgres
-gosu postgres /usr/lib/postgresql/17/bin/initdb -D "$PGDATA" --encoding=UTF8 --locale=C
-
-# pg_ctl — must run as postgres
-gosu postgres /usr/lib/postgresql/17/bin/pg_ctl start -D "$PGDATA" -l /tmp/pg.log \
-    -o "-p $PGPORT -k $PGSOCKET -c listen_addresses='' -c dynamic_shared_memory_type=mmap"
-
-# pg_isready, createdb, pg_regress — must run as postgres
-gosu postgres /usr/lib/postgresql/17/bin/pg_isready -h "$PGSOCKET" -p "$PGPORT" -U postgres -q
+```sh
+PG_BIN=$(pg_config --bindir)          # /usr/lib/postgresql/17/bin on Debian
+PG_PKGLIBDIR=$(pg_config --pkglibdir) # extension .so goes here
+PG_EXTDIR=$(pg_config --sharedir)/extension
 ```
 
-Directories that postgres must own: `$PGDATA` (700), socket dir (775), log file.
+## pg_regress Binary Path
 
-```bash
-mkdir -p "$PGDATA" "$PGSOCKET"
-chown postgres:postgres "$PGDATA" "$PGSOCKET"
-chmod 700 "$PGDATA"
-chmod 775 "$PGSOCKET"
-touch "$PGLOG" && chown postgres:postgres "$PGLOG"
+`pg_regress` is **not** in the bin directory. Derive from pgxs:
+```sh
+PGXS_MK=$(pg_config --pgxs)           # .../pgxs/src/makefiles/pgxs.mk
+PG_REGRESS=$(dirname "$(dirname "$PGXS_MK")")/test/regress/pg_regress
+# fallback:
+[ -x "$PG_REGRESS" ] || PG_REGRESS=$(find /usr/lib/postgresql* -name pg_regress -type f | head -1)
 ```
 
-## Socket vs TCP
+## pg_regress --outputdir
 
-Prefer Unix socket (`listen_addresses=''`) inside the container — no port exposure needed:
+`pg_regress` creates `output/` and `results/` **inside** `--outputdir`.
+Use `--outputdir=.` (current dir = regress/) so output lands at `regress/output/kham_fts.out`.
 
-```bash
-PGSOCKET=/var/run/postgresql
-pg_ctl start -o "-p $PGPORT -k $PGSOCKET -c listen_addresses=''"
-pg_isready -h "$PGSOCKET" -p "$PGPORT"
-createdb   -h "$PGSOCKET" -p "$PGPORT" mydb
-pg_regress --host="$PGSOCKET" --port="$PGPORT" ...
+```sh
+cd /path/to/regress
+$RUNAS "$PG_REGRESS" --inputdir=. --outputdir=. --dbname=regression \
+    --host="$PGSOCKET" --port="$PGPORT" --user="$PGUSER" kham_fts
+```
+
+After a failed run, diffs are at `regression.diffs` (relative to `--outputdir`).
+
+## cdylib Symbol Export (Linux)
+
+Rust's cdylib linker uses `--version-script` that hides all C symbols (`local: *`).
+PostgreSQL symbols (`Pg_magic_func`, `kham_start`, `pg_finfo_*`) need to be in the dynamic table.
+
+**Fix: provide a version script in `build.rs`:**
+```rust
+// build.rs
+let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+if target_os == "linux" {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    println!("cargo:rustc-link-arg=-Wl,--version-script={manifest_dir}/src/pg_exports.map");
+}
+```
+
+`src/pg_exports.map`:
+```
+{
+    global:
+        Pg_magic_func;
+        kham_start; kham_gettoken; kham_end; kham_lextypes;
+        pg_finfo_kham_start; pg_finfo_kham_gettoken;
+        pg_finfo_kham_end; pg_finfo_kham_lextypes;
+    local: *;
+};
+```
+
+Also add `-fvisibility=default` to `cc::Build` so C symbols compile as `T` (global) before the script runs.
+
+**Verify** with the smoke-test in the builder stage:
+```dockerfile
+RUN nm -D target/release/libkham_pg.so \
+    | grep -E 'Pg_magic_func|kham_start\b' \
+    || { echo "ERROR: PG symbols missing"; exit 1; }
 ```
 
 ## Trust Auth
 
-Add trust rules **after** `initdb` (which overwrites `pg_hba.conf`):
-
-```bash
-cat >> "$PGDATA/pg_hba.conf" <<'EOF'
-local all all trust
-host  all all 127.0.0.1/32 trust
-EOF
+Add **after** `initdb` (which regenerates `pg_hba.conf`):
+```sh
+printf 'local all all trust\nhost all all 127.0.0.1/32 trust\n' >> "$PGDATA/pg_hba.conf"
 ```
 
-## Error Logging — always capture the PG log
+## Error Logging
 
 `set -e` exits before you can cat the log. Use `|| { ... }`:
-
-```bash
-gosu postgres pg_ctl start ... -l "$PGLOG" || {
-    echo "=== PostgreSQL startup log ===" >&2
-    cat "$PGLOG" >&2
-    exit 1
-}
-```
-
-## Full Entrypoint Pattern
-
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-PG_BIN=/usr/lib/postgresql/17/bin
-PGDATA=/var/lib/postgresql/17/mytest
-PGSOCKET=/var/run/postgresql
-PGPORT=15432
-PGUSER=postgres
-PGLOG=/tmp/pg.log
-
-# Prepare directories (root)
-mkdir -p "$PGDATA" "$PGSOCKET"
-chown postgres:postgres "$PGDATA" "$PGSOCKET"
-chmod 700 "$PGDATA"
-chmod 775 "$PGSOCKET"
-touch "$PGLOG" && chown postgres:postgres "$PGLOG"
-
-# initdb
-gosu postgres "$PG_BIN/initdb" -D "$PGDATA" --encoding=UTF8 --locale=C
-
-# postgresql.conf tweaks
-echo "dynamic_shared_memory_type = mmap" >> "$PGDATA/postgresql.conf"
-
-# Trust auth
-cat >> "$PGDATA/pg_hba.conf" <<'HBAEOF'
-local all all trust
-HBAEOF
-
-# Start
-gosu postgres "$PG_BIN/pg_ctl" start -D "$PGDATA" -l "$PGLOG" -t 60 \
-    -o "-p $PGPORT -k $PGSOCKET -c listen_addresses='' -c dynamic_shared_memory_type=mmap" \
-    || { echo "=== PG LOG ===" >&2; cat "$PGLOG" >&2; exit 1; }
-
-# Wait
-for i in $(seq 1 30); do
-    gosu postgres "$PG_BIN/pg_isready" -h "$PGSOCKET" -p "$PGPORT" -U "$PGUSER" -q \
-        && break
-    [ "$i" = "30" ] && { cat "$PGLOG"; exit 1; }
-done
-
-# Your tests here
-gosu postgres "$PG_BIN/createdb" -h "$PGSOCKET" -p "$PGPORT" -U "$PGUSER" testdb
-gosu postgres "$PG_BIN/pg_regress" \
-    --inputdir=./regress \
-    --outputdir=./regress/results \
-    --dbname=testdb \
-    --host="$PGSOCKET" \
-    --port="$PGPORT" \
-    --user="$PGUSER" \
-    mytest
-```
-
-## Installing Extension Files
-
-Copy before entrypoint runs (in Dockerfile), not inside the entrypoint:
-
-```dockerfile
-# Build the .so
-RUN PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config \
-    cargo build -p kham-pg --release
-
-# Install
-RUN PG_PKGLIBDIR=$(/usr/lib/postgresql/17/bin/pg_config --pkglibdir) && \
-    PG_SHAREDIR=$(/usr/lib/postgresql/17/bin/pg_config --sharedir) && \
-    cp target/release/libkham_pg.so "$PG_PKGLIBDIR/kham_pg.so" && \
-    cp kham-pg/kham_pg.control "$PG_SHAREDIR/extension/" && \
-    cp kham-pg/sql/kham_pg--0.1.0.sql "$PG_SHAREDIR/extension/"
-```
-
-## pg_regress Directory Layout
-
-```
-regress/
-├── sql/
-│   └── mytest.sql          # test input
-├── expected/
-│   └── mytest.out          # expected output (generate with first run, then review)
-└── results/                # created at runtime; gitignore this
-    ├── output/
-    │   └── mytest.out
-    └── diff/
-        └── mytest.diff     # non-empty = test failure
-```
-
-`pg_regress` requires `sql/` and `expected/` under `--inputdir`. Pass test names without `.sql`.
-
-## Generating Expected Output
-
-First run will differ (no expected file yet). To capture:
-```bash
-# After a run, copy actual output to expected:
-docker compose run regress \
-    cat /path/to/regress/results/output/mytest.out > regress/expected/mytest.out
-```
-
-## docker-compose.yml Pattern
-
-```yaml
-services:
-  regress:
-    build:
-      context: ../..          # repo root = cargo workspace
-      dockerfile: kham-pg/docker/Dockerfile.test
-```
-
-Use `--exit-code-from regress --abort-on-container-exit` to get the test exit code:
-```bash
-docker compose -f kham-pg/docker/docker-compose.yml up \
-    --build \
-    --exit-code-from regress \
-    --abort-on-container-exit
+```sh
+$RUNAS pg_ctl start ... -l "$PGLOG" || { cat "$PGLOG" >&2; exit 1; }
 ```
 
 ## Known PG Version Differences
 
-| Feature                          | PG 15 | PG 16 | PG 17 |
-|----------------------------------|-------|-------|-------|
-| `dynamic_shared_memory_type=none`| ✓     | ✓     | ✗ removed |
-| `varatt.h` in `postgres.h`       | ✗     | ✗     | ✗ (include explicitly) |
-| `ts_token_type` column names     | `tokid,alias,description` | same | same |
+| Feature                           | PG 15 | PG 16 | PG 17 |
+|-----------------------------------|-------|-------|-------|
+| `dynamic_shared_memory_type=none` | ✓     | ✓     | ✗ removed |
+| `varatt.h` in `postgres.h`        | ✗     | ✗     | ✗ (include explicitly) |
