@@ -1,0 +1,174 @@
+-- kham_ranking — Ranking, ts_stat, and real-world scenario tests.
+--
+-- Run via:  make -C kham-pg regress   (uses Docker PostgreSQL 17)
+--
+-- Covers: ts_rank, ts_rank_cd, ORDER BY rank, ts_stat lexeme statistics,
+-- product catalogue search, article search with ranking, NULL handling.
+--
+-- Note: ts_headline is NOT supported by kham parser (no HEADLINE callback).
+-- This is a known limitation of custom parsers in PostgreSQL.
+CREATE EXTENSION IF NOT EXISTS kham_pg;
+NOTICE:  extension "kham_pg" already exists, skipping
+-- ── ts_rank basic ─────────────────────────────────────────────────────────────
+-- 1. ts_rank > 0 for matching document
+SELECT ts_rank(
+    to_tsvector('kham', 'กินข้าวกับปลา'),
+    plainto_tsquery('kham', 'ปลา')
+) > 0 AS rank_nonzero;
+ rank_nonzero 
+--------------
+ t
+(1 row)
+
+-- 2. ts_rank = 0 for non-matching document
+SELECT ts_rank(
+    to_tsvector('kham', 'กินข้าวกับปลา'),
+    plainto_tsquery('kham', 'หมู')
+) = 0 AS rank_zero_no_match;
+ rank_zero_no_match 
+--------------------
+ t
+(1 row)
+
+-- 3. ts_rank_cd > 0 for matching document
+SELECT ts_rank_cd(
+    to_tsvector('kham', 'กินข้าวกับปลา'),
+    plainto_tsquery('kham', 'ปลา')
+) > 0 AS rank_cd_nonzero;
+ rank_cd_nonzero 
+-----------------
+ t
+(1 row)
+
+-- 4. Higher term frequency → higher rank
+-- doc_high has ปลา twice; doc_low has ปลา once
+SELECT
+    ts_rank(to_tsvector('kham', 'บทความเกี่ยวกับการกินปลาและปลาทะเลมีประโยชน์'),
+            plainto_tsquery('kham', 'ปลา'))
+    >
+    ts_rank(to_tsvector('kham', 'ปลาเป็นอาหารที่มีประโยชน์'),
+            plainto_tsquery('kham', 'ปลา'))
+    AS higher_freq_ranks_higher;
+ higher_freq_ranks_higher 
+--------------------------
+ t
+(1 row)
+
+-- ── ts_stat — lexeme statistics ───────────────────────────────────────────────
+-- 5. ts_stat: top lexemes by frequency in a corpus query
+-- กินข้าวกับปลา has 4 Thai tokens; verify ปลา appears once with nentry=1
+SELECT word, ndoc, nentry
+FROM ts_stat($$SELECT to_tsvector('kham', body)
+             FROM (VALUES ('กินข้าวกับปลา'), ('ปลาทอด')) AS t(body)$$)
+WHERE word = 'ปลา'
+ORDER BY word;
+ word | ndoc | nentry 
+------+------+--------
+ ปลา  |    2 |      2
+(1 row)
+
+-- 6. ts_stat: ปลา appears in 2 documents → ndoc=2
+SELECT ndoc = 2 AS pla_in_two_docs
+FROM ts_stat($$SELECT to_tsvector('kham', body)
+             FROM (VALUES ('กินข้าวกับปลา'), ('ปลาทอด')) AS t(body)$$)
+WHERE word = 'ปลา';
+ pla_in_two_docs 
+-----------------
+ t
+(1 row)
+
+-- ── ORDER BY ts_rank DESC ─────────────────────────────────────────────────────
+CREATE TABLE articles (
+    id   integer,
+    body text
+);
+INSERT INTO articles VALUES
+    (1, 'บทความเกี่ยวกับการกินปลาและปลาทะเลมีประโยชน์'),
+    (2, 'ปลาเป็นอาหารที่มีประโยชน์'),
+    (3, 'ไก่ย่างอร่อยมาก');
+-- 7. ORDER BY rank DESC — id=1 (ปลา×2) ranks above id=2 (ปลา×1)
+SELECT id
+FROM articles
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา')
+ORDER BY ts_rank(to_tsvector('kham', body), plainto_tsquery('kham', 'ปลา')) DESC;
+ id 
+----
+  1
+  2
+(2 rows)
+
+-- ── Product catalogue ─────────────────────────────────────────────────────────
+CREATE TABLE products (
+    id   integer,
+    name text
+);
+INSERT INTO products VALUES
+    (1,  'ข้าวผัดกุ้ง'),
+    (2,  'ต้มยำกุ้ง'),
+    (3,  'ผัดไทย'),
+    (4,  'แกงเขียวหวาน'),
+    (5,  'ข้าวมันไก่'),
+    (6,  'ต้มข่าไก่'),
+    (7,  'ยำวุ้นเส้น'),
+    (8,  'ข้าวหน้าเป็ด'),
+    (9,  'กินข้าวกับปลา'),
+    (10, 'แกงส้มปลา');
+CREATE INDEX products_fts_idx ON products
+    USING GIN (to_tsvector('kham', name));
+-- 8. Search กุ้ง → returns rows 1 and 2 only
+SELECT id
+FROM products
+WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'กุ้ง')
+ORDER BY id;
+ id 
+----
+  1
+  2
+(2 rows)
+
+-- 9. Search ปลา → returns rows 9 and 10 only
+SELECT id
+FROM products
+WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'ปลา')
+ORDER BY id;
+ id 
+----
+  9
+ 10
+(2 rows)
+
+-- 10. Search ไก่ → returns rows 5 and 6 only
+SELECT id
+FROM products
+WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'ไก่')
+ORDER BY id;
+ id 
+----
+  5
+  6
+(2 rows)
+
+-- 11. Search with no match → 0 rows
+SELECT id
+FROM products
+WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'หมู')
+ORDER BY id;
+ id 
+----
+(0 rows)
+
+-- ── NULL handling ─────────────────────────────────────────────────────────────
+-- 12. to_tsvector with NULL document returns NULL (no error)
+SELECT to_tsvector('kham', NULL) IS NULL AS null_doc_returns_null;
+ null_doc_returns_null 
+-----------------------
+ t
+(1 row)
+
+-- 13. ts_rank with NULL tsvector returns NULL (no error)
+SELECT ts_rank(NULL::tsvector, plainto_tsquery('kham', 'ปลา')) IS NULL AS null_tsvector_rank_null;
+ null_tsvector_rank_null 
+-------------------------
+ t
+(1 row)
+

@@ -89,7 +89,8 @@ $RUNAS "$PG_REGRESS" \
     --user="$PGUSER" \
     kham_fts \
     kham_thai \
-    kham_operators
+    kham_operators \
+    kham_ranking
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then
