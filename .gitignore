@@ -59,3 +59,5 @@ kham-pg/regress/results/
 
 # macOS
 .DS_Store
+
+./.claude/projects
