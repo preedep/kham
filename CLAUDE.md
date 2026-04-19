@@ -77,8 +77,10 @@ The CI `fmt` job fails if any diff exists. Common triggers:
 ### Clippy — run before every commit
 
 ```bash
-cargo clippy --workspace --exclude kham-python --exclude kham-wasm --all-targets -- -D warnings
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg --all-targets -- -D warnings
 ```
+
+`kham-pg` is excluded because it requires PostgreSQL server headers (`pg_config`) that are not available in all environments. Build it explicitly with `cargo build -p kham-pg` when PG headers are present.
 
 Common clippy failures in this codebase:
 - `map_or(false, |x| …)` → use `is_some_and(|x| …)` instead
@@ -255,6 +257,7 @@ Punctuation and emoji have no mapping — PG discards those token types at index
 - `pg_config` in `PATH` **or** `PG_CONFIG=/path/to/pg_config`
 - C compiler (clang or gcc) — `cc` crate compiles `src/shim.c`
 - For regress tests: Docker with BuildKit
+- **macOS only**: `brew install gettext` — PostgreSQL headers include `libintl.h` from GNU gettext. `build.rs` auto-detects the Homebrew prefix via `brew --prefix gettext`.
 
 ### Required C headers (include order matters)
 
@@ -280,7 +283,9 @@ Key constraints:
 - pg_ctl/initdb run as `postgres` via `gosu`; entrypoint uses `pg_config` for all paths
 - `pg_regress` binary: `$(pg_config --pgxs | dirname | dirname)/test/regress/pg_regress`
 - Use `--outputdir=.` in pg_regress so output lands at `regress/output/` and `regress/results/`
-- Linux cdylib symbol export: `build.rs` provides `src/pg_exports.map` version script so `Pg_magic_func`, `kham_start`, and all `pg_finfo_*` symbols appear in the dynamic table
+- Linux cdylib symbol export: all PG-facing symbols (`Pg_magic_func`, `kham_start`, etc.) are defined as `#[no_mangle] pub extern "C"` in `lib.rs` — Rust trampolines are always in the dynamic table
+- `PG_MODULE_MAGIC_DATA` portability: PGDG PG17 uses the object-like form; Homebrew/PG18+ uses a variadic function-like form. `shim.c` guards with `#ifdef PG_MODULE_ABI_DATA`
+- macOS linker: `build.rs` emits `-undefined dynamic_lookup` so PG server symbols (`palloc`, `ereport`) are resolved at dlopen time
 
 ## Segmenter DP scoring
 
