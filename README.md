@@ -438,6 +438,95 @@ Words not in the dictionary are emitted as `TokenKind::Unknown`. The FTS pipelin
 let fts = FtsTokenizer::builder().ngram_size(0).build();
 ```
 
+### Part-of-speech tagging
+
+`FtsTokenizer` automatically assigns a POS tag to each Thai token via a built-in lookup table (~230 hand-curated entries). The tag is exposed as `FtsToken.pos`.
+
+**13 categories:** `Noun`, `Verb`, `Adj`, `Adv`, `Particle`, `ProperNoun`, `Pronoun`, `Numeral`, `Classifier`, `Conjunction`, `Auxiliary`, `Determiner`, `Preposition`
+
+```rust
+use kham_core::fts::FtsTokenizer;
+
+let fts = FtsTokenizer::new();
+let tokens = fts.segment_for_fts("กินข้าว");
+for t in &tokens {
+    println!("{} → {:?}", t.text, t.pos);
+}
+// กิน → Some(Verb)
+// ข้าว → Some(Noun)
+```
+
+Supply a custom POS table from TSV (`word<TAB>TAG`, one entry per line):
+
+```rust
+use kham_core::pos::PosTagger;
+use kham_core::fts::FtsTokenizer;
+
+let tagger = PosTagger::from_tsv(include_str!("my_pos.tsv"));
+let fts = FtsTokenizer::builder().pos_tagger(tagger).build();
+```
+
+OOV words and non-Thai tokens (Latin, Number, Named) always get `pos = None`.
+
+### Named entity recognition
+
+After segmentation, `FtsTokenizer` runs a gazetteer pass that relabels Thai tokens matching the built-in word list from `TokenKind::Thai` to `TokenKind::Named(kind)`. The category is exposed as `FtsToken.ne`.
+
+**Three categories:** `Person`, `Place`, `Org`
+
+```rust
+use kham_core::fts::FtsTokenizer;
+
+let fts = FtsTokenizer::new();
+let tokens = fts.segment_for_fts("ทักษิณเดินทางไปไทย");
+for t in &tokens {
+    if let Some(ne) = t.ne {
+        println!("{} → {}", t.text, ne.as_str());
+    }
+}
+// ทักษิณ → Person
+// ไทย → Place
+```
+
+Supply a custom gazetteer from TSV (`word<TAB>TAG`, tags: `PERSON PLACE ORG`):
+
+```rust
+use kham_core::ne::NeTagger;
+use kham_core::fts::FtsTokenizer;
+
+let tagger = NeTagger::from_tsv(include_str!("my_ne.tsv"));
+let fts = FtsTokenizer::builder().ne_tagger(tagger).build();
+```
+
+> **Limitation:** Only single-token NEs are matched. Compound names that the segmenter splits into multiple tokens are not tagged. Verify an entry segments as one token with `Tokenizer::new().segment("candidate")` before adding it to the TSV.
+
+### RTGS romanization
+
+RTGS (Royal Thai General System of Transcription) romanizations can be injected into `FtsToken.synonyms` so Latin-script queries (e.g. `kin`) match Thai-script documents (e.g. `กิน`) in PostgreSQL FTS.
+
+```rust
+use kham_core::fts::FtsTokenizer;
+use kham_core::romanizer::RomanizationMap;
+
+let fts = FtsTokenizer::builder()
+    .romanization(RomanizationMap::builtin())
+    .build();
+
+let lexemes = fts.lexemes("กินข้าว");
+// → ["กิน", "kin", "ข้าว", "khao"]
+//           ^^^^^         ^^^^^  RTGS synonyms appended
+```
+
+Supply a custom romanization table from TSV (`thai_word<TAB>rtgs`, one entry per line):
+
+```rust
+use kham_core::romanizer::RomanizationMap;
+
+let map = RomanizationMap::from_tsv("กิน\tkin\nข้าว\tkhao\n");
+```
+
+Romanization is **disabled by default** — opt in by calling `.romanization(map)` on the builder.
+
 ### `FtsToken` fields
 
 | Field | Type | Description |
