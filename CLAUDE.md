@@ -88,3 +88,9 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 - **No BEST corpus or non-CC0 data** in the repo
 - Algorithm reference: nlpO3 (Apache-2.0) and PyThaiNLP newmm — clean-room implementation
 - All Thai text in tests must be valid UTF-8, never raw bytes
+
+## Architecture Decision Records
+
+| ADR | Title |
+|-----|-------|
+| [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) | NE Person Name Import Strategy — Dictionary-Filter Approach |
