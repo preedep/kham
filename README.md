@@ -14,11 +14,12 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
-- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations when multiple dictionary paths tie
-- **Pre-compiled DARTS** — Double-Array Trie is built once at compile time (`build.rs`) and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction from text)
+- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations
+- **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
-- **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering (1 029 built-in entries, PyThaiNLP Apache-2.0), synonym expansion (TSV-driven `SynonymMap`), and character n-gram fallback for OOV tokens; ready for PostgreSQL `tsvector` integration
-- **Structured CLI logging** — `RUST_LOG`-controlled output with coloured log levels via `env_logger` + `colored`
+- **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` integration
+- **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
+- **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 
 ## Packages
 
@@ -28,7 +29,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-cli` | [crates.io](https://crates.io/crates/kham-cli) | `kham` binary (clap) |
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
-| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header; includes FTS API |
+| `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header |
 | `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) (coming soon) | PostgreSQL extension: custom text search parser for Thai |
 
 ## Quick start
@@ -50,7 +51,8 @@ for t in &tokens {
 }
 // กิน (Thai)
 // ข้าว (Thai)
-// ...
+// กับ (Thai)
+// ปลา (Thai)
 ```
 
 Mixed script works out of the box:
@@ -62,13 +64,6 @@ assert_eq!(tokens[1].text, "100");     // Number
 assert_eq!(tokens[2].text, "แห่ง");   // Thai
 ```
 
-For input that may contain stacked tone marks or decomposed Sara Am, normalize first:
-
-```rust
-let normalized = tok.normalize(raw_input); // tone dedup + Sara Am composition
-let tokens = tok.segment(&normalized);     // tokens borrow `normalized`
-```
-
 ### Python
 
 ```bash
@@ -78,11 +73,9 @@ pip install kham
 ```python
 import kham
 
-# Simple — list of token strings
 tokens = kham.segment("กินข้าวกับปลา")
 print(tokens)  # ['กิน', 'ข้าว', 'กับ', 'ปลา']
 
-# Rich — Token objects with span information
 tokens = kham.segment_tokens("ธนาคาร100แห่ง")
 for t in tokens:
     print(t.text, t.char_start, t.char_end, t.kind)
@@ -90,8 +83,6 @@ for t in tokens:
 # 100     6  9  Number
 # แห่ง    9  13 Thai
 ```
-
-`Token` attributes: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
 
 ### JavaScript / TypeScript (WASM)
 
@@ -103,91 +94,58 @@ npm install kham-wasm
 import init, { segment, segment_tokens } from "kham-wasm";
 await init();
 
-// Simple — array of token strings
 const words = segment("กินข้าวกับปลา");
-console.log(words); // ["กิน", "ข้าว", "กับ", "ปลา"]
+// ["กิน", "ข้าว", "กับ", "ปลา"]
 
-// Rich — Token objects with span information
 const tokens = segment_tokens("ธนาคาร100แห่ง");
 for (const t of tokens) {
     console.log(t.text, t.char_start, t.char_end, t.kind);
 }
-// ธนาคาร  0  6  Thai
-// 100     6  9  Number
-// แห่ง    9  13 Thai
 ```
-
-`Token` properties: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind`.
-
-> **Note on JS string offsets:** `char_start`/`char_end` are Unicode scalar-value counts.
-> For BMP text these equal JavaScript's `string.slice()` indices. For surrogate-pair
-> emoji, use `byte_start`/`byte_end` with `TextEncoder` for precise byte-level slicing.
 
 ### PostgreSQL
 
-`kham-pg` is a PostgreSQL extension that registers a custom text search parser so you can index and query Thai text with `tsvector` / `tsquery`.
-
-**Prerequisites:** Docker with BuildKit (for the test runner), or PostgreSQL dev headers and `pg_config` for a local install.
+`kham-pg` registers a custom text search parser so you can index and query Thai text with `tsvector` / `tsquery`.
 
 ```bash
-# Build and run pg_regress tests in Docker (67 tests across 4 suites)
-make -C kham-pg regress
-
-# Manual install (if pg_config is in PATH)
-make -C kham-pg install
+make -C kham-pg regress   # build + run pg_regress in Docker (PostgreSQL 17)
+make -C kham-pg install   # install locally (requires pg_config in PATH)
 psql -c "CREATE EXTENSION kham_pg;"
-
-# PGXN distribution zip (for upload to pgxn.org)
-make -C kham-pg dist       # produces kham-pg/kham_pg-0.1.3.zip
 ```
 
-Once installed:
-
 ```sql
--- Register the extension
-CREATE EXTENSION kham_pg;
-
--- Inspect token types produced by the parser
+-- Token types
 SELECT * FROM ts_token_type('kham');
--- 1  thai     Thai word
--- 2  latin    Latin script token
--- 3  number   Numeric token
--- 4  punct    Punctuation
--- 5  emoji    Emoji token
--- 6  unknown  Unknown / OOV token
+-- 1  thai    Thai word
+-- 2  latin   Latin script token
+-- 3  number  Numeric token
+-- 4  punct   Punctuation
+-- 5  emoji   Emoji token
+-- 6  unknown Unknown / OOV token
+-- 7  named   Named entity token (person, place, organisation)
 
--- Tokenise a document
-SELECT * FROM ts_parse('kham', 'กินข้าวกับปลา');
--- 1  กิน
--- 1  ข้าว
--- 1  กับ
--- 1  ปลา
+-- Tokenise
+SELECT * FROM ts_parse('kham', 'ทักษิณเดินทางไปกรุงเทพ');
+-- 1  เดิน
+-- 1  ทาง
+-- 1  ไป
+-- 7  ทักษิณ     ← Named: Person
+-- 7  กรุงเทพ    ← Named: Place (merged from กรุง+เทพ by multi-token NE)
 
--- Build a tsvector (all token types indexed; kham_dict uses simple template)
+-- Build tsvector
 SELECT to_tsvector('kham', 'กินข้าวกับปลา');
 -- 'กิน':1 'กับ':3 'ข้าว':2 'ปลา':4
 
--- Full-text search (AND)
+-- Search
 SELECT title FROM articles
 WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าว ปลา');
 
--- Phrase search (adjacent tokens)
-SELECT title FROM articles
-WHERE to_tsvector('kham', body) @@ phraseto_tsquery('kham', 'กิน ข้าว');
-
--- GIN index for large tables
+-- GIN index
 CREATE INDEX articles_fts_idx ON articles
     USING GIN (to_tsvector('kham', body));
-
--- Ranked results
-SELECT title,
-       ts_rank(to_tsvector('kham', body), plainto_tsquery('kham', 'ปลา')) AS rank
-FROM articles
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา')
-ORDER BY rank DESC;
 ```
 
-> **Note:** `ts_headline` is not supported — the kham parser has no HEADLINE callback. This is a known limitation of custom parsers in PostgreSQL.
+> **Note:** `ts_headline` is not supported — the kham parser has no HEADLINE callback.
 
 ### CLI
 
@@ -196,145 +154,49 @@ cargo install kham-cli
 ```
 
 ```bash
-# Positional argument
-kham "กินข้าวกับปลา"
-# กิน|ข้าว|กับ|ปลา
+kham "กินข้าวกับปลา"               # กิน|ข้าว|กับ|ปลา
+kham --sep " / " "สวัสดีชาวโลก"    # สวัสดี / ชาว / โลก
+kham --kind "ธนาคาร100แห่ง"        # ธนาคาร:Thai|100:Number|แห่ง:Thai
+kham --spans "กินข้าวกับปลา"       # กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
 
-# Custom separator
-kham --sep " / " "สวัสดีชาวโลก"
-# สวัสดี / ชาว / โลก
+# FTS pipeline — kind, POS, NE, stopword (one token per line)
+kham --fts "ทักษิณเดินทางไปกรุงเทพ"
+# ทักษิณ  kind=Named  pos=-     ne=Person  stop=false
+# เดิน    kind=Thai   pos=Verb  ne=-       stop=false
+# ทาง     kind=Thai   pos=-     ne=-       stop=true
+# ไป      kind=Thai   pos=Verb  ne=-       stop=true
+# กรุงเทพ kind=Named  pos=-     ne=Place   stop=false
 
-# Show token kinds
-kham --kind "ธนาคาร100แห่ง"
-# ธนาคาร:Thai|100:Number|แห่ง:Thai
-
-# Show Unicode char spans
-kham --spans "กินข้าวกับปลา"
-# กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
-
-# Combine kind and spans
-kham --kind --spans "กินข้าว"
-# กิน:Thai:0-3|ข้าว:Thai:3-7
-
-# Normalize before segmenting
-kham --normalize "กิน\u{0E02}\u{0E49}\u{0E49}าว"
-
-# Custom dictionary
-kham --dict my_words.txt "มะม่วงหิมพานต์"
-
-# Pipeline / stdin
-echo "กินข้าว" | kham
-cat corpus.txt | kham --sep " "
-
-# FTS pipeline — kind, POS, NE, and stopword metadata (one token per line)
-kham --fts "ทักษิณเดินทางไปไทย"
-# ทักษิณ   kind=Person  pos=-            ne=Person  stop=false
-# เดิน     kind=Thai    pos=Verb         ne=-       stop=false
-# ทาง     kind=Thai    pos=-            ne=-       stop=true
-# ไป      kind=Thai    pos=Verb         ne=-       stop=true
-# ไทย     kind=Place   pos=-            ne=Place   stop=false
-
-# Pipe through column -t for aligned output
-kham --fts "กินข้าวกับปลา" | column -t
-# กิน   kind=Thai  pos=Verb         ne=-  stop=false
-# ข้าว  kind=Thai  pos=Noun         ne=-  stop=false
-# กับ   kind=Thai  pos=Conjunction  ne=-  stop=true
-# ปลา  kind=Thai  pos=Noun         ne=-  stop=false
-```
-
-Full options:
-
-```
-Usage: kham [OPTIONS] [TEXT]
-
-Arguments:
-  [TEXT]  Thai text to segment. Reads from stdin line-by-line if omitted.
-
-Options:
-  -d, --dict <FILE>   Path to a custom word-list file (newline-separated)
-  -s, --sep <SEP>     Output separator between tokens [default: |]
-  -w, --whitespace    Include whitespace tokens in output
-  -n, --normalize     Run normalize() before segmenting
-  -k, --kind          Append token kind after each token (e.g. กิน:Thai)
-      --spans         Append Unicode char span after each token (e.g. กิน:0-3)
-      --fts           Run FTS pipeline; print one token per line with kind,
-                      POS, NE, and stopword metadata (tab-separated)
-  -h, --help          Print help
-  -V, --version       Print version
-```
-
-Debug and timing output is controlled by the `RUST_LOG` environment variable:
-
-```bash
-RUST_LOG=debug kham "กินข้าวกับปลา"   # full per-token trace + timing
-RUST_LOG=info  kham --dict w.txt "..."  # dict-load confirmation only
+echo "กินข้าว" | kham           # stdin
+RUST_LOG=debug kham "กินข้าว"  # per-token trace + timing
 ```
 
 ### C
 
-Generate the header and link `libkham_capi`:
+```c
+#include "kham.h"
+
+KhamTokens *t = kham_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < t->len; i++) printf("%s\n", t->words[i]);
+kham_tokens_free(t);
+
+// Rich token structs
+KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
+for (size_t i = 0; i < list->len; i++) {
+    KhamToken tok = list->tokens[i];
+    printf("%s  char %zu..%zu  %s\n", tok.text, tok.char_start, tok.char_end, tok.kind);
+}
+kham_token_list_free(list);
+```
+
+Generate the header:
 
 ```bash
 cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
 cargo build -p kham-capi --release
 ```
 
-```c
-#include "kham.h"
-
-// Simple — array of token strings
-KhamTokens *tokens = kham_segment("กินข้าวกับปลา");
-for (size_t i = 0; i < tokens->len; i++) {
-    printf("%s\n", tokens->words[i]);
-}
-kham_tokens_free(tokens);
-
-// Rich — KhamToken structs with full span information
-KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
-for (size_t i = 0; i < list->len; i++) {
-    KhamToken t = list->tokens[i];
-    printf("%s  char %zu..%zu  %s\n", t.text, t.char_start, t.char_end, t.kind);
-}
-// ธนาคาร  char 0..6   Thai
-// 100     char 6..9   Number
-// แห่ง    char 9..13  Thai
-kham_token_list_free(list);
-```
-
-`KhamToken` fields: `text`, `byte_start`, `byte_end`, `char_start`, `char_end`, `kind` (all null-terminated UTF-8 strings or `size_t`).
-
-#### FTS API (C)
-
-Run the full Thai FTS pipeline from C to get stopword flags, synonym expansions, and OOV trigrams:
-
-```c
-#include "kham.h"
-
-// Annotated FTS tokens (all non-whitespace, with metadata)
-KhamFtsTokenList *fts = kham_fts_segment("กินข้าวกับปลา");
-for (size_t i = 0; i < fts->len; i++) {
-    KhamFtsToken t = fts->tokens[i];
-    printf("%s  pos=%zu  stop=%d  synonyms=%zu  trigrams=%zu\n",
-           t.text, t.position, t.is_stop, t.synonyms_len, t.trigrams_len);
-}
-// กิน  pos=0  stop=0  synonyms=0  trigrams=0
-// ข้าว pos=1  stop=0  synonyms=0  trigrams=0
-// กับ  pos=2  stop=1  synonyms=0  trigrams=0
-// ปลา  pos=3  stop=0  synonyms=0  trigrams=0
-kham_fts_token_list_free(fts);
-
-// Flat lexeme array for tsvector population (stopwords removed)
-size_t n = 0;
-char **lexemes = kham_fts_lexemes("กินข้าวกับปลา", &n);
-// lexemes[0] = "กิน", lexemes[1] = "ข้าว", lexemes[2] = "ปลา"  (n = 3)
-kham_fts_lexemes_free(lexemes, n);
-```
-
-`KhamFtsToken` fields: `text`, `position` (`size_t`), `kind`, `is_stop` (`bool`), `synonyms`/`synonyms_len`, `trigrams`/`trigrams_len`.
-
 ## Token contract
-
-Every `segment()` call returns `Vec<Token>`:
 
 ```rust
 pub struct Token<'a> {
@@ -345,806 +207,120 @@ pub struct Token<'a> {
 }
 ```
 
-- `span` — byte offsets; use to slice `&str` directly (`&input[token.span.clone()]`)
-- `char_span` — Unicode scalar-value offsets; use for Python/JavaScript string indexing where strings are char- or code-unit-indexed
-- Both spans are always valid UTF-8 boundaries
-- Joining all `token.text` values (with whitespace kept) reconstructs the original input exactly
+- `span` — byte offsets; slice with `&input[token.span.clone()]`
+- `char_span` — Unicode scalar-value offsets for Python/JavaScript indexing
+- Joining all `token.text` values (whitespace kept) reconstructs the original input exactly
 
-```rust
-use kham_core::Tokenizer;
+## Full-Text Search
 
-let tok = Tokenizer::new();
-let input = "ธนาคาร100แห่ง";
-let tokens = tok.segment(input);
-
-// ธนาคาร: 6 chars, 18 bytes
-assert_eq!(tokens[0].span,      0..18);
-assert_eq!(tokens[0].char_span, 0..6);
-
-// 100: 3 chars, 3 bytes
-assert_eq!(tokens[1].span,      18..21);
-assert_eq!(tokens[1].char_span, 6..9);
-```
-
-## Custom dictionary
-
-```rust
-// From a string
-let tok = Tokenizer::builder()
-    .dict_words("มะม่วงหิมพานต์\nกระทะ\n")
-    .build();
-
-// From a file (requires the `std` feature)
-let tok = Tokenizer::builder()
-    .dict_file("my_words.txt")?
-    .build();
-
-// Keep whitespace tokens
-let tok = Tokenizer::builder()
-    .keep_whitespace(true)
-    .build();
-```
-
-## Full-Text Search (FTS)
-
-`kham-core` ships a complete Thai FTS pipeline on top of the segmenter. The `kham-pg` PostgreSQL extension (Phase 2) wraps this pipeline as a custom text search parser — see the [PostgreSQL quick start](#postgresql) above.
-
-### Basic indexing
+`FtsTokenizer` wraps the segmenter with the full NLP pipeline:
 
 ```rust
 use kham_core::fts::FtsTokenizer;
 
-let fts = FtsTokenizer::new(); // built-in stopwords, no synonyms
+let fts = FtsTokenizer::new();
 
 // All tokens with metadata
-let tokens = fts.segment_for_fts("กินข้าวกับปลา");
+let tokens = fts.segment_for_fts("ทักษิณเดินทางไปกรุงเทพ");
 for t in &tokens {
-    println!("{} pos={} stop={}", t.text, t.position, t.is_stop);
+    println!("{} ne={:?} pos={:?} stop={}", t.text, t.ne, t.pos, t.is_stop);
 }
-// กิน  pos=0 stop=false
-// ข้าว pos=1 stop=false
-// กับ  pos=2 stop=true   ← conjunction → filtered at index time
-// ปลา  pos=3 stop=false
+// ทักษิณ  ne=Some(Person)  pos=None    stop=false
+// เดิน    ne=None          pos=Verb    stop=false
+// ทาง     ne=None          pos=None    stop=true
+// ไป      ne=None          pos=Verb    stop=true
+// กรุงเทพ ne=Some(Place)   pos=None    stop=false  ← merged from กรุง+เทพ
 
 // Flat lexeme list for tsvector (stopwords removed)
 let lexemes = fts.lexemes("กินข้าวกับปลา");
 // → ["กิน", "ข้าว", "ปลา"]
 ```
 
-### Synonym expansion
-
-Define a TSV file where each line maps a canonical form to one or more equivalents:
-
-```text
-คอม    คอมพิวเตอร์    computer
-รถไฟฟ้า    BTS    MRT    รถไฟใต้ดิน
-```
+Builder options:
 
 ```rust
 use kham_core::fts::FtsTokenizer;
 use kham_core::synonym::SynonymMap;
-
-let synonyms = SynonymMap::from_tsv(include_str!("synonyms.tsv"));
-let fts = FtsTokenizer::builder().synonyms(synonyms).build();
-
-let lexemes = fts.lexemes("ซื้อคอมใหม่");
-// → ["ซื้อ", "คอม", "คอมพิวเตอร์", "computer", "ใหม่"]
-//              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  expanded
-```
-
-### Custom stopwords
-
-```rust
 use kham_core::stopwords::StopwordSet;
-use kham_core::fts::FtsTokenizer;
-
-// Add domain-specific stopwords on top of the built-in list
-let extra = StopwordSet::from_text("ซื้อ\nขาย\nราคา\n");
-let fts = FtsTokenizer::builder().stopwords(extra).build();
-```
-
-### OOV (out-of-vocabulary) n-grams
-
-Words not in the dictionary are emitted as `TokenKind::Unknown`. The FTS pipeline automatically generates character n-grams for these tokens so they remain searchable:
-
-```rust
-// Default ngram_size = 3 (trigrams)
-// Unknown token "สกรีน" (3-char TCC clusters) → ["สกร", "กรี", "รีน"]
-
-// Disable n-gram generation:
-let fts = FtsTokenizer::builder().ngram_size(0).build();
-```
-
-### Part-of-speech tagging
-
-`FtsTokenizer` automatically assigns a POS tag to each Thai token via a built-in lookup table (~230 hand-curated entries). The tag is exposed as `FtsToken.pos`.
-
-**13 categories:** `Noun`, `Verb`, `Adj`, `Adv`, `Particle`, `ProperNoun`, `Pronoun`, `Numeral`, `Classifier`, `Conjunction`, `Auxiliary`, `Determiner`, `Preposition`
-
-```rust
-use kham_core::fts::FtsTokenizer;
-
-let fts = FtsTokenizer::new();
-let tokens = fts.segment_for_fts("กินข้าว");
-for t in &tokens {
-    println!("{} → {:?}", t.text, t.pos);
-}
-// กิน → Some(Verb)
-// ข้าว → Some(Noun)
-```
-
-Supply a custom POS table from TSV (`word<TAB>TAG`, one entry per line):
-
-```rust
-use kham_core::pos::PosTagger;
-use kham_core::fts::FtsTokenizer;
-
-let tagger = PosTagger::from_tsv(include_str!("my_pos.tsv"));
-let fts = FtsTokenizer::builder().pos_tagger(tagger).build();
-```
-
-OOV words and non-Thai tokens (Latin, Number, Named) always get `pos = None`.
-
-### Named entity recognition
-
-After segmentation, `FtsTokenizer` runs a gazetteer pass that relabels Thai tokens matching the built-in word list from `TokenKind::Thai` to `TokenKind::Named(kind)`. The category is exposed as `FtsToken.ne`.
-
-**Three categories:** `Person`, `Place`, `Org`
-
-```rust
-use kham_core::fts::FtsTokenizer;
-
-let fts = FtsTokenizer::new();
-let tokens = fts.segment_for_fts("ทักษิณเดินทางไปไทย");
-for t in &tokens {
-    if let Some(ne) = t.ne {
-        println!("{} → {}", t.text, ne.as_str());
-    }
-}
-// ทักษิณ → Person
-// ไทย → Place
-```
-
-Supply a custom gazetteer from TSV (`word<TAB>TAG`, tags: `PERSON PLACE ORG`):
-
-```rust
-use kham_core::ne::NeTagger;
-use kham_core::fts::FtsTokenizer;
-
-let tagger = NeTagger::from_tsv(include_str!("my_ne.tsv"));
-let fts = FtsTokenizer::builder().ne_tagger(tagger).build();
-```
-
-> **Limitation:** Only single-token NEs are matched. Compound names that the segmenter splits into multiple tokens are not tagged. Verify an entry segments as one token with `Tokenizer::new().segment("candidate")` before adding it to the TSV.
-
-### RTGS romanization
-
-RTGS (Royal Thai General System of Transcription) romanizations can be injected into `FtsToken.synonyms` so Latin-script queries (e.g. `kin`) match Thai-script documents (e.g. `กิน`) in PostgreSQL FTS.
-
-```rust
-use kham_core::fts::FtsTokenizer;
 use kham_core::romanizer::RomanizationMap;
 
 let fts = FtsTokenizer::builder()
-    .romanization(RomanizationMap::builtin())
+    .synonyms(SynonymMap::from_tsv(include_str!("synonyms.tsv")))
+    .stopwords(StopwordSet::from_text("ซื้อ\nขาย\n"))
+    .romanization(RomanizationMap::builtin()) // adds RTGS to synonyms: กิน → "kin"
+    .ngram_size(3)                            // trigrams for Unknown tokens (0 = disable)
     .build();
-
-let lexemes = fts.lexemes("กินข้าว");
-// → ["กิน", "kin", "ข้าว", "khao"]
-//           ^^^^^         ^^^^^  RTGS synonyms appended
 ```
 
-Supply a custom romanization table from TSV (`thai_word<TAB>rtgs`, one entry per line):
+`FtsToken` fields: `text`, `position`, `kind`, `is_stop`, `synonyms`, `trigrams`, `pos`, `ne`.
 
-```rust
-use kham_core::romanizer::RomanizationMap;
+## Named entity recognition
 
-let map = RomanizationMap::from_tsv("กิน\tkin\nข้าว\tkhao\n");
+The built-in gazetteer (~10,400 entries) covers:
+
+| Category | Coverage |
+|---|---|
+| Place | Thai provinces (77), full country list (246), world cities, regions |
+| Person | 10,000+ Thai given names filtered against the dictionary to reduce false positives |
+| Org | Thai government ministries, state enterprises, banks, universities, international orgs |
+
+Multi-token matching merges compound names split by the segmenter:
+
+```
+กรุงเทพ  → segmenter splits → กรุง + เทพ
+         → NE tagger merges → กรุงเทพ  Named(Place)
+
+กนกวรรณ  → segmenter splits → กนก + วร + รณ
+         → NE tagger merges → กนกวรรณ  Named(Person)
 ```
 
-Romanization is **disabled by default** — opt in by calling `.romanization(map)` on the builder.
-
-### `FtsToken` fields
-
-| Field | Type | Description |
-|---|---|---|
-| `text` | `String` | Token text (normalised) |
-| `position` | `usize` | Ordinal index in non-whitespace sequence (0-based) |
-| `kind` | `TokenKind` | Thai / Latin / Number / … / Unknown / Named(NamedEntityKind) |
-| `is_stop` | `bool` | Matched the stopword list |
-| `synonyms` | `Vec<String>` | Synonym expansions (empty if none); RTGS romanization appended when romanization map is configured |
-| `trigrams` | `Vec<String>` | Char n-grams for `Unknown` tokens only |
-| `pos` | `Option<PosTag>` | POS tag from lookup table; `None` for OOV or non-Thai tokens |
-| `ne` | `Option<NamedEntityKind>` | Named entity category (`Person`, `Place`, `Org`); set iff `kind == Named(k)` |
-
-## Architecture
-
-### Workspace crate graph
-
-```mermaid
-graph LR
-    core["<b>kham-core</b><br/><i>no_std · alloc only</i><br/>segmentation engine"]
-
-    cli["<b>kham-cli</b><br/>kham binary<br/>(clap)"]
-    python["<b>kham-python</b><br/>Python wheel<br/>(PyO3 · maturin)"]
-    wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
-    capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)<br/>segment · FTS · lexemes"]
-
-    pg["<b>kham-pg</b><br/>PostgreSQL extension<br/>(C shim · cdylib)"]
-
-    core --> cli
-    core --> python
-    core --> wasm
-    core --> capi
-    core --> pg
-```
-
-### Core module responsibilities
-
-```mermaid
-classDiagram
-    direction LR
-
-    class normalizer {
-        +normalize(text) String
-        --
-        วรรณยุกต์ dedup
-        Sara Am composition
-    }
-
-    class pre_tokenizer {
-        +pre_tokenize(text) Vec~Token~
-        +classify_char(c) TokenKind
-        --
-        Unicode script split
-        Thai · Latin · Number
-        Emoji · Punct · WS
-    }
-
-    class tcc {
-        +tcc_boundaries(text) Vec~usize~
-        +tcc_iter(text) Iterator
-        --
-        Thai Character Cluster
-        boundary detection
-        Theeramunkong 2000
-    }
-
-    class dict {
-        +builtin_dict() Dict
-        +from_word_list(text) Dict
-        +from_bytes(data) Dict
-        +contains(word) bool
-        +prefixes(text) Vec~str~
-        --
-        Double-Array Trie
-        O(k) byte-level lookup
-        pre-compiled binary blob
-        built-in CC0 word list
-    }
-
-    class freq {
-        +FreqMap::builtin() FreqMap
-        +from_tsv(data) FreqMap
-        +get(word) u32
-        --
-        TNC raw occurrence counts
-        CC0 · 106k entries
-        DP tie-breaking scorer
-    }
-
-    class segmenter {
-        +segment(text) Vec~Token~
-        +normalize(text) String
-        --
-        newmm DAG algorithm
-        DP over TCC boundaries
-        min unknowns · max dict words
-        TNC freq · min token count
-    }
-
-    class token {
-        +text : and str
-        +span : Range~usize~
-        +char_span : Range~usize~
-        +kind : TokenKind
-        --
-        Thai · Latin · Number
-        Punctuation · Emoji
-        Whitespace · Unknown
-    }
-
-    class stopwords {
-        +StopwordSet::builtin() StopwordSet
-        +from_text(data) StopwordSet
-        +contains(word) bool
-        --
-        1029 entries · Apache-2.0
-        sorted Vec binary search
-        O(log n) lookup
-    }
-
-    class synonym {
-        +SynonymMap::from_tsv(data) SynonymMap
-        +expand(word) Option~slice~
-        +has_synonyms(word) bool
-        --
-        BTreeMap canonical→synonyms
-        TSV format
-        duplicate canonicals merge
-    }
-
-    class ngram {
-        +char_ngrams(text, n) Iterator
-        +token_ngrams(tokens, n) Iterator
-        --
-        zero-alloc char slices
-        OOV fallback indexing
-        phrase proximity
-    }
-
-    class fts {
-        +FtsTokenizer::new() FtsTokenizer
-        +segment_for_fts(text) Vec~FtsToken~
-        +index_tokens(text) Vec~FtsToken~
-        +lexemes(text) Vec~String~
-        --
-        FtsToken: text · position
-        is_stop · synonyms · trigrams
-        PostgreSQL tsvector entry point
-    }
-
-    segmenter ..> normalizer : calls
-    segmenter ..> pre_tokenizer : calls
-    segmenter ..> tcc : calls
-    segmenter ..> dict : queries
-    segmenter ..> freq : scores
-    segmenter ..> token : emits
-    pre_tokenizer ..> token : emits
-    fts ..> segmenter : wraps
-    fts ..> stopwords : filters
-    fts ..> synonym : expands
-    fts ..> ngram : OOV grams
-```
-
-### Segmentation pipeline
-
-```mermaid
-flowchart TD
-    INPUT(["<b>raw &amp;str</b>"])
-
-    subgraph OPTIONAL["optional — call before segment()"]
-        NORM["<b>normalizer::normalize()</b>\nวรรณยุกต์ dedup\nSara Am อํ+อา → อำ"]
-    end
-
-    PRE["<b>pre_tokenizer::pre_tokenize()</b>\nUnicode script classification\nsplit into homogeneous spans"]
-
-    SPLIT{span kind?}
-
-    PASS["pass through\nas-is"]
-
-    subgraph THAI_PATH["Thai span processing"]
-        TCC["<b>tcc::tcc_boundaries()</b>\nTCC boundary positions\n= legal word-break points"]
-        DICT["<b>dict::prefixes()</b>\nDATS prefix search\nat each boundary"]
-        DAG["<b>DP over boundary graph</b>\nminimise unknown tokens\nmaximise dict-word count\nTNC frequency score · fewest tokens"]
-    end
-
-    MERGE(["<b>Vec&lt;Token&lt;'_&gt;&gt;</b>\nzero-copy &amp;str slices"])
-
-    INPUT --> OPTIONAL
-    OPTIONAL --> PRE
-    PRE --> SPLIT
-    SPLIT -->|"Thai"| TCC
-    SPLIT -->|"Latin · Number\nEmoji · Punct · WS"| PASS
-    TCC --> DICT
-    DICT --> DAG
-    DAG --> MERGE
-    PASS --> MERGE
-```
-
-### DAG segmentation detail
-
-```mermaid
-flowchart LR
-    subgraph INPUT["Thai span: &quot;กินข้าว&quot;"]
-        direction LR
-        C0(["pos 0"])
-        C1(["pos 3\n กิ"])
-        C2(["pos 6\n น"])
-        C3(["pos 9\n ข้"])
-        C4(["pos 15\n าว"])
-        C5(["pos 21\n end"])
-    end
-
-    C0 -->|"กิน ✓ dict"| C2
-    C0 -.->|"กิ  unknown"| C1
-    C1 -.->|"น   unknown"| C2
-    C2 -->|"ข้าว ✓ dict"| C5
-    C2 -.->|"ข้  unknown"| C3
-    C3 -.->|"าว  unknown"| C4
-
-    BEST["DP picks bold path:\nกิน · ข้าว\n= 2 dict words"]
-    C5 --- BEST
-```
-
-## Prerequisites
-
-### All targets
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Rust toolchain | ≥ 1.85 (MSRV) | `curl -sSf https://sh.rustup.rs \| sh` |
-| Cargo | ships with Rust | — |
-
-Verify: `rustc --version`
-
----
-
-### WASM (`kham-wasm`)
-
-| Tool | Version | Install |
-|------|---------|---------|
-| `wasm32-unknown-unknown` target | — | `rustup target add wasm32-unknown-unknown` |
-| `wasm-pack` | ≥ 0.13 | `cargo install wasm-pack` |
-
-`wasm-pack` wraps `cargo build --target wasm32-unknown-unknown` and `wasm-bindgen-cli` to produce the `.wasm` binary and JavaScript/TypeScript glue in one step.
-
----
-
-### Python (`kham-python`)
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Python | ≥ 3.8 | system package manager or [python.org](https://www.python.org/downloads/) |
-| `maturin` | ≥ 1.0 | `pip install maturin` |
-
-`maturin` compiles the PyO3 extension module and installs it into the active virtual environment. Always run inside a `venv` or `conda` environment.
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install maturin
-cd kham-python && maturin develop
-```
-
-The crate targets Python ≥ 3.8 (`abi3-py38` stable ABI) — a single wheel runs on 3.8 through 3.13+.
-
----
-
-### C (`kham-capi`)
-
-| Tool | Version | Install |
-|------|---------|---------|
-| `cbindgen` | ≥ 0.26 | `cargo install cbindgen` |
-| C compiler | any C11-capable compiler | system package manager |
-
----
-
-### PostgreSQL (`kham-pg`)
-
-| Tool | Version | Install |
-|------|---------|---------|
-| Docker with BuildKit | ≥ 24 | [docs.docker.com](https://docs.docker.com/engine/install/) |
-| `make` | any | system package manager |
-
-For local (non-Docker) builds, also install:
-
-| Tool | Version | Install |
-|------|---------|---------|
-| PostgreSQL dev headers | 14–17 | Linux: `apt install postgresql-server-dev-17` · macOS: `brew install postgresql@17` |
-| `pg_config` | ships with dev headers | — |
-| C compiler | any C11-capable compiler | system package manager |
-| GNU gettext | any | macOS only: `brew install gettext` (provides `libintl.h` required by PG headers) |
-
-`cbindgen` reads `kham-capi/src/lib.rs` and `kham-capi/cbindgen.toml` to generate `kham.h`. Link against the compiled `libkham_capi` (`.so` / `.dylib` / `.dll`).
-
-```bash
-cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h
-cargo build -p kham-capi --release
-# macOS: target/release/libkham_capi.dylib
-# Linux: target/release/libkham_capi.so
-# Windows: target/release/kham_capi.dll
-```
-
----
+See [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) for the person-name import decision.
 
 ## Building
 
 ```bash
-cargo build                                  # all default members (also runs build.rs → dict.bin)
-cargo test --release                         # run all tests
-cargo test -p kham-core --release            # core only
-cargo bench -p kham-core                     # criterion benchmarks
-cargo run -p kham-cli -- "ข้อความ"           # run CLI
+cargo build                          # all crates (also runs build.rs → dict.bin)
+cargo test --release                 # all tests
+cargo test -p kham-core --release    # core only
+cargo bench -p kham-core             # criterion benchmarks
+
+# Bindings
+wasm-pack build kham-wasm --target web
+cd kham-python && maturin develop
+make -C kham-pg regress              # PostgreSQL: Docker pg_regress
 ```
 
-The `kham-core` build script (`build.rs`) pre-compiles the built-in dictionary into a binary DARTS blob (`$OUT_DIR/dict.bin`) on every `cargo build`. It only reruns when `build.rs` or `data/words_th.txt` change.
+Prerequisites per target:
 
-Binding targets (after installing prerequisites above):
+| Target | Tool | Install |
+|---|---|---|
+| All | Rust ≥ 1.85 | `curl -sSf https://sh.rustup.rs \| sh` |
+| WASM | `wasm-pack` | `cargo install wasm-pack` |
+| Python | `maturin` | `pip install maturin` |
+| C | `cbindgen` | `cargo install cbindgen` |
+| PostgreSQL | Docker with BuildKit | [docs.docker.com](https://docs.docker.com/engine/install/) |
+| PostgreSQL (local) | `pg_config`, C compiler, `gettext` (macOS) | `brew install postgresql@17 gettext` |
 
-```bash
-wasm-pack build kham-wasm --target web           # WASM → kham-wasm/pkg/
-cd kham-python && maturin develop                # Python wheel (active venv)
-cbindgen --config kham-capi/cbindgen.toml \
-    --crate kham-capi --output kham-capi/include/kham.h  # C header
-cargo build -p kham-capi --release               # C shared library
-make -C kham-pg regress                          # PostgreSQL: build + run pg_regress in Docker
-```
-
-### Deploy script
-
-`scripts/deploy.sh` publishes any combination of packages in the correct dependency order:
-
-```bash
-./scripts/deploy.sh --all               # publish everything
-./scripts/deploy.sh core capi cli       # crates.io only
-./scripts/deploy.sh wasm python         # npm + PyPI only
-./scripts/deploy.sh --dry-run --all     # preflight checks, no upload
-```
-
-Runs `cargo fmt`, `cargo clippy`, and `cargo test` before any upload. Requires `MATURIN_PYPI_TOKEN` env var for PyPI and an active `npm login` session for npm.
-
-## CI / CD
-
-Two GitHub Actions workflows run automatically:
-
-### CI (`ci.yml`) — every push and pull request to `main` / `develop`
+## CI
 
 | Job | What it checks |
 |---|---|
 | `fmt` | `cargo fmt --check` |
 | `clippy` | `cargo clippy -D warnings` |
-| `test` | Unit + integration + doc tests on stable and MSRV 1.85, Linux and macOS |
-| `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` (bare metal) |
+| `test` | Unit + integration + doc tests, stable and MSRV 1.85, Linux and macOS |
+| `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` |
 | `wasm` | `wasm-pack build --target web` succeeds |
 | `python` | `maturin develop` on Python 3.8 and 3.12 |
-| `bench_compile` | Benchmark suite compiles without errors |
-| `pg_regress` | 67 SQL correctness tests across 4 suites (`kham_fts`, `kham_thai`, `kham_operators`, `kham_ranking`) inside Docker PostgreSQL 17 |
+| `pg_regress` | 67 SQL tests across 4 suites in Docker PostgreSQL 17 |
 
-### Release (`release.yml`) — on `v*.*.*` tag push
+## Further reading
 
-Publishes to all registries after the CI gate passes:
-
-```mermaid
-flowchart LR
-    TAG(["git tag v0.1.0\ngit push --tags"])
-    CI["CI gate\n(full test matrix)"]
-    CRATES["crates.io\nkham-core + kham-cli"]
-    PYPI["PyPI\nkham wheels\n(manylinux · macOS · Windows)"]
-    NPM["npm\nkham-wasm"]
-    GH["GitHub Release\nauto release notes\n+ wheel artifacts"]
-
-    TAG --> CI
-    CI --> CRATES
-    CI --> PYPI
-    CI --> NPM
-    CRATES --> GH
-    PYPI --> GH
-    NPM --> GH
-```
-
-#### Required secrets
-
-| Secret | Used for |
+| Document | Contents |
 |---|---|
-| `CARGO_REGISTRY_TOKEN` | crates.io publish |
-| `NPM_TOKEN` | npm publish |
-| PyPI — no secret needed | OIDC trusted publishing; configure via pypi.org Trusted Publisher |
-
-To cut a release:
-
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-## Benchmarks
-
-### Environment
-
-| Field | Value |
-|---|---|
-| CPU | Apple M-series (arm64) |
-| OS | macOS 26.4.1 |
-| Rust | 1.94.1 (stable) |
-| Profile | release (LTO enabled) |
-| Built-in dictionary | 62,102 words · 669,387 DARTS states · 5.1 MiB |
-| TNC frequency table | 106,125 entries |
-
-### Segmentation throughput (`segment/by_length`)
-
-Pure Thai input, built-in dictionary, no custom dict.
-
-| Input | Size | Time (median) | Throughput |
-|---|---|---|---|
-| short | 37 B | 879 ns | 42.3 MiB/s |
-| medium | 182 B | 3.80 µs | 45.1 MiB/s |
-| long | 546 B | 10.9 µs | 47.1 MiB/s |
-
-### Mixed-script throughput (`segment/mixed`)
-
-Thai + Latin + Number in the same input, measuring pre-tokenizer boundary overhead.
-
-| Input | Size | Time (median) | Throughput |
-|---|---|---|---|
-| sparse (`ธนาคาร100แห่ง`) | 26 B | 744 ns | 42.3 MiB/s |
-| medium (multi-boundary) | 74 B | 1.73 µs | 43.5 MiB/s |
-| dense (alternating script) | 29 B | 535 ns | 55.3 MiB/s |
-
-### Normalize + segment (`normalize_then_segment/medium`)
-
-| Operation | Time (median) |
-|---|---|
-| `normalize()` then `segment()` on medium input | 4.09 µs |
-
-### Normalization throughput (`normalize/thai`)
-
-| Input | Size | Time (median) | Throughput |
-|---|---|---|---|
-| short | 37 B | 79.9 ns | 465 MiB/s |
-| medium | 182 B | 199 ns | 864 MiB/s |
-| long | 546 B | 507 ns | 1.0 GiB/s |
-
-### Dictionary construction (`dict/construction`)
-
-| Operation | Time (median) | Notes |
-|---|---|---|
-| `builtin_dict()` — binary blob load | 78 µs | pay-once startup cost |
-| `Dict::from_word_list` — 62k words | 980 ms | only when merging a custom dict |
-| `Dict::from_word_list` — 8-word list | 3.72 µs | small custom dict |
-| `dict/file/read_and_build` — disk + build | 1.01 s | `kham --dict <file>` startup |
-| `Tokenizer::builder().dict_file().build()` | 1.04 s | full CLI code path with custom dict |
-
-> `builtin_dict()` is **~12,500×** faster than `Dict::from_word_list` because the DARTS trie is
-> pre-compiled by `build.rs` at compile time; runtime cost is a single O(S) binary decode pass.
-> `Dict::from_word_list` runs only when a user-supplied custom dictionary is merged with the built-in list.
-
-### Dictionary lookup (`dict/contains`, `dict/prefixes`)
-
-| Operation | Time (median) | Throughput |
-|---|---|---|
-| `contains` — hit (3-byte word `กิน`) | 7.1 ns | 1.18 GiB/s |
-| `contains` — hit (12-byte word `สวัสดี`) | 18.3 ns | 940 MiB/s |
-| `contains` — miss (ASCII non-word) | 744 ps | 7.5–8.8 GiB/s |
-| `prefixes` — short anchor (7 B) | 42.3 ns | 473 MiB/s |
-| `prefixes` — medium anchor (60 B) | 36.7 ns | 1.52 GiB/s |
-| `prefixes` — long anchor (97 B) | 74.5 ns | 1.24 GiB/s |
-
-### TNC frequency table (`freq/construction`, `freq/get`)
-
-| Operation | Time (median) | Notes |
-|---|---|---|
-| `FreqMap::builtin()` — parse 106k TSV entries | 22.1 ms | pay-once startup cost |
-| `FreqMap::get` — common word hit (`กิน`) | 67.8 ns | O(log n) BTreeMap |
-| `FreqMap::get` — rare word hit | 48.6 ns | |
-| `FreqMap::get` — miss | 56.5 ns | |
-
-> `FreqMap::builtin()` startup cost (~22 ms) is the dominant component of `Tokenizer::new()` (~20 ms total).
-> It is paid once per tokenizer instance; the returned `FreqMap` is reused across all `segment()` calls.
-
-Run locally:
-
-```bash
-cargo bench -p kham-core
-# HTML report: target/criterion/report/index.html
-```
-
-### PostgreSQL extension (`kham-pg`)
-
-The kham-pg extension is benchmarked at the SQL level using `pgbench` inside the Docker test container, plus system-level CPU/memory via `docker stats`.
-
-#### 1 · Latency — psql `\timing`
-
-```sql
-\timing on
-SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
-
--- Per-node breakdown
-EXPLAIN (ANALYZE, BUFFERS)
-SELECT to_tsvector('kham', body) FROM documents LIMIT 1000;
-```
-
-#### 2 · Throughput — `pgbench`
-
-Create `bench_fts.sql`:
-
-```sql
-SELECT to_tsvector('kham', 'กินข้าวกับปลา Python 3 สำหรับนักพัฒนา');
-```
-
-Run via Docker:
-
-```bash
-# Terminal 1 — watch CPU/memory while bench runs
-docker stats docker-regress-1
-
-# Terminal 2 — throughput bench (4 clients, 30 seconds)
-docker exec docker-regress-1 pgbench \
-  -n -c 4 -j 4 -T 30 \
-  -f /bench_fts.sql \
-  -h /var/run/postgresql -p 15432 kham_test
-# Output: TPS, latency avg/stddev
-```
-
-#### 3 · Index build time — realistic workload
-
-```sql
-CREATE TABLE docs (id serial, body text);
-INSERT INTO docs (body)
-  SELECT 'กินข้าวกับปลา Python ' || g
-  FROM generate_series(1, 100000) g;
-
-\timing on
-CREATE INDEX ON docs USING gin(to_tsvector('kham', body));
-
--- Query latency against the index
-SELECT count(*) FROM docs
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
-```
-
-## Dictionary and corpus data
-
-| File | License | Entries | Purpose |
-|---|---|---|---|
-| `data/words_th.txt` | CC0 | 62,102 words | Built-in segmentation dictionary |
-| `data/tnc_freq.txt` | CC0 | 106,125 entries | TNC raw counts → DP tie-breaking scorer |
-| `data/stopwords_th.txt` | Apache-2.0 (PyThaiNLP) | 1,029 words | FTS stopword filter |
-
-Custom dictionaries are newline-separated plain text files; lines beginning with `#` are treated as comments.
-
-The frequency table is embedded at compile time and loaded into a `FreqMap` at runtime. The newmm DP scorer uses it as the third tiebreaker — after minimising unknown tokens and maximising dictionary matches — so statistically more common segmentations are preferred when multiple paths are otherwise equal. Frequency data is kept separate from `dict.bin`; do not merge them.
-
-The stopword list is sourced from [PyThaiNLP](https://github.com/PyThaiNLP/pythainlp) (Apache-2.0) and embedded via `include_str!`. Attribution is preserved in the header of `stopwords_th.txt`. The list is sorted and deduplicated at runtime into a `StopwordSet` backed by binary search.
-
-**Constraint:** Never ship BEST corpus data or any non-Apache-2.0/CC0 material in this repository.
-
-### Pre-compiled DARTS binary (`dict.bin`)
-
-`build.rs` compiles the built-in word list into a binary Double-Array Trie blob (`$OUT_DIR/dict.bin`) once at build time. At runtime, `builtin_dict()` loads this blob via `Dict::from_bytes`, which is ~15,000× faster than reconstructing the trie from the text word list (~64 µs vs ~960 ms).
-
-#### File format
-
-All multi-byte integers are **little-endian**. The file begins with a fixed 16-byte header followed immediately by the two DARTS arrays.
-
-| Offset | Size (bytes) | Field       | Type    | Description                                     |
-|-------:|-------------:|-------------|---------|------------------------------------------------|
-|      0 |            4 | `magic`     | `[u8;4]`| `b"KDAM"` — file-type identifier               |
-|      4 |            1 | `version`   | `u8`    | Format version; currently `0x01`               |
-|      5 |            3 | `reserved`  | `[u8;3]`| Zero-filled; reserved for future flags         |
-|      8 |            4 | `base_len`  | `u32`   | Number of `i32` elements in the `base` array   |
-|     12 |            4 | `check_len` | `u32`   | Number of `i32` elements in the `check` array  |
-|     16 |  `base_len×4`| `base[]`    | `i32[]` | DARTS base offsets, little-endian              |
-| `16 + base_len×4` | `check_len×4` | `check[]` | `i32[]` | DARTS parent-state indices, little-endian (`-1` = unused slot) |
-
-#### Lifecycle
-
-```mermaid
-flowchart LR
-    WL(["words_th.txt\n62k words · CC0"])
-    BS["build.rs\nbuild_trie() → from_trie()\nBFS base-allocation\nFreeBitmap O(n/64)"]
-    BIN(["$OUT_DIR/dict.bin\n16-byte header\n+ base[] + check[]"])
-    IB["include_bytes!\nembedded in binary"]
-    RT["Dict::from_bytes()\none-pass LE decode\nO(S) — ~64 µs"]
-    BD(["builtin_dict()\nready Dict"])
-
-    WL --> BS --> BIN --> IB --> RT --> BD
-
-    FQ(["tnc_freq.txt\n106k entries · CC0"])
-    FM["include_str!\nembedded at compile time"]
-    FP["FreqMap::builtin()\nparse TSV → BTreeMap"]
-    FS(["FreqMap\nDP tie-breaking scorer"])
-
-    FQ --> FM --> FP --> FS
-```
-
-#### Validity guarantees
-
-`Dict::from_bytes` panics on malformed input rather than returning an error, because failures always indicate a stale or corrupted build artifact — not a recoverable runtime condition. A clean `cargo build` regenerates a valid blob automatically.
-
-| Condition checked           | Panic message                      |
-|-----------------------------|------------------------------------|
-| `data.len() < 16`           | `"dict.bin too short"`             |
-| Bytes 0–3 ≠ `b"KDAM"`      | `"dict.bin: bad magic"`            |
-| Byte 4 ≠ `0x01`             | `"dict.bin: unsupported version"`  |
+| [doc/architecture.md](doc/architecture.md) | Crate graph, pipeline flowcharts, module responsibilities (Mermaid) |
+| [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL benchmarks |
+| [doc/dict-format.md](doc/dict-format.md) | `dict.bin` binary format, DARTS lifecycle, data sources |
+| [doc/adr-001-ne-person-name-import-strategy.md](doc/adr-001-ne-person-name-import-strategy.md) | Why person names are filtered against `words_th.txt` |
 
 ## License
 
