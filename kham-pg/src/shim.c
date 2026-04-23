@@ -85,7 +85,7 @@ kham_end_shim(PG_FUNCTION_ARGS)
 Datum
 kham_lextypes_shim(PG_FUNCTION_ARGS)
 {
-    LexDescr *list = (LexDescr *) palloc(7 * sizeof(LexDescr));
+    LexDescr *list = (LexDescr *) palloc(8 * sizeof(LexDescr));
 
     list[0].lexid = 1; list[0].alias = pstrdup("thai");    list[0].descr = pstrdup("Thai word");
     list[1].lexid = 2; list[1].alias = pstrdup("latin");   list[1].descr = pstrdup("Latin script token");
@@ -93,7 +93,8 @@ kham_lextypes_shim(PG_FUNCTION_ARGS)
     list[3].lexid = 4; list[3].alias = pstrdup("punct");   list[3].descr = pstrdup("Punctuation");
     list[4].lexid = 5; list[4].alias = pstrdup("emoji");   list[4].descr = pstrdup("Emoji token");
     list[5].lexid = 6; list[5].alias = pstrdup("unknown"); list[5].descr = pstrdup("Unknown / OOV token");
-    list[6].lexid = 0; list[6].alias = NULL;                list[6].descr = NULL;
+    list[6].lexid = 7; list[6].alias = pstrdup("named");   list[6].descr = pstrdup("Named entity token");
+    list[7].lexid = 0; list[7].alias = NULL;                list[7].descr = NULL;
 
     PG_RETURN_POINTER(list);
 }

@@ -345,6 +345,7 @@ PostgreSQL fmgr  ──▶  src/shim.c (C)  ──▶  kham_*_impl() (Rust, src/
 | 4       | `punct`   | `TokenKind::Punctuation` |
 | 5       | `emoji`   | `TokenKind::Emoji`   |
 | 6       | `unknown` | `TokenKind::Unknown` |
+| 7       | `named`   | `TokenKind::Named(_)` |
 
 ### SQL install objects
 
@@ -353,7 +354,7 @@ Created by `kham_pg--0.1.0.sql` in this order:
 2. `CREATE TEXT SEARCH PARSER kham` — wires up the four functions
 3. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through)
 4. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
-5. `ALTER TEXT SEARCH CONFIGURATION kham ADD MAPPING FOR thai, latin, number, unknown WITH kham_dict`
+5. `ALTER TEXT SEARCH CONFIGURATION kham ADD MAPPING FOR thai, latin, number, unknown, named WITH kham_dict`
 
 Punctuation and emoji have no mapping — PG discards those token types at index time.
 

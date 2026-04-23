@@ -7,15 +7,16 @@ CREATE EXTENSION kham_pg;
 SELECT tokid, alias, description
 FROM ts_token_type('kham')
 ORDER BY tokid;
- tokid |  alias  |     description     
--------+---------+---------------------
+ tokid |  alias  |     description
+-------+---------+----------------------
      1 | thai    | Thai word
      2 | latin   | Latin script token
      3 | number  | Numeric token
      4 | punct   | Punctuation
      5 | emoji   | Emoji token
      6 | unknown | Unknown / OOV token
-(6 rows)
+     7 | named   | Named entity token
+(7 rows)
 
 -- ── 3. ts_parse — pure Thai ──────────────────────────────────────────────────
 SELECT tokid, token
@@ -168,8 +169,33 @@ SELECT ts_rank(
     to_tsvector('kham', 'กินข้าวกับปลา'),
     plainto_tsquery('kham', 'ปลา')
 ) > 0 AS ranked;
- ranked 
+ ranked
 --------
  t
+(1 row)
+
+-- ── 20. Named entity — ts_parse returns tokid=7 ──────────────────────────────
+-- กรุงเทพ is in the NE gazetteer as PLACE
+SELECT tokid, token
+FROM ts_parse('kham', 'กรุงเทพ')
+ORDER BY tokid, token;
+ tokid |  token
+-------+---------
+     7 | กรุงเทพ
+(1 row)
+
+-- ── 21. Named entity — to_tsvector indexes the token ────────────────────────
+SELECT to_tsvector('kham', 'ไปกรุงเทพ') @@ to_tsquery('kham', 'กรุงเทพ') AS found;
+ found
+-------
+ t
+(1 row)
+
+-- ── 22. lextypes — parser exposes 7 token types ──────────────────────────────
+SELECT count(*) AS lextype_count
+FROM ts_token_type('kham');
+ lextype_count
+---------------
+             7
 (1 row)
 

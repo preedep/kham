@@ -48,8 +48,7 @@ fn kind_to_pg_type(kind: TokenKind) -> c_int {
         TokenKind::Emoji => 5,
         TokenKind::Whitespace => 0, // filtered below; should not reach here
         TokenKind::Unknown => 6,
-        // TODO: map to type 7 once SQL install script adds the "named" lextypes entry
-        TokenKind::Named(_) => 1,
+        TokenKind::Named(_) => 7,
     }
 }
 

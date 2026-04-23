@@ -122,3 +122,9 @@ SELECT to_tsvector('kham', 'โรงพยาบาลใกล้บ้าน'
 -- ── 20. Normalisation: to_tsvector is deterministic for same input ────────────
 
 SELECT to_tsvector('kham', 'กินข้าว')::text = to_tsvector('kham', 'กินข้าว')::text AS stable;
+
+-- ── 21. Named entity: กรุงเทพ → tokid=7, ไป → tokid=1 ───────────────────────
+
+SELECT tokid, token
+FROM ts_parse('kham', 'ไปกรุงเทพ')
+ORDER BY tokid, token;
