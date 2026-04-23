@@ -123,8 +123,9 @@ SELECT to_tsvector('kham', 'โรงพยาบาลใกล้บ้าน'
 
 SELECT to_tsvector('kham', 'กินข้าว')::text = to_tsvector('kham', 'กินข้าว')::text AS stable;
 
--- ── 21. Named entity: กรุงเทพ → tokid=7, ไป → tokid=1 ───────────────────────
+-- ── 21. Named entity: จีน → tokid=7, ไป → tokid=1 ──────────────────────────
+-- จีน is single-syllable → not split by segmenter
 
 SELECT tokid, token
-FROM ts_parse('kham', 'ไปกรุงเทพ')
+FROM ts_parse('kham', 'ไปจีน')
 ORDER BY tokid, token;

@@ -114,15 +114,15 @@ SELECT ts_rank(
 ) > 0 AS ranked;
 
 -- ── 20. Named entity — ts_parse returns tokid=7 ──────────────────────────────
--- กรุงเทพ is in the NE gazetteer as PLACE
+-- จีน is in the NE gazetteer as PLACE; single syllable → always one token
 
 SELECT tokid, token
-FROM ts_parse('kham', 'กรุงเทพ')
+FROM ts_parse('kham', 'จีน')
 ORDER BY tokid, token;
 
 -- ── 21. Named entity — to_tsvector indexes the token ────────────────────────
 
-SELECT to_tsvector('kham', 'ไปกรุงเทพ') @@ to_tsquery('kham', 'กรุงเทพ') AS found;
+SELECT to_tsvector('kham', 'ไปจีน') @@ to_tsquery('kham', 'จีน') AS found;
 
 -- ── 22. lextypes — parser exposes 7 token types ──────────────────────────────
 
