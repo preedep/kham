@@ -178,7 +178,7 @@ impl FtsTokenizer {
         let normalized = self.tokenizer.normalize(text);
         let raw_tokens = self
             .ne_tagger
-            .tag_tokens(self.tokenizer.segment(&normalized));
+            .tag_tokens(self.tokenizer.segment(&normalized), &normalized);
 
         let mut result = Vec::with_capacity(raw_tokens.len());
         let mut position = 0usize;
@@ -463,6 +463,39 @@ mod tests {
     #[test]
     fn lexemes_empty_input_is_empty() {
         assert!(fts().lexemes("").is_empty());
+    }
+
+    // ── multi-token NE ────────────────────────────────────────────────────────
+
+    #[test]
+    fn multi_token_ne_merged_in_pipeline() {
+        // กรุงเทพ is in the NE gazetteer as PLACE; the segmenter splits it
+        // into กรุง+เทพ. The FTS pipeline must merge them into one Named token.
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("ไปกรุงเทพ");
+        let named: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.kind, TokenKind::Named(_)))
+            .collect();
+        assert!(
+            named.iter().any(|t| t.text == "กรุงเทพ"),
+            "กรุงเทพ should be tagged Named after multi-token merge, tokens: {:?}",
+            tokens
+                .iter()
+                .map(|t| (&t.text, &t.kind))
+                .collect::<alloc::vec::Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn multi_token_ne_reconstructable() {
+        // Texts of all non-whitespace tokens must still reconstruct the normalized input.
+        let fts = FtsTokenizer::new();
+        let text = "ไปกรุงเทพ";
+        let normalized = fts.tokenizer.normalize(text);
+        let tokens = fts.segment_for_fts(text);
+        let rebuilt: String = tokens.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(rebuilt, normalized);
     }
 
     // ── builder ───────────────────────────────────────────────────────────────

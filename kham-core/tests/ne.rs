@@ -112,7 +112,7 @@ fn tag_tokens_passes_through_all_non_thai_kinds() {
     ];
     for kind in kinds {
         let tok = Token::new("hello", 0..5, 0..5, kind);
-        let result = tagger.tag_tokens(vec![tok]);
+        let result = tagger.tag_tokens(vec![tok], "hello");
         assert_eq!(
             result[0].kind, kind,
             "kind {:?} should pass through tag_tokens unchanged",

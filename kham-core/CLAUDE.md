@@ -139,19 +139,20 @@ Data: `kham-core/data/pos_th.tsv` — sections grouped by tag with `# ── NOU
 `NamedEntityKind` is defined in `token.rs` (not `ne.rs`) to avoid circular imports.
 
 ```rust
-NeTagger::builtin()                         // ~200 entries, hand-curated
+NeTagger::builtin()                         // ~400 entries: provinces, countries (full list), cities, orgs
 NeTagger::from_tsv(data: &str)             // last duplicate wins
 tagger.tag(word: &str) -> Option<NamedEntityKind>
-tagger.tag_tokens(tokens: Vec<Token>) -> Vec<Token>  // relabels Thai→Named
+tagger.tag_tokens(tokens: Vec<Token>, source: &str) -> Vec<Token>
+//   greedy longest-match up to 5 consecutive Thai tokens; merges split compound names
 
 NamedEntityKind::from_tag("PLACE") -> Option<NamedEntityKind>
 NamedEntityKind::Place.as_tag() -> &'static str   // "PLACE"
 NamedEntityKind::Place.as_str() -> &'static str   // "Place"
 ```
 
-**Limitation:** Only single-token NEs match. Compound names the segmenter splits (e.g. กรุงเทพ → กรุง+เทพ) are not tagged. Verify with `Tokenizer::new().segment("candidate")` before adding to the TSV. Use single-syllable words (e.g. จีน) for regress tests — they are guaranteed not to split.
+**Multi-token matching:** `tag_tokens` tries spans of 5→1 consecutive Thai tokens; first gazetteer hit wins. Compound names split by the segmenter (e.g. กรุง+เทพ → กรุงเทพ) are merged into one `Named` token with combined spans. TSV entries must match the segmenter's concatenated output exactly — verify with `Tokenizer::new().segment("candidate")`.
 
-Data: `kham-core/data/ne_th.tsv` — Thai provinces (77), countries (30+), world cities (14), regions (8), organisations, universities, public figures (~200 total).
+Data: `kham-core/data/ne_th.tsv` — Thai provinces (77), full country list from PyThaiNLP (~246, Apache-2.0), world cities, regions, organisations, universities, public figures (~400 total).
 
 ### `romanizer` — `RomanizationMap`
 
