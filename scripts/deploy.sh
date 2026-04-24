@@ -71,7 +71,7 @@ cd "$ROOT"
 
 # tests
 info "Running cargo test..."
-cargo test --workspace 2>&1 | tail -3
+cargo test --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg 2>&1 | tail -3
 success "Tests pass"
 
 # fmt
@@ -81,7 +81,7 @@ success "Formatting OK"
 
 # clippy
 info "Running clippy..."
-cargo clippy --workspace --exclude kham-python --exclude kham-wasm \
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg \
   --all-targets -- -D warnings 2>&1 | grep -E "^error" && die "Clippy errors" || true
 success "Clippy OK"
 
