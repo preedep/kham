@@ -40,7 +40,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.1"
+kham-core = "0.2"
 ```
 
 ```rust
@@ -328,7 +328,7 @@ cargo bench -p kham-sqlite           # SQLite FTS5 criterion benchmarks
 
 # Bindings
 wasm-pack build kham-wasm --target web
-cd kham-python && maturin develop
+maturin develop -m kham-python/Cargo.toml
 make -C kham-pg regress              # PostgreSQL: Docker pg_regress
 cargo build -p kham-sqlite --release # SQLite: build libkham_sqlite.dylib/.so
 ```
