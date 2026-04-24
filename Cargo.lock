@@ -604,6 +604,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kham-sqlite"
+version = "0.2.0"
+dependencies = [
+ "cc",
+ "kham-core",
+]
+
+[[package]]
 name = "kham-wasm"
 version = "0.2.0"
 dependencies = [

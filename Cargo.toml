@@ -6,9 +6,11 @@ members = [
     "kham-wasm",
     "kham-capi",
     "kham-pg",
+    "kham-sqlite",
 ]
 # kham-python requires `maturin develop`; kham-wasm requires `wasm-pack build`.
 # kham-pg requires pg_config in PATH (or PG_CONFIG env var) to build.
+# kham-sqlite requires SQLite headers (macOS SDK / libsqlite3-dev on Linux).
 # Exclude them from the default `cargo build / test` invocation.
 default-members = [
     "kham-core",

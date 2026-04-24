@@ -1,6 +1,6 @@
 # kham.rs — Thai Word Segmentation Engine
 
-Batteries-included Thai word segmentation library in Rust. Multi-target: Rust crate, WASM, Python (PyO3), C FFI, CLI.
+Batteries-included Thai word segmentation library in Rust. Multi-target: Rust crate, WASM, Python (PyO3), C FFI, CLI, PostgreSQL FTS5, SQLite FTS5.
 
 ## Architecture
 
@@ -12,13 +12,14 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 | `kham-capi/` | C FFI via cbindgen |
 | `kham-cli/` | CLI binary using clap. → [kham-cli/CLAUDE.md](kham-cli/CLAUDE.md) |
 | `kham-pg/` | PostgreSQL text-search parser extension (`cdylib`). → [kham-pg/CLAUDE.md](kham-pg/CLAUDE.md) |
+| `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
 
 ## Commands
 
 ```bash
 cargo fmt --all                      # format (run before every commit)
 cargo fmt --all -- --check           # verify formatting (CI gate)
-cargo clippy --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg --all-targets -- -D warnings
+cargo clippy --workspace --exclude kham-python --exclude kham-wasm --exclude kham-pg --exclude kham-sqlite --all-targets -- -D warnings
 cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
@@ -37,6 +38,14 @@ cargo build -p kham-capi --release
 cargo build -p kham-pg --release
 make -C kham-pg install
 make -C kham-pg regress              # pg_regress in Docker (PG 17)
+
+# kham-sqlite (requires SQLite headers: macOS SDK or libsqlite3-dev on Linux)
+cargo build -p kham-sqlite --release
+# Load and use in SQLite shell:
+#   .load ./target/release/libkham_sqlite
+#   CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
+#   INSERT INTO docs VALUES ('กินข้าวกับปลา');
+#   SELECT * FROM docs WHERE docs MATCH 'ปลา';
 ```
 
 ## Code Style
@@ -72,7 +81,7 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 
 - All three bindings expose `segment(text)` (strings only) and `segment_tokens(text)` (rich objects).
 - **C FFI legacy API** — `KhamTokens` / `kham_segment()` / `kham_tokens_free()` exist for backward compatibility. Do not remove them. New callers use `kham_segment_tokens()`.
-- `unsafe` is confined to `kham-capi/src/lib.rs` and `kham-pg/src/lib.rs`. Do not add `unsafe` to any other crate.
+- `unsafe` is confined to `kham-capi/src/lib.rs`, `kham-pg/src/lib.rs`, and `kham-sqlite/src/lib.rs`. Do not add `unsafe` to any other crate.
 - Regenerate the C header after any `#[repr(C)]` struct change: `cbindgen --config kham-capi/cbindgen.toml --crate kham-capi --output kham-capi/include/kham.h`
 
 ## Testing
@@ -81,6 +90,7 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 - Integration tests in `kham-core/tests/`; test data in `kham-core/testdata/` (format: `input|tok1|tok2|…`)
 - Python binding tests: `kham-python/tests/test_kham.py` — run after every `maturin develop`
 - kham-pg regress: `make -C kham-pg regress` — Docker (PG 17); expected output in `kham-pg/regress/expected/`
+- kham-sqlite smoke test: `cargo build -p kham-sqlite --release && sqlite3 ':memory:' "SELECT load_extension('./target/release/libkham_sqlite');" ...` — requires Homebrew sqlite3 on macOS (system sqlite3 disables `load_extension`)
 
 ## Important
 

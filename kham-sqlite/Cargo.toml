@@ -1,0 +1,18 @@
+[package]
+name = "kham-sqlite"
+description = "SQLite FTS5 tokenizer extension for Thai (kham-sqlite)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+kham-core = { workspace = true, features = ["std"] }
+
+[build-dependencies]
+cc = "1"
