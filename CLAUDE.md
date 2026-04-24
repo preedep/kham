@@ -23,7 +23,8 @@ cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
-cargo run -p kham-cli -- "ข้อความ"    # run CLI
+cargo run -p kham-cli -- "ข้อความ"           # run CLI
+cargo run -p kham-cli -- --fts "กินข้าวกับปลา"  # FTS pipeline: kind/POS/NE/stopword per token
 
 # Bindings
 wasm-pack build kham-wasm --target web
@@ -81,10 +82,22 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 - Python binding tests: `kham-python/tests/test_kham.py` — run after every `maturin develop`
 - kham-pg regress: `make -C kham-pg regress` — Docker (PG 17); expected output in `kham-pg/regress/expected/`
 
+## NLP Pipeline (v0.2.0+)
+
+`kham-core` ships a full NLP pipeline on top of segmentation:
+
+| Feature | Module | Default in `FtsTokenizer::new()` |
+|---------|--------|----------------------------------|
+| Named Entity Recognition | `ne` — 10 488-entry gazetteer (countries + person names) | ✅ enabled |
+| Part-of-Speech tagging | `pos` — 338-entry lookup table, 13 categories | ✅ enabled |
+| RTGS Romanization | `romanizer` — 415-entry table-driven Thai→Roman | ❌ opt-in via `.romanize(true)` |
+
+`FtsTokenizer::new()` loads NE and POS gazetteers from embedded data on **every call**. In `kham-pg`, a new tokenizer is created per document — this is a known performance footgun. Defer to `FtsTokenizerBuilder` and cache when performance is critical.
+
 ## Important
 
 - **Library-first** — `kham-core` must never depend on `std`
-- **Performance matters** — benchmark every PR touching segmenter or dict (`cargo bench`)
+- **Performance matters** — benchmark every PR touching segmenter, dict, or FTS pipeline (`cargo bench`)
 - **No BEST corpus or non-CC0 data** in the repo
 - Algorithm reference: nlpO3 (Apache-2.0) and PyThaiNLP newmm — clean-room implementation
 - All Thai text in tests must be valid UTF-8, never raw bytes
