@@ -14,7 +14,7 @@ PG_CONFIG      ?= pg_config
 CARGO          ?= cargo
 DOCKER_COMPOSE ?= docker compose
 
-EXT_VERSION    := 0.1.3
+EXT_VERSION    := 0.2.0
 DIST_NAME      := kham_pg-$(EXT_VERSION)
 
 PG_PKGLIBDIR   := $(shell $(PG_CONFIG) --pkglibdir)
