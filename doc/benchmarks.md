@@ -3,7 +3,9 @@
 Run locally:
 
 ```bash
-cargo bench -p kham-core
+cargo bench -p kham-core             # core segmentation + FTS pipeline
+cargo build -p kham-sqlite --release # must build dylib before benchmarking
+cargo bench -p kham-sqlite           # SQLite FTS5 extension
 # HTML report: target/criterion/report/index.html
 ```
 
@@ -88,6 +90,44 @@ Thai + Latin + Number in the same input, measuring pre-tokenizer boundary overhe
 
 > `FreqMap::builtin()` startup cost (~22 ms) is the dominant component of `Tokenizer::new()` (~20 ms total).
 > It is paid once per tokenizer instance; the returned `FreqMap` is reused across all `segment()` calls.
+
+## SQLite FTS5 extension (`kham-sqlite`)
+
+Criterion benchmarks via `rusqlite` with bundled SQLite (FTS5 enabled), in-memory database.
+Run with `cargo build -p kham-sqlite --release && cargo bench -p kham-sqlite`.
+
+### Indexing — INSERT throughput (`index/*`)
+
+`index/single` measures one INSERT per autocommit transaction (includes SQLite journal overhead).
+`index/batch_100` wraps 100 INSERTs in a single transaction — reflects real bulk-indexing throughput.
+
+| Benchmark | Input | Size | Time (median) | Throughput |
+|---|---|---|---|---|
+| `index/single/short` | `กินข้าวกับปลา` | 21 B | 11.4 µs | 3.25 MiB/s |
+| `index/single/medium` | ~63 B Thai prose | 63 B | 28.2 µs | 6.09 MiB/s |
+| `index/single/long` | 3× medium | 189 B | 53.7 µs | 9.59 MiB/s |
+| `index/single/mixed` | Thai + Latin + Number | 37 B | 33.8 µs | 2.23 MiB/s |
+| `index/batch_100/short` | 100 × short | 2.1 KB | 303 µs (**3.0 µs/doc**) | 12.3 MiB/s |
+| `index/batch_100/medium` | 100 × medium | 6.3 KB | 1.21 ms (**12.1 µs/doc**) | 14.2 MiB/s |
+| `index/batch_100/long` | 100 × long | 18.9 KB | 1.97 ms (**19.7 µs/doc**) | 26.1 MiB/s |
+
+> Per-document cost in batch mode (3–20 µs) versus single-INSERT mode (11–54 µs) shows that
+> SQLite transaction overhead dominates single-INSERT latency, not tokenization.
+
+### Query latency (`query/*`)
+
+Table pre-populated with 1 000 rows of the medium input.
+
+| Benchmark | Query | Result rows | Time (median) |
+|---|---|---|---|
+| `query/single_word/thai_common` | `ข้าว` | 1 000 | 23.4 µs |
+| `query/single_word/thai_rare` | `ปลา` | 1 000 | 23.4 µs |
+| `query/single_word/number` | `100` | 0 | 1.17 µs |
+| `query/single_word/latin` | `hello` | 0 | 1.17 µs |
+| `query/snippet` | `ข้าว` (top 10 snippets) | 10 | 118 µs |
+
+> The 23 µs query latency covers: tokenizing the query term + FTS5 index lookup + iterating
+> 1 000 matching rowids.  No-match queries (number / latin) cost only ~1.2 µs (FTS5 index miss path).
 
 ## PostgreSQL extension (`kham-pg`)
 

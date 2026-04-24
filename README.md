@@ -1,6 +1,6 @@
 # kham
 
-Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core library with bindings for Python, WebAssembly, C, and a command-line interface.
+Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core library with bindings for Python, WebAssembly, C, a command-line interface, and database extensions for PostgreSQL and SQLite.
 
 [![CI](https://github.com/preedep/kham/actions/workflows/ci.yml/badge.svg)](https://github.com/preedep/kham/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/kham-core.svg)](https://crates.io/crates/kham-core)
@@ -17,7 +17,8 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations
 - **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
-- **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` integration
+- **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration
+- **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer for SQLite's built-in full-text search; `highlight()` and `snippet()` work correctly via byte-accurate token offsets
 - **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 
@@ -31,6 +32,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | WebAssembly bindings via wasm-bindgen |
 | `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | C FFI with cbindgen-generated header |
 | `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) (coming soon) | PostgreSQL extension: custom text search parser for Thai |
+| `kham-sqlite` | — | SQLite loadable extension: FTS5 tokenizer for Thai |
 
 ## Quick start
 
@@ -146,6 +148,41 @@ CREATE INDEX articles_fts_idx ON articles
 ```
 
 > **Note:** `ts_headline` is not supported — the kham parser has no HEADLINE callback.
+
+### SQLite
+
+`kham-sqlite` registers a `kham` tokenizer as a loadable SQLite extension, enabling Thai full-text search with FTS5.
+
+```bash
+cargo build -p kham-sqlite --release
+```
+
+```sql
+-- Load the extension
+SELECT load_extension('./target/release/libkham_sqlite', 'sqlite3_kham_init');
+
+-- Create an FTS5 virtual table
+CREATE VIRTUAL TABLE articles USING fts5(title, body, tokenize='kham');
+
+-- Insert Thai documents
+INSERT INTO articles VALUES ('อาหารไทย', 'กินข้าวกับปลาและน้ำพริก');
+INSERT INTO articles VALUES ('สภาพอากาศ', 'วันนี้อากาศดีมากท้องฟ้าแจ่มใส');
+
+-- Full-text search
+SELECT title FROM articles WHERE articles MATCH 'ปลา';
+-- อาหารไทย
+
+SELECT title FROM articles WHERE articles MATCH 'อากาศ';
+-- สภาพอากาศ
+
+-- Snippet highlighting (byte-accurate offsets from the tokenizer)
+SELECT snippet(articles, 1, '>>>', '<<<', '...', 6)
+FROM articles WHERE articles MATCH 'ข้าว';
+-- กิน>>>ข้าว<<<กับปลาและน้ำพริก
+```
+
+SQLite itself must be compiled with FTS5 support (the default in most distributions).  
+On macOS, use `brew install sqlite` — the system sqlite3 binary has `load_extension` disabled.
 
 ### CLI
 
@@ -282,12 +319,14 @@ See [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) for the person-name
 cargo build                          # all crates (also runs build.rs → dict.bin)
 cargo test --release                 # all tests
 cargo test -p kham-core --release    # core only
-cargo bench -p kham-core             # criterion benchmarks
+cargo bench -p kham-core             # core criterion benchmarks
+cargo bench -p kham-sqlite           # SQLite FTS5 criterion benchmarks
 
 # Bindings
 wasm-pack build kham-wasm --target web
 cd kham-python && maturin develop
 make -C kham-pg regress              # PostgreSQL: Docker pg_regress
+cargo build -p kham-sqlite --release # SQLite: build libkham_sqlite.dylib/.so
 ```
 
 Prerequisites per target:
@@ -300,6 +339,8 @@ Prerequisites per target:
 | C | `cbindgen` | `cargo install cbindgen` |
 | PostgreSQL | Docker with BuildKit | [docs.docker.com](https://docs.docker.com/engine/install/) |
 | PostgreSQL (local) | `pg_config`, C compiler, `gettext` (macOS) | `brew install postgresql@17 gettext` |
+| SQLite (macOS) | Xcode CLT or Homebrew sqlite | `xcode-select --install` or `brew install sqlite` |
+| SQLite (Linux) | SQLite development headers | `apt install libsqlite3-dev` |
 
 ## CI
 
@@ -318,7 +359,7 @@ Prerequisites per target:
 | Document | Contents |
 |---|---|
 | [doc/architecture.md](doc/architecture.md) | Crate graph, pipeline flowcharts, module responsibilities (Mermaid) |
-| [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL benchmarks |
+| [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL and SQLite FTS5 benchmarks |
 | [doc/dict-format.md](doc/dict-format.md) | `dict.bin` binary format, DARTS lifecycle, data sources |
 | [doc/adr-001-ne-person-name-import-strategy.md](doc/adr-001-ne-person-name-import-strategy.md) | Why person names are filtered against `words_th.txt` |
 
