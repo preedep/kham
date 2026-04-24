@@ -11,12 +11,14 @@ graph LR
     wasm["<b>kham-wasm</b><br/>WASM module<br/>(wasm-bindgen)"]
     capi["<b>kham-capi</b><br/>C shared library<br/>(cbindgen)<br/>segment · FTS · lexemes"]
     pg["<b>kham-pg</b><br/>PostgreSQL extension<br/>(C shim · cdylib)"]
+    sqlite["<b>kham-sqlite</b><br/>SQLite FTS5 extension<br/>(C shim · cdylib)"]
 
     core --> cli
     core --> python
     core --> wasm
     core --> capi
     core --> pg
+    core --> sqlite
 ```
 
 ## Core module responsibilities
