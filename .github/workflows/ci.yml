@@ -37,6 +37,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # kham-pg requires PostgreSQL server headers (pg_config) — tested via Docker.
       # kham-python needs Python headers; kham-wasm needs the wasm32 target.
+      # kham-sqlite needs SQLite headers for the C shim.
+      - run: sudo apt-get install -y libsqlite3-dev
       - run: >
           cargo clippy
           --workspace
@@ -61,6 +63,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.toolchain }}
+      - name: Install SQLite headers
+        run: sudo apt-get install -y libsqlite3-dev
       - name: Build
         run: >
           cargo build
