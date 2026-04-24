@@ -23,7 +23,8 @@ cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
-cargo run -p kham-cli -- "ข้อความ"    # run CLI
+cargo run -p kham-cli -- "ข้อความ"         # run CLI
+cargo run -p kham-cli -- --fts "ข้อความ"   # FTS mode: kind/POS/NE/stopword per token
 
 # Bindings
 wasm-pack build kham-wasm --target web
