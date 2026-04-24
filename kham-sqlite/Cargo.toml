@@ -16,3 +16,11 @@ kham-core = { workspace = true, features = ["std"] }
 
 [build-dependencies]
 cc = "1"
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+rusqlite = { version = "0.32", features = ["load_extension", "bundled"] }
+
+[[bench]]
+name = "fts"
+harness = false
