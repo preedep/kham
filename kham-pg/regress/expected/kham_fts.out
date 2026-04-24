@@ -15,7 +15,8 @@ ORDER BY tokid;
      4 | punct   | Punctuation
      5 | emoji   | Emoji token
      6 | unknown | Unknown / OOV token
-(6 rows)
+     7 | named   | Named entity token
+(7 rows)
 
 -- ── 3. ts_parse — pure Thai ──────────────────────────────────────────────────
 SELECT tokid, token
@@ -171,5 +172,30 @@ SELECT ts_rank(
  ranked 
 --------
  t
+(1 row)
+
+-- ── 20. Named entity — ts_parse returns tokid=7 ──────────────────────────────
+-- จีน is in the NE gazetteer as PLACE; single syllable → always one token
+SELECT tokid, token
+FROM ts_parse('kham', 'จีน')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     7 | จีน
+(1 row)
+
+-- ── 21. Named entity — to_tsvector indexes the token ────────────────────────
+SELECT to_tsvector('kham', 'ไปจีน') @@ to_tsquery('kham', 'จีน') AS found;
+ found 
+-------
+ t
+(1 row)
+
+-- ── 22. lextypes — parser exposes 7 token types ──────────────────────────────
+SELECT count(*) AS lextype_count
+FROM ts_token_type('kham');
+ lextype_count 
+---------------
+             7
 (1 row)
 

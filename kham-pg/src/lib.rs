@@ -48,6 +48,7 @@ fn kind_to_pg_type(kind: TokenKind) -> c_int {
         TokenKind::Emoji => 5,
         TokenKind::Whitespace => 0, // filtered below; should not reach here
         TokenKind::Unknown => 6,
+        TokenKind::Named(_) => 7,
     }
 }
 

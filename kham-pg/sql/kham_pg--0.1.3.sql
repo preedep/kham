@@ -10,6 +10,7 @@
 --   4  punct    Punctuation
 --   5  emoji    Emoji token
 --   6  unknown  Unknown / OOV token
+--   7  named    Named entity token (person, place, organisation)
 
 -- Guard against accidental direct \i load
 \echo Use "CREATE EXTENSION kham_pg" to load this file. \quit
@@ -80,3 +81,6 @@ ALTER TEXT SEARCH CONFIGURATION kham
 
 ALTER TEXT SEARCH CONFIGURATION kham
     ADD MAPPING FOR unknown WITH kham_dict;
+
+ALTER TEXT SEARCH CONFIGURATION kham
+    ADD MAPPING FOR named   WITH kham_dict;

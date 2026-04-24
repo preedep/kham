@@ -1,0 +1,102 @@
+# kham-pg
+
+PostgreSQL text-search parser extension (`cdylib`) wrapping `kham-core`'s `FtsTokenizer`.
+
+## Architecture
+
+```
+PostgreSQL fmgr  ──▶  src/shim.c (C)  ──▶  kham_*_impl() (Rust, src/lib.rs)
+                       PG_MODULE_MAGIC
+                       PG_FUNCTION_INFO_V1
+                       PG_GETARG_POINTER / PG_GETARG_INT32 / PG_RETURN_*
+                       palloc / pfree / pstrdup / ereport
+```
+
+## Parser callback signatures
+
+| Callback        | SQL signature                             | Notes |
+|-----------------|-------------------------------------------|-------|
+| `kham_start`    | `(internal, int4) → internal`             | raw `char*` + `int4` length |
+| `kham_gettoken` | `(internal, internal, internal) → int4`   | state + char** + int* output |
+| `kham_end`      | `(internal) → void`                       | frees state |
+| `kham_lextypes` | `(internal) → internal`                   | returns palloc'd `LexDescr[]` |
+
+**Critical:** `kham_start` receives a raw `char*` + `int4` — NOT a varlena `text*`. Use `PG_GETARG_POINTER(0)` + `PG_GETARG_INT32(1)`, never `PG_GETARG_TEXT_PP`.
+
+## Token type integers
+
+| PG tokid | alias     | `TokenKind`              |
+|----------|-----------|--------------------------|
+| 1        | `thai`    | `TokenKind::Thai`        |
+| 2        | `latin`   | `TokenKind::Latin`       |
+| 3        | `number`  | `TokenKind::Number`      |
+| 4        | `punct`   | `TokenKind::Punctuation` |
+| 5        | `emoji`   | `TokenKind::Emoji`       |
+| 6        | `unknown` | `TokenKind::Unknown`     |
+| 7        | `named`   | `TokenKind::Named(_)`    |
+
+`LexDescr[]` in `kham_lextypes_shim` must be null-terminated (lexid=0 sentinel at index 7).
+
+## SQL install objects (`kham_pg--0.1.x.sql`)
+
+Created in this order:
+1. `CREATE FUNCTION kham_start/gettoken/end/lextypes` — registers C symbols from `MODULE_PATHNAME`
+2. `CREATE TEXT SEARCH PARSER kham` — wires up the four functions
+3. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through)
+4. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
+5. `ALTER TEXT SEARCH CONFIGURATION kham ADD MAPPING FOR thai, latin, number, unknown, named WITH kham_dict`
+
+Punctuation and emoji have no mapping — PG discards those token types at index time.
+
+## Build requirements
+
+- `pg_config` in `PATH` **or** `PG_CONFIG=/path/to/pg_config`
+- C compiler (clang or gcc) — `cc` crate compiles `src/shim.c`
+- **macOS only:** `brew install gettext` — PG headers include `libintl.h`. `build.rs` auto-detects via `brew --prefix gettext`.
+- For regress tests: Docker with BuildKit
+
+## Required C header include order
+
+```c
+#include "postgres.h"           // must be first
+#include "fmgr.h"               // PG_FUNCTION_INFO_V1, PG_GETARG_*, PG_RETURN_*
+#include "tsearch/ts_public.h"  // LexDescr
+#include "utils/palloc.h"       // palloc, pfree, pstrdup
+```
+
+`varatt.h` is only needed for varlena args — `kham_start` uses raw pointer args so it is not included.
+
+## Docker test environment
+
+Multi-stage build (`kham-pg/docker/Dockerfile.test`):
+- **Stage 1 (builder):** `debian:bookworm-slim` + `postgresql-server-dev-17` + Rust → `libkham_pg.so`
+- **Stage 2 (runner):** `debian:bookworm-slim` + `postgresql-17` only (~200 MB vs ~2 GB single-stage)
+
+Do **not** use Alpine/musl: Rust musl targets are static-only and do not support `cdylib`.
+
+Key constraints:
+- `dynamic_shared_memory_type = mmap` must be set before `pg_ctl start` (PG 17 removed `none`)
+- pg_ctl/initdb run as `postgres` via `gosu`
+- `pg_regress` binary: `$(pg_config --pgxs | dirname | dirname)/test/regress/pg_regress`
+- Use `--outputdir=.` so results land at `regress/results/` (gitignored)
+- Linux cdylib: all PG-facing symbols defined as `#[no_mangle] pub extern "C"` in `lib.rs`
+- `PG_MODULE_MAGIC_DATA` portability: PGDG PG17 uses object-like form; Homebrew/PG18+ uses function-like form. `shim.c` guards with `#ifdef PG_MODULE_ABI_DATA`
+- macOS linker: `build.rs` emits `-undefined dynamic_lookup` so PG server symbols resolve at dlopen time
+
+## Regress tests
+
+Expected output: `kham-pg/regress/expected/` (committed). Results: `kham-pg/regress/results/` (gitignored).
+
+Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`
+
+**NE test words:** Use single-syllable words (e.g. จีน) for named entity regress tests — multi-syllable words (e.g. กรุงเทพ) are split by the segmenter before NE tagging. Verify with `Tokenizer::new().segment("candidate")` before adding to the test.
+
+**Updating expected output:** If pg_regress output changes, use a volume mount to capture actual results:
+```bash
+docker compose run --rm --build -v "$(pwd)/kham-pg/regress/results:/kham/kham-pg/regress/results" test
+cp kham-pg/regress/results/kham_fts.out kham-pg/regress/expected/kham_fts.out
+```
+
+## unsafe policy
+
+`unsafe` is confined to `src/lib.rs` (FFI boundary). `src/shim.c` is plain C. Do not add `unsafe` to any other crate.

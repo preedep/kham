@@ -14,6 +14,8 @@
 //!     -n, --normalize      Run normalize() before segmenting
 //!     -k, --kind           Append token kind after each token (e.g. กิน:Thai)
 //!         --spans          Append char span after each token (e.g. กิน:0-3)
+//!         --fts            Run the FTS pipeline; print one token per line with
+//!                          kind, POS, NE, and stopword metadata
 //!     -h, --help           Print help information
 //!     -V, --version        Print version information
 //! ```
@@ -23,8 +25,30 @@ use std::time::Instant;
 
 use clap::Parser;
 use colored::Colorize;
-use kham_core::Tokenizer;
+use kham_core::fts::FtsTokenizer;
+use kham_core::{TokenKind, Tokenizer};
 use log::{debug, info, warn};
+
+// ---------------------------------------------------------------------------
+// Token kind helper (shared by basic and FTS output paths)
+// ---------------------------------------------------------------------------
+
+fn kind_str(kind: TokenKind) -> &'static str {
+    match kind {
+        TokenKind::Thai => "Thai",
+        TokenKind::Latin => "Latin",
+        TokenKind::Number => "Number",
+        TokenKind::Punctuation => "Punctuation",
+        TokenKind::Emoji => "Emoji",
+        TokenKind::Whitespace => "Whitespace",
+        TokenKind::Unknown => "Unknown",
+        TokenKind::Named(ne) => ne.as_str(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CLI definition
+// ---------------------------------------------------------------------------
 
 #[derive(Parser, Debug)]
 #[command(
@@ -38,29 +62,49 @@ struct Cli {
     text: Option<String>,
 
     /// Path to a custom word-list file (newline-separated words).
+    /// Not supported with --fts (custom dict is ignored in FTS mode).
     #[arg(short, long, value_name = "FILE")]
     dict: Option<String>,
 
-    /// Separator printed between tokens.
+    /// Separator printed between tokens (basic mode only).
     #[arg(short, long, default_value = "|")]
     sep: String,
 
-    /// Include whitespace tokens in output.
+    /// Include whitespace tokens in output (basic mode only).
     #[arg(short, long)]
     whitespace: bool,
 
-    /// Normalize text before segmenting (tone dedup + Sara Am composition).
+    /// Normalize text before segmenting (basic mode only; FTS always normalizes).
     #[arg(short, long)]
     normalize: bool,
 
-    /// Append the token kind after each token text (e.g. กิน:Thai).
+    /// Append the token kind after each token text (basic mode only, e.g. กิน:Thai).
     #[arg(short, long)]
     kind: bool,
 
-    /// Append the Unicode char span after each token text (e.g. กิน:0-3).
+    /// Append the Unicode char span after each token text (basic mode only, e.g. กิน:0-3).
     #[arg(long)]
     spans: bool,
+
+    /// Run the full FTS pipeline (FtsTokenizer).
+    ///
+    /// Prints one token per line with tab-separated fields:
+    ///   text  kind=KIND  pos=POS  ne=NE  stop=BOOL
+    ///
+    /// KIND is the token script category (Thai, Latin, Number, Person, Place, Org, …).
+    /// POS is the part-of-speech tag (Verb, Noun, Adj, …) or "-" for OOV/non-Thai.
+    /// NE  is the named entity category (Person, Place, Org) or "-" if not an NE.
+    /// BOOL is true if the token matched the built-in stopword list.
+    ///
+    /// Pipe through `column -t` for aligned columns:
+    ///   kham --fts "ทักษิณเดินทางไปไทย" | column -t
+    #[arg(long)]
+    fts: bool,
 }
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
 
 fn main() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn"))
@@ -79,7 +123,6 @@ fn main() {
             let target = format!("[{}]", record.target()).dimmed();
             let message = record.args().to_string();
 
-            // Colour the message body for WARN/ERROR to make it stand out.
             let message = match record.level() {
                 log::Level::Error => message.red().to_string(),
                 log::Level::Warn => message.yellow().to_string(),
@@ -94,7 +137,18 @@ fn main() {
 
     debug!("CLI args: {:?}", cli);
 
-    // Build the tokenizer.
+    if cli.fts {
+        run_fts_mode(&cli);
+    } else {
+        run_basic_mode(&cli);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Basic segmentation mode
+// ---------------------------------------------------------------------------
+
+fn run_basic_mode(cli: &Cli) {
     debug!("Building tokenizer (keep_whitespace={})", cli.whitespace);
     let t0 = Instant::now();
 
@@ -119,12 +173,10 @@ fn main() {
     );
 
     match cli.text {
-        // Text supplied as a positional argument.
         Some(ref text) => {
             debug!("Mode: positional argument ({} bytes)", text.len());
-            process_line(&tokenizer, text, &cli);
+            process_line(&tokenizer, text, cli);
         }
-        // No argument — read stdin line-by-line (pipeline / interactive mode).
         None => {
             debug!("Mode: stdin");
             let stdin = io::stdin();
@@ -134,7 +186,7 @@ fn main() {
                     Ok(text) => {
                         line_count += 1;
                         debug!("stdin line {}: {} bytes", line_count, text.len());
-                        process_line(&tokenizer, &text, &cli);
+                        process_line(&tokenizer, &text, cli);
                     }
                     Err(e) => {
                         eprintln!("kham: read error: {e}");
@@ -151,7 +203,6 @@ fn main() {
 fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
     debug!("process_line: input={:?} ({} bytes)", raw, raw.len());
 
-    // Normalize into an owned String when requested; otherwise borrow raw.
     let normalized;
     let text: &str = if cli.normalize {
         let t0 = Instant::now();
@@ -196,7 +247,7 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
 
     let unknown_count = tokens
         .iter()
-        .filter(|t| t.kind == kham_core::TokenKind::Unknown)
+        .filter(|t| t.kind == TokenKind::Unknown)
         .count();
     if unknown_count > 0 {
         warn!("segment: {} unknown token(s) in {:?}", unknown_count, text);
@@ -216,4 +267,72 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
         .collect();
 
     println!("{}", parts.join(&cli.sep));
+}
+
+// ---------------------------------------------------------------------------
+// FTS pipeline mode
+// ---------------------------------------------------------------------------
+
+fn run_fts_mode(cli: &Cli) {
+    if cli.dict.is_some() {
+        warn!("--dict is not supported with --fts and will be ignored");
+    }
+
+    debug!("Building FtsTokenizer");
+    let t0 = Instant::now();
+    let fts = FtsTokenizer::new();
+    debug!(
+        "FtsTokenizer ready ({:.3}ms)",
+        t0.elapsed().as_secs_f64() * 1000.0
+    );
+
+    match cli.text {
+        Some(ref text) => {
+            debug!("FTS mode: positional argument ({} bytes)", text.len());
+            process_fts_line(&fts, text);
+        }
+        None => {
+            debug!("FTS mode: stdin");
+            let stdin = io::stdin();
+            let mut line_count = 0usize;
+            for line in stdin.lock().lines() {
+                match line {
+                    Ok(text) => {
+                        line_count += 1;
+                        debug!("stdin line {}: {} bytes", line_count, text.len());
+                        process_fts_line(&fts, &text);
+                    }
+                    Err(e) => {
+                        eprintln!("kham: read error: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            debug!("FTS mode: processed {} line(s)", line_count);
+        }
+    }
+}
+
+/// Run the FTS pipeline on one input line and print one token per line.
+///
+/// Output format (tab-separated):
+/// ```text
+/// TEXT    kind=KIND    pos=POS    ne=NE    stop=BOOL
+/// ```
+///
+/// Pipe through `column -t` for aligned columns.
+fn process_fts_line(fts: &FtsTokenizer, text: &str) {
+    let tokens = fts.segment_for_fts(text);
+    for t in &tokens {
+        let pos = t.pos.map(|p| p.as_str()).unwrap_or("-");
+        let ne = t.ne.map(|n| n.as_str()).unwrap_or("-");
+        println!(
+            "{}\tkind={}\tpos={}\tne={}\tstop={}",
+            t.text,
+            kind_str(t.kind),
+            pos,
+            ne,
+            t.is_stop,
+        );
+    }
 }

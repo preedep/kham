@@ -44,6 +44,7 @@ fn kind_cstring(kind: TokenKind) -> CString {
         TokenKind::Emoji => "Emoji",
         TokenKind::Whitespace => "Whitespace",
         TokenKind::Unknown => "Unknown",
+        TokenKind::Named(ne) => ne.as_str(),
     })
     .unwrap()
 }
@@ -140,6 +141,10 @@ pub struct KhamToken {
     pub char_end: usize,
     /// Null-terminated token kind string: `"Thai"`, `"Latin"`, `"Number"`,
     /// `"Punctuation"`, `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
+    ///
+    /// Note: `"Person"`, `"Place"`, and `"Org"` are never produced by
+    /// [`kham_segment_tokens`] because NE tagging is not part of the basic
+    /// segmentation pipeline. Use [`kham_fts_segment`] to obtain Named tokens.
     pub kind: *mut c_char,
 }
 
@@ -233,8 +238,12 @@ pub struct KhamFtsToken {
     pub text: *mut c_char,
     /// Ordinal position in the non-whitespace token sequence (0-based).
     pub position: usize,
-    /// Null-terminated token kind string: `"Thai"`, `"Latin"`, `"Number"`,
-    /// `"Punctuation"`, `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
+    /// Null-terminated token kind string.
+    ///
+    /// Possible values: `"Thai"`, `"Latin"`, `"Number"`, `"Punctuation"`,
+    /// `"Emoji"`, `"Whitespace"`, `"Unknown"`.
+    /// Named entity tokens produced by the NE gazetteer use `"Person"`,
+    /// `"Place"`, or `"Org"` instead of `"Thai"`.
     pub kind: *mut c_char,
     /// `true` if this token matches the built-in stopword list.
     pub is_stop: bool,

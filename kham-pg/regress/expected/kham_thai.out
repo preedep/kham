@@ -200,3 +200,14 @@ SELECT to_tsvector('kham', 'กินข้าว')::text = to_tsvector('kham', 
  t
 (1 row)
 
+-- ── 21. Named entity: จีน → tokid=7, ไป → tokid=1 ──────────────────────────
+-- จีน is single-syllable → not split by segmenter
+SELECT tokid, token
+FROM ts_parse('kham', 'ไปจีน')
+ORDER BY tokid, token;
+ tokid | token 
+-------+-------
+     1 | ไป
+     7 | จีน
+(2 rows)
+

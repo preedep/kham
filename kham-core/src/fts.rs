@@ -27,10 +27,13 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::ne::NeTagger;
 use crate::ngram::char_ngrams;
+use crate::pos::{PosTag, PosTagger};
+use crate::romanizer::RomanizationMap;
 use crate::stopwords::StopwordSet;
 use crate::synonym::SynonymMap;
-use crate::token::TokenKind;
+use crate::token::{NamedEntityKind, TokenKind};
 use crate::Tokenizer;
 
 /// A token produced by the FTS pipeline, ready for lexeme indexing.
@@ -48,6 +51,12 @@ pub struct FtsToken {
     pub synonyms: Vec<String>,
     /// Character trigrams — populated only for [`TokenKind::Unknown`] tokens.
     pub trigrams: Vec<String>,
+    /// Primary part-of-speech tag from the lookup table, or `None` if the word
+    /// is not in the table (OOV) or is not a Thai token.
+    pub pos: Option<PosTag>,
+    /// Named entity category, or `None` if the token is not in the NE
+    /// gazetteer. When set, `kind` is [`TokenKind::Named`]`(ne)`.
+    pub ne: Option<NamedEntityKind>,
 }
 
 /// Builder for [`FtsTokenizer`].
@@ -56,6 +65,9 @@ pub struct FtsTokenizerBuilder {
     stopwords: Option<StopwordSet>,
     synonyms: Option<SynonymMap>,
     ngram_size: Option<usize>,
+    pos_tagger: Option<PosTagger>,
+    ne_tagger: Option<NeTagger>,
+    romanization: Option<RomanizationMap>,
 }
 
 impl FtsTokenizerBuilder {
@@ -79,6 +91,30 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Use a custom POS tagger instead of the built-in table.
+    pub fn pos_tagger(mut self, t: PosTagger) -> Self {
+        self.pos_tagger = Some(t);
+        self
+    }
+
+    /// Use a custom NE gazetteer instead of the built-in table.
+    pub fn ne_tagger(mut self, t: NeTagger) -> Self {
+        self.ne_tagger = Some(t);
+        self
+    }
+
+    /// Attach a romanization map so RTGS forms are added to [`FtsToken::synonyms`].
+    ///
+    /// When set, each Thai and Named token whose text is found in the map gets its
+    /// RTGS romanization appended to `synonyms`, enabling Latin-script queries
+    /// (e.g. `kin`) to match Thai-script documents (e.g. `กิน`) in PostgreSQL FTS.
+    ///
+    /// Disabled by default — call this method to opt in.
+    pub fn romanization(mut self, m: RomanizationMap) -> Self {
+        self.romanization = Some(m);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -86,6 +122,9 @@ impl FtsTokenizerBuilder {
             stopwords: self.stopwords.unwrap_or_else(StopwordSet::builtin),
             synonyms: self.synonyms.unwrap_or_else(SynonymMap::empty),
             ngram_size: self.ngram_size.unwrap_or(3),
+            pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
+            ne_tagger: self.ne_tagger.unwrap_or_else(NeTagger::builtin),
+            romanization: self.romanization,
         }
     }
 }
@@ -109,6 +148,9 @@ pub struct FtsTokenizer {
     stopwords: StopwordSet,
     synonyms: SynonymMap,
     ngram_size: usize,
+    pos_tagger: PosTagger,
+    ne_tagger: NeTagger,
+    romanization: Option<RomanizationMap>,
 }
 
 impl FtsTokenizer {
@@ -134,7 +176,9 @@ impl FtsTokenizer {
     /// [`index_tokens`]: FtsTokenizer::index_tokens
     pub fn segment_for_fts(&self, text: &str) -> Vec<FtsToken> {
         let normalized = self.tokenizer.normalize(text);
-        let raw_tokens = self.tokenizer.segment(&normalized);
+        let raw_tokens = self
+            .ne_tagger
+            .tag_tokens(self.tokenizer.segment(&normalized), &normalized);
 
         let mut result = Vec::with_capacity(raw_tokens.len());
         let mut position = 0usize;
@@ -145,17 +189,35 @@ impl FtsTokenizer {
             }
 
             let is_stop = self.stopwords.contains(token.text);
-            let synonyms = self
+            let is_thai_or_named = matches!(token.kind, TokenKind::Thai | TokenKind::Named(_));
+            let mut synonyms = self
                 .synonyms
                 .expand(token.text)
                 .map(|s| s.to_vec())
                 .unwrap_or_default();
+            if is_thai_or_named {
+                if let Some(ref rom) = self.romanization {
+                    if let Some(rtgs) = rom.romanize(token.text) {
+                        synonyms.push(String::from(rtgs));
+                    }
+                }
+            }
             let trigrams = if token.kind == TokenKind::Unknown && self.ngram_size > 0 {
                 char_ngrams(token.text, self.ngram_size)
                     .map(String::from)
                     .collect()
             } else {
                 Vec::new()
+            };
+            let ne = if let TokenKind::Named(k) = token.kind {
+                Some(k)
+            } else {
+                None
+            };
+            let pos = if token.kind == TokenKind::Thai {
+                self.pos_tagger.tag(token.text)
+            } else {
+                None
             };
 
             result.push(FtsToken {
@@ -165,6 +227,8 @@ impl FtsTokenizer {
                 is_stop,
                 synonyms,
                 trigrams,
+                pos,
+                ne,
             });
 
             position += 1;
@@ -399,6 +463,39 @@ mod tests {
     #[test]
     fn lexemes_empty_input_is_empty() {
         assert!(fts().lexemes("").is_empty());
+    }
+
+    // ── multi-token NE ────────────────────────────────────────────────────────
+
+    #[test]
+    fn multi_token_ne_merged_in_pipeline() {
+        // กรุงเทพ is in the NE gazetteer as PLACE; the segmenter splits it
+        // into กรุง+เทพ. The FTS pipeline must merge them into one Named token.
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("ไปกรุงเทพ");
+        let named: Vec<_> = tokens
+            .iter()
+            .filter(|t| matches!(t.kind, TokenKind::Named(_)))
+            .collect();
+        assert!(
+            named.iter().any(|t| t.text == "กรุงเทพ"),
+            "กรุงเทพ should be tagged Named after multi-token merge, tokens: {:?}",
+            tokens
+                .iter()
+                .map(|t| (&t.text, &t.kind))
+                .collect::<alloc::vec::Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn multi_token_ne_reconstructable() {
+        // Texts of all non-whitespace tokens must still reconstruct the normalized input.
+        let fts = FtsTokenizer::new();
+        let text = "ไปกรุงเทพ";
+        let normalized = fts.tokenizer.normalize(text);
+        let tokens = fts.segment_for_fts(text);
+        let rebuilt: String = tokens.iter().map(|t| t.text.as_str()).collect();
+        assert_eq!(rebuilt, normalized);
     }
 
     // ── builder ───────────────────────────────────────────────────────────────

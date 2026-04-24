@@ -40,6 +40,7 @@ fn kind_str(kind: TokenKind) -> &'static str {
         TokenKind::Emoji => "Emoji",
         TokenKind::Whitespace => "Whitespace",
         TokenKind::Unknown => "Unknown",
+        TokenKind::Named(ne) => ne.as_str(),
     }
 }
 
@@ -98,6 +99,8 @@ impl Token {
 
     /// Token kind: `"Thai"`, `"Latin"`, `"Number"`, `"Punctuation"`,
     /// `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
+    /// Named entity tokens (reachable via the FTS API) use `"Person"`,
+    /// `"Place"`, or `"Org"` instead of `"Thai"`.
     #[wasm_bindgen(getter)]
     pub fn kind(&self) -> String {
         self.kind.to_owned()
