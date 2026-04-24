@@ -18,7 +18,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration
-- **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer for SQLite's built-in full-text search; `highlight()` and `snippet()` work correctly via byte-accurate token offsets
+- **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
 - **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 
@@ -175,7 +175,11 @@ SELECT title FROM articles WHERE articles MATCH 'ปลา';
 SELECT title FROM articles WHERE articles MATCH 'อากาศ';
 -- สภาพอากาศ
 
--- Snippet highlighting (byte-accurate offsets from the tokenizer)
+-- RTGS romanization (built-in — no config required)
+SELECT title FROM articles WHERE articles MATCH 'kin';
+-- อาหารไทย  (กิน is indexed as both "กิน" and its RTGS form "kin")
+
+-- Snippet highlighting (byte-accurate offsets into normalized text)
 SELECT snippet(articles, 1, '>>>', '<<<', '...', 6)
 FROM articles WHERE articles MATCH 'ข้าว';
 -- กิน>>>ข้าว<<<กับปลาและน้ำพริก

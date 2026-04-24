@@ -1,14 +1,26 @@
 //! kham-sqlite — SQLite FTS5 tokenizer extension for Thai.
 //!
-//! This crate exposes a loadable SQLite extension that registers a custom FTS5
-//! tokenizer named `kham`.  After loading, create an FTS5 table with:
+//! Registers a custom FTS5 tokenizer named `kham` that provides:
+//! - Thai word segmentation (newmm DAG algorithm)
+//! - Text normalization (สระลอย reorder, วรรณยุกต์ dedup, Sara Am composition)
+//! - Named entity recognition (places, persons, organisations)
+//! - Synonym expansion via `FTS5_TOKEN_COLOCATED` (configurable TSV map)
+//! - RTGS romanization added as colocated synonyms (กิน → "kin")
 //!
 //! ```sql
-//! SELECT load_extension('./libkham_sqlite');
+//! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
 //! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
 //! INSERT INTO docs VALUES ('กินข้าวกับปลา');
 //! SELECT * FROM docs WHERE docs MATCH 'ปลา';
+//! SELECT snippet(docs, 0, '<b>', '</b>', '...', 5) FROM docs WHERE docs MATCH 'ปลา';
 //! ```
+//!
+//! ## Normalization and byte offsets
+//!
+//! `xToken(iStart, iEnd)` reports byte offsets into the **normalized** form of
+//! the input text.  `snippet()` and `highlight()` are accurate when documents
+//! are stored in normalized form.  For documents with stacked tone marks or
+//! unresolved Sara Am, offsets may shift by a few bytes in those spans.
 //!
 //! ## Architecture
 //!
@@ -19,10 +31,13 @@
 //!                   kham_sqlite_get_fts5api()  sqlite3_kham_init / sqlite3_khamsqlite_init
 //!                                                       │
 //!                                                       ▼
-//!                                              xCreate → KhamInstance (cached Tokenizer)
+//!                                              xCreate → KhamInstance (cached FtsTokenizer)
 //!                                                       │
 //!                                                       ▼
-//!                                              xTokenize → Tokenizer::segment()
+//!                                              xTokenize → normalize → segment_for_fts
+//!                                                                → xToken (primary)
+//!                                                                → xToken FTS5_TOKEN_COLOCATED
+//!                                                                         (synonyms + RTGS)
 //! ```
 //!
 //! ## Instance layout
@@ -31,10 +46,10 @@
 //! (`KhamFts5Tokenizer`) is the first field, so a `*mut KhamInstance` is
 //! pointer-compatible with `*mut KhamFts5Tokenizer`.  SQLite stores and passes
 //! back the same pointer it received from `xCreate`, so `xTokenize`/`xDelete`
-//! can cast it to `*mut KhamInstance` and access the cached `Tokenizer`.
+//! can cast it to `*mut KhamInstance` and access the cached `FtsTokenizer`.
 //!
-//! `Tokenizer::new()` is called once per FTS5 table (in `xCreate`), not per
-//! document.  This avoids rebuilding the Double-Array Trie on every token call.
+//! `FtsTokenizer::new()` is called once per FTS5 table (in `xCreate`), not per
+//! document or query.
 //!
 //! ## unsafe policy
 //!
@@ -45,7 +60,9 @@
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
 
-use kham_core::{TokenKind, Tokenizer};
+use kham_core::fts::FtsTokenizer;
+use kham_core::normalizer;
+use kham_core::romanizer::RomanizationMap;
 
 // ---------------------------------------------------------------------------
 // SQLite / FTS5 constants
@@ -53,6 +70,9 @@ use kham_core::{TokenKind, Tokenizer};
 
 const SQLITE_OK: c_int = 0;
 const SQLITE_ERROR: c_int = 1;
+
+/// Flag passed to `xToken` to emit a colocated synonym at the same position.
+const FTS5_TOKEN_COLOCATED: c_int = 0x0001;
 
 // ---------------------------------------------------------------------------
 // FTS5 type definitions — must match sqlite3.h layout exactly.
@@ -117,19 +137,19 @@ struct KhamFts5Api {
 ///
 /// `vtable` **must be the first field** so that a `*mut KhamInstance` is
 /// pointer-compatible with SQLite's `*mut Fts5Tokenizer`.  SQLite only
-/// sees and passes back the first-field pointer; the `tokenizer` field is
+/// sees and passes back the first-field pointer; the `fts` field is
 /// invisible to it and lives behind the pointer.
 #[repr(C)]
 struct KhamInstance {
     vtable: KhamFts5Tokenizer,
-    tokenizer: Tokenizer,
+    fts: FtsTokenizer,
 }
 
 // ---------------------------------------------------------------------------
 // FTS5 tokenizer callbacks
 // ---------------------------------------------------------------------------
 
-/// Allocate a new per-table tokenizer instance, building the `Tokenizer` once.
+/// Allocate a new per-table tokenizer instance, building the `FtsTokenizer` once.
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
     _az_arg: *const *const c_char,
@@ -145,8 +165,10 @@ unsafe extern "C" fn kham_fts5_create(
             x_delete: Some(kham_fts5_delete),
             x_tokenize: Some(kham_fts5_tokenize),
         },
-        // Dict construction happens here — once per FTS5 table, not per document.
-        tokenizer: Tokenizer::new(),
+        // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS.
+        fts: FtsTokenizer::builder()
+            .romanization(RomanizationMap::builtin())
+            .build(),
     });
     // SAFETY: vtable is the first field of KhamInstance (#[repr(C)]),
     // so *mut KhamInstance and *mut KhamFts5Tokenizer alias the same address.
@@ -164,9 +186,12 @@ unsafe extern "C" fn kham_fts5_delete(p: *mut KhamFts5Tokenizer) {
 
 /// Tokenise `p_text[0..n_text]` and report each token to SQLite via `x_token`.
 ///
-/// Uses the per-instance [`Tokenizer`] (built once in `xCreate`) which returns
-/// zero-copy `Token<'_>` slices with byte-offset spans — exactly what SQLite's
-/// `xToken(iStart, iEnd)` needs for `highlight()` and `snippet()`.
+/// Pipeline per call:
+/// 1. Normalise input (สระลอย, วรรณยุกต์ dedup, Sara Am) — offsets reference normalized text.
+/// 2. Run the full FTS pipeline (`segment_for_fts`): segment → NE tag → stopword → POS →
+///    synonym expand → RTGS romanization.
+/// 3. For each non-whitespace token, call `x_token(flags=0, iStart, iEnd)`.
+/// 4. For each synonym/RTGS form, call `x_token(FTS5_TOKEN_COLOCATED, iStart, iEnd)`.
 unsafe extern "C" fn kham_fts5_tokenize(
     p: *mut KhamFts5Tokenizer,
     p_ctx: *mut c_void,
@@ -176,7 +201,7 @@ unsafe extern "C" fn kham_fts5_tokenize(
     x_token: XTokenFn,
 ) -> c_int {
     let result = catch_unwind(|| {
-        // Recover the cached Tokenizer from the instance.
+        // Recover the cached FtsTokenizer from the instance.
         // SAFETY: p is a *mut KhamInstance cast to *mut KhamFts5Tokenizer by xCreate.
         let instance = unsafe { &*(p as *mut KhamInstance) };
 
@@ -194,18 +219,43 @@ unsafe extern "C" fn kham_fts5_tokenize(
             }
         };
 
-        let tokens = instance.tokenizer.segment(text);
+        // Normalize once; FtsTokenizer::segment_for_fts normalizes internally too —
+        // both paths call the same normalizer::normalize(), so the results match.
+        // We need the normalized string to compute accurate byte offsets.
+        let normalized = normalizer::normalize(text);
 
-        for token in &tokens {
-            if token.kind == TokenKind::Whitespace {
+        // Full FTS pipeline: segment → NE merge → stopword tag → POS → synonyms → RTGS.
+        let fts_tokens = instance.fts.segment_for_fts(text);
+
+        // Forward cursor into `normalized` for offset computation.
+        let mut scan: usize = 0;
+
+        for ft in &fts_tokens {
+            // segment_for_fts already excludes Whitespace, but guard defensively.
+            let tok_bytes = ft.text.as_bytes();
+            if tok_bytes.is_empty() {
                 continue;
             }
 
-            let tok_bytes = token.text.as_bytes();
-            let i_start = token.span.start as c_int;
-            let i_end = token.span.end as c_int;
+            // Locate this token's byte span in the normalized text, advancing the cursor.
+            // ft.text is a slice of the normalized form, so find() is always successful
+            // unless NE merging produced a text that spans a whitespace gap.
+            let (i_start, i_end) = match normalized[scan..].find(ft.text.as_str()) {
+                Some(rel) => {
+                    let start = scan + rel;
+                    let end = start + tok_bytes.len();
+                    scan = end;
+                    (start as c_int, end as c_int)
+                }
+                None => {
+                    // Fallback: use scan position as a point span (degenerate case).
+                    let pos = scan.min(normalized.len()) as c_int;
+                    (pos, pos)
+                }
+            };
 
-            // SAFETY: tok_bytes points into `text`, which is valid for this call.
+            // Emit primary token.
+            // SAFETY: tok_bytes points into ft.text which is alive for this loop body.
             let rc = unsafe {
                 x_token(
                     p_ctx,
@@ -218,6 +268,27 @@ unsafe extern "C" fn kham_fts5_tokenize(
             };
             if rc != SQLITE_OK {
                 return rc;
+            }
+
+            // Emit colocated synonyms (synonym map + RTGS romanization from builder).
+            for syn in &ft.synonyms {
+                let syn_bytes = syn.as_bytes();
+                if syn_bytes.is_empty() {
+                    continue;
+                }
+                let rc = unsafe {
+                    x_token(
+                        p_ctx,
+                        FTS5_TOKEN_COLOCATED,
+                        syn_bytes.as_ptr() as *const c_char,
+                        syn_bytes.len() as c_int,
+                        i_start,
+                        i_end,
+                    )
+                };
+                if rc != SQLITE_OK {
+                    return rc;
+                }
             }
         }
 
@@ -248,7 +319,7 @@ fn register_tokenizer(fts5_api_ptr: *mut c_void) -> c_int {
         Some(f) => f,
         None => return SQLITE_ERROR,
     };
-    let name = b"kham\0".as_ptr() as *const c_char;
+    let name = c"kham".as_ptr();
     unsafe { x_create(api, name, std::ptr::null_mut(), &KHAM_TOKENIZER, None) }
 }
 

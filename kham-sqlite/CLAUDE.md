@@ -1,6 +1,6 @@
 # kham-sqlite
 
-SQLite FTS5 tokenizer extension (`cdylib`) wrapping `kham-core`'s `Tokenizer`.
+SQLite FTS5 tokenizer extension (`cdylib`) wrapping `kham-core`'s `FtsTokenizer`.
 
 ## Architecture
 
@@ -11,15 +11,19 @@ SQLite FTS5  ──▶  src/shim.c (C helpers)  ──▶  lib.rs (Rust entry po
                   kham_sqlite_get_fts5api()  sqlite3_kham_init / sqlite3_khamsqlite_init
                                                       │
                                                       ▼
-                                             xCreate / xDelete / xTokenize
+                                             xCreate → KhamInstance (cached FtsTokenizer)
                                                       │
                                                       ▼
-                                             kham_core::Tokenizer::segment()
+                                             xTokenize → normalize → segment_for_fts
+                                                               → xToken (primary)
+                                                               → xToken FTS5_TOKEN_COLOCATED
+                                                                        (synonyms + RTGS)
 ```
 
 - `shim.c` provides C helpers (`kham_sqlite_setup_api`, `kham_sqlite_get_fts5api`) called from Rust
 - `lib.rs` defines `#[no_mangle]` entry points (guaranteed in dylib symbol table) and FTS5 callbacks
-- `Tokenizer::segment()` provides zero-copy `Token<'_>` with byte spans for accurate `iStart`/`iEnd`
+- `FtsTokenizer` is built **once per FTS5 table** in `xCreate` and cached in `KhamInstance`
+- `xTokenize` normalizes the input, segments, then emits primary tokens + colocated synonyms
 
 ## Key Files
 
@@ -28,8 +32,8 @@ kham-sqlite/
 ├── Cargo.toml             # crate-type = ["cdylib"], kham-core dep
 ├── build.rs               # find SQLite headers (xcrun/brew/pkg-config); compile shim.c
 └── src/
-    ├── lib.rs             # Rust FTS5 callbacks + kham_register_tokenizer
-    └── shim.c             # C: SQLITE_EXTENSION_INIT1/2, fts5_api_from_db, entry point
+    ├── lib.rs             # Rust FTS5 callbacks + registration
+    └── shim.c             # C: SQLITE_EXTENSION_INIT1/2, fts5_api_from_db
 ```
 
 ## FTS5 Tokenizer Callbacks
@@ -40,12 +44,27 @@ kham-sqlite/
 | `xDelete`     | `(*tokenizer)`                                          | Free tokenizer instance |
 | `xTokenize`   | `(*tok, pCtx, flags, pText, nText, xToken) → int`       | Segment document / query text |
 
-**`xTokenize` flow:**
+**`xTokenize` pipeline:**
 1. Build `&str` from `(pText, nText)` — handles both counted and NUL-terminated forms
-2. Call `Tokenizer::new().segment(text)` → `Vec<Token<'_>>` (zero-copy, with `span`)
-3. Skip `TokenKind::Whitespace` (Tokenizer default already drops whitespace)
-4. Call `xToken(pCtx, 0, pToken, nToken, iStart, iEnd)` for each remaining token
-5. Return immediately if any `xToken` call returns non-`SQLITE_OK`
+2. `normalizer::normalize(text)` → `normalized: String` (สระลอย, วรรณยุกต์ dedup, Sara Am)
+3. `fts.segment_for_fts(text)` → `Vec<FtsToken>` (whitespace excluded; NE merged; synonyms populated)
+4. For each `FtsToken`, locate its byte span in `normalized` via forward scan
+5. `xToken(pCtx, 0, pToken, nToken, iStart, iEnd)` — primary token
+6. `xToken(pCtx, FTS5_TOKEN_COLOCATED, pSyn, nSyn, iStart, iEnd)` — each synonym/RTGS form
+7. Return immediately if any `xToken` call returns non-`SQLITE_OK`
+
+## Struct layout — C inheritance pattern
+
+```rust
+#[repr(C)]
+struct KhamInstance {
+    vtable: KhamFts5Tokenizer,  // MUST be first field — pointer-aliases *mut KhamFts5Tokenizer
+    fts: FtsTokenizer,          // cached; invisible to SQLite
+}
+```
+
+SQLite stores and passes back `*mut KhamFts5Tokenizer` from `xCreate`.  `xTokenize`/`xDelete`
+cast it to `*mut KhamInstance` to recover the `FtsTokenizer`.
 
 ## Rust Type Definitions
 
@@ -66,7 +85,25 @@ struct KhamFts5Api {
 }
 ```
 
-`#[repr(C)]` field offsets match the C struct exactly: `c_int` (4 bytes) + implicit 4-byte alignment padding + function pointer (8 bytes on 64-bit). Accessing only the first two fields of `fts5_api` is safe because we receive a pointer to the full struct.
+## Normalization and byte offsets
+
+`xToken(iStart, iEnd)` reports byte offsets into the **normalized** form of the input text.
+`snippet()` and `highlight()` are accurate when documents are stored in normalized form.
+For documents stored with stacked tone marks or unresolved Sara Am (rare in practice), offsets
+may shift by a few bytes in those spans.
+
+## Synonym expansion (FTS5_TOKEN_COLOCATED)
+
+For each non-stop token, any synonyms and RTGS romanization forms are emitted as colocated
+tokens at the same `(iStart, iEnd)` position.  This enables queries like:
+
+```sql
+SELECT * FROM docs WHERE docs MATCH 'kin';   -- matches กิน via RTGS
+SELECT * FROM docs WHERE docs MATCH 'eat';   -- matches กิน if synonym map includes "กิน → eat"
+```
+
+RTGS romanization is enabled by default (built in `xCreate` with `RomanizationMap::builtin()`).
+Custom synonym maps are not yet exposed via `xCreate` arguments (v2 roadmap).
 
 ## Build Requirements
 
@@ -101,40 +138,37 @@ CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
 
 -- Insert Thai documents
 INSERT INTO docs VALUES ('กินข้าวกับปลา');
-INSERT INTO docs VALUES ('วันนี้อากาศดีมาก');
+INSERT INTO docs VALUES ('ทักษิณเดินทางไปกรุงเทพ');
 
 -- Full-text search
 SELECT * FROM docs WHERE docs MATCH 'ปลา';
-SELECT * FROM docs WHERE docs MATCH 'อากาศ';
+SELECT * FROM docs WHERE docs MATCH 'กรุงเทพ';   -- NE merged from กรุง+เทพ
+
+-- RTGS romanization search (built-in, no config needed)
+SELECT * FROM docs WHERE docs MATCH 'kin';       -- matches กิน
+SELECT * FROM docs WHERE docs MATCH 'krungthep'; -- matches กรุงเทพ (if in RTGS map)
 
 -- Phrase search
 SELECT * FROM docs WHERE docs MATCH '"กิน ข้าว"';
 
--- Snippet highlighting (uses iStart/iEnd byte offsets from xTokenize)
+-- Snippet highlighting (uses byte offsets from xTokenize into normalized text)
 SELECT snippet(docs, 0, '<b>', '</b>', '...', 5) FROM docs WHERE docs MATCH 'ปลา';
 ```
 
 ## Token Types
 
-All non-whitespace token kinds are forwarded to SQLite FTS5 without filtering.
-SQLite handles punctuation/emoji suppression at the FTS5 level if needed.
+All non-whitespace token kinds are forwarded to SQLite FTS5 without stopword filtering.
 
-| `TokenKind`              | Forwarded? |
-|--------------------------|-----------|
-| `Thai`                   | ✓ |
-| `Latin`                  | ✓ |
-| `Number`                 | ✓ |
-| `Punctuation`            | ✓ |
-| `Emoji`                  | ✓ |
-| `Unknown`                | ✓ |
-| `Named(_)`               | ✓ |
-| `Whitespace`             | — (dropped by `Tokenizer::new()`) |
-
-## v1 Limitations
-
-- **No normalization:** Text is segmented as-is. For Thai text with สระลอย reordering, normalize before insertion: `Tokenizer::new().normalize(text)`.
-- **No synonym expansion:** Synonyms from `FtsTokenizer` are not expanded. Add `FTS5_TOKEN_COLOCATED` calls in v2.
-- **No stopword filtering:** All tokens are indexed. Use SQLite FTS5 `content=` tables or application-level filtering for stopwords.
+| `TokenKind`              | Forwarded? | Notes |
+|--------------------------|-----------|-------|
+| `Thai`                   | ✓ | + synonyms/RTGS as colocated |
+| `Latin`                  | ✓ | |
+| `Number`                 | ✓ | |
+| `Punctuation`            | ✓ | |
+| `Emoji`                  | ✓ | |
+| `Unknown`                | ✓ | trigrams emitted as colocated |
+| `Named(_)`               | ✓ | merged by NE tagger; + RTGS |
+| `Whitespace`             | — | excluded by `segment_for_fts` |
 
 ## Build Commands
 
@@ -146,13 +180,23 @@ cargo build -p kham-sqlite --release
 nm -D target/release/libkham_sqlite.dylib | grep kham   # macOS
 nm -D target/release/libkham_sqlite.so   | grep kham   # Linux
 
-# Quick smoke test with sqlite3 CLI
+# Run criterion benchmarks
+cargo bench -p kham-sqlite
+
+# Quick smoke test
 sqlite3 ':memory:' \
   ".load ./target/release/libkham_sqlite" \
   "CREATE VIRTUAL TABLE t USING fts5(body, tokenize='kham');" \
   "INSERT INTO t VALUES ('กินข้าวกับปลา');" \
-  "SELECT * FROM t WHERE t MATCH 'ปลา';"
+  "SELECT * FROM t WHERE t MATCH 'ปลา';" \
+  "SELECT * FROM t WHERE t MATCH 'kin';"
 ```
+
+## v3 Roadmap
+
+- Accept `synonyms=<path>` argument in `xCreate` to load a custom synonym TSV at table-creation time
+- Optional stopword suppression via `stopwords=on` argument in `xCreate`
+- Expose `ngram_size=N` for custom n-gram configuration on Unknown tokens
 
 ## unsafe policy
 
