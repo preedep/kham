@@ -12,7 +12,8 @@ CLI binary using `clap`. Exposes user-facing runtime flags only — not internal
 | `--normalize` | Normalize text before segmenting |
 | `--kind` | Append token kind: `กิน:Thai` |
 | `--spans` | Append Unicode char span: `กิน:0-3` |
-| `--fts` | Switch to `FtsTokenizer`; print one token per line with tab-separated fields: `text kind=KIND pos=POS ne=NE stop=BOOL` |
+| `--fts` | Switch to `FtsTokenizer`; print one token per line with tab-separated fields: `text kind=KIND pos=POS ne=NE stop=BOOL syn=SYNONYMS` |
+| `--soundex <ALGO>` | Phonetic encoding for `--fts` mode; valid: `lk82`, `udom83`, `metasound`. Emits soundex code into `syn=` field for Thai and Named tokens. No effect without `--fts`. |
 
 Combined `--kind --spans` produces `กิน:Thai:0-3`.
 

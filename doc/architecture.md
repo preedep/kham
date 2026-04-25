@@ -81,8 +81,8 @@ classDiagram
         --
         newmm DAG algorithm
         DP over TCC boundaries
-        min unknowns · max dict words
-        TNC freq · min token count
+        min unknowns · min token count
+        max dict words · TNC freq
     }
 
     class token {
@@ -216,7 +216,7 @@ flowchart TD
     subgraph THAI_PATH["Thai span processing"]
         TCC["tcc::tcc_boundaries()\nTCC boundary positions\n= legal word-break points"]
         DICT["dict::prefixes()\nDATS prefix search\nat each boundary"]
-        DAG["DP over boundary graph\nminimise unknown tokens\nmaximise dict-word count\nTNC frequency score · fewest tokens"]
+        DAG["DP over boundary graph\nminimise unknown tokens\nminimise token count (compound-first)\nmaximise dict-word count · TNC frequency"]
     end
 
     MERGE(["Vec&lt;Token&lt;'_&gt;&gt;\nzero-copy &str slices"])
@@ -240,6 +240,7 @@ flowchart LR
         C5(["pos 21\n end"])
     end
 
+    C0 ==>|"กินข้าว ✓ dict"| C5
     C0 -->|"กิน ✓ dict"| C2
     C0 -.->|"กิ  unknown"| C1
     C1 -.->|"น   unknown"| C2
@@ -247,7 +248,7 @@ flowchart LR
     C2 -.->|"ข้  unknown"| C3
     C3 -.->|"าว  unknown"| C4
 
-    BEST["DP picks bold path:\nกิน · ข้าว\n= 2 dict words"]
+    BEST["DP picks bold path:\nกินข้าว (1 token)\nfewer tokens beats\nกิน·ข้าว (2 tokens)"]
     C5 --- BEST
 ```
 

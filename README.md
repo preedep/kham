@@ -14,17 +14,18 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
-- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations
+- **Compound-first DP scoring** — DP scorer prioritises fewer, longer tokens (compound preservation) over splitting into more dict matches, then uses TNC frequency as a tiebreaker; achieves 94.9% sentence-level agreement with PyThaiNLP newmm (F1 0.975)
 - **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration
 - **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
-- **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
+- **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~36,600 entries covering Thai provinces, 246 countries, 17,000+ Wikipedia places/orgs, and 9,000+ person and family names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 - **Number normalization** — Thai digit characters (๐–๙) converted to ASCII synonyms in FTS; spelled-out Thai cardinal words parsed to integers (`หนึ่งร้อย` → `100`); Thai Baht currency text parsed and generated (`parse_thai_baht` / `to_thai_baht_text`)
 - **Abbreviation expansion** — `AbbrevMap` with 118-entry built-in TSV (months, era markers, ranks, agencies); greedy longest-first pre-tokenisation expansion so dot-containing forms (`ก.ค.` → `กรกฎาคม`) are replaced before segmentation; opt-in via `FtsTokenizerBuilder::abbrevs()`
 - **Date parsing** — `parse_thai_date` handles 7 input formats (full month, abbreviated month, era marker, `วันที่` prefix, slash/dash-separated, Thai digits) in both Buddhist Era and Gregorian; formats back to ISO 8601 or Thai text
 - **Sentence segmentation** — `split_sentences` splits Thai and mixed-script text on Thai terminators (`๚` `๛`), Paiyannoi (`ฯ`, excluding `ฯลฯ`), punctuation, and newlines with decimal- and abbreviation-aware dot rules
+- **Phonetic encoding (Soundex)** — four Thai soundex algorithms: lk82 (4-char, 12 groups), udom83 (4-char, 14 groups with finer sibilant/liquid distinctions), MetaSound (per-syllable `[initial][vowel][final]`), and Thai–English cross-language Soundex (Suwanvisat & Prasitjutrakul 1998); FTS integration via `.soundex(SoundexAlgorithm)` builder option emits phonetic codes as synonyms for fuzzy name matching
 
 ## Packages
 
@@ -44,7 +45,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.3"
+kham-core = "0.4"
 ```
 
 ```rust
@@ -204,13 +205,20 @@ kham --sep " / " "สวัสดีชาวโลก"    # สวัสดี 
 kham --kind "ธนาคาร100แห่ง"        # ธนาคาร:Thai|100:Number|แห่ง:Thai
 kham --spans "กินข้าวกับปลา"       # กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
 
-# FTS pipeline — kind, POS, NE, stopword (one token per line)
+# FTS pipeline — kind, POS, NE, stopword, synonyms (one token per line)
 kham --fts "ทักษิณเดินทางไปกรุงเทพ"
-# ทักษิณ  kind=Named  pos=-     ne=Person  stop=false
-# เดิน    kind=Thai   pos=Verb  ne=-       stop=false
-# ทาง     kind=Thai   pos=-     ne=-       stop=true
-# ไป      kind=Thai   pos=Verb  ne=-       stop=true
-# กรุงเทพ kind=Named  pos=-     ne=Place   stop=false
+# ทักษิณ  kind=Person  pos=-     ne=Person  stop=false  syn=-
+# เดิน    kind=Thai    pos=Verb  ne=-       stop=false  syn=-
+# ทาง     kind=Thai    pos=Noun  ne=-       stop=true   syn=-
+# ไป      kind=Thai    pos=Verb  ne=-       stop=true   syn=-
+# กรุงเทพ kind=Place   pos=-     ne=Place   stop=false  syn=-
+
+# FTS + phonetic encoding — syn= shows the lk82 code for Thai/Named tokens
+kham --fts --soundex lk82 "กินข้าวกับปลา" | column -t
+# กิน   kind=Thai  pos=Verb  ne=-  stop=false  syn=1600
+# ข้าว  kind=Thai  pos=Noun  ne=-  stop=false  syn=1900
+# กับ   kind=Thai  pos=Conj  ne=-  stop=true   syn=1400
+# ปลา   kind=Thai  pos=Noun  ne=-  stop=false  syn=4800
 
 echo "กินข้าว" | kham           # stdin
 RUST_LOG=debug kham "กินข้าว"  # per-token trace + timing
@@ -295,6 +303,7 @@ let fts = FtsTokenizer::builder()
     .synonyms(SynonymMap::from_tsv(include_str!("synonyms.tsv")))
     .stopwords(StopwordSet::from_text("ซื้อ\nขาย\n"))
     .romanization(RomanizationMap::builtin()) // adds RTGS to synonyms: กิน → "kin"
+    .soundex(SoundexAlgorithm::Lk82)         // adds lk82 code to synonyms for Thai/Named tokens
     .ngram_size(3)                            // trigrams for Unknown tokens (0 = disable)
     .number_normalize(true)                   // Thai digits → ASCII synonym (default: true)
     .build();
@@ -431,6 +440,50 @@ Multi-token matching merges compound names split by the segmenter:
 
 See [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) for the person-name import decision.
 
+## Phonetic encoding (Soundex)
+
+`kham_core::soundex` provides four Thai phonetic encoding algorithms for fuzzy name matching and spell-correction:
+
+```rust
+use kham_core::soundex::{soundex, sounds_like, SoundexAlgorithm};
+use kham_core::soundex::{lk82, udom83, metasound};
+use kham_core::soundex::{thai_english_soundex, sounds_like_cross_lang};
+
+// lk82 — 4-char code, 12 consonant groups (most widely used)
+assert_eq!(lk82("กาน"), lk82("ขาน")); // ก and ข in the same group → "1600"
+assert_eq!(lk82("กาน"), "1600");
+
+// udom83 — finer sibilant/liquid distinctions
+assert_ne!(udom83("ลาน"), udom83("ราน")); // ล and ร are split in udom83
+assert_ne!(udom83("สาน"), udom83("ชาน")); // sibilant ≠ affricate
+
+// MetaSound — 3 chars per syllable: [initial][vowel][final]
+assert_eq!(metasound("กาน"), "112"); // initial=ก(1) vowel=า(1) final=น(2)
+assert_ne!(metasound("กาน"), metasound("กาม")); // different final
+
+// Unified API
+assert!(sounds_like("กาน", "คาน", SoundexAlgorithm::Lk82));
+
+// Thai–English cross-language (Suwanvisat & Prasitjutrakul 1998)
+// — encodes Thai and English to a shared code space without a romanizer
+assert_eq!(thai_english_soundex("Robert"), thai_english_soundex("Rupert"));
+// Thai transliteration and English source share a common prefix
+let en = thai_english_soundex("McDonald");
+let th = thai_english_soundex("แมคโดนัลด์");
+assert_eq!(&en[..3], &th[..3]); // "523"
+```
+
+FTS integration — emit the soundex code as a synonym alongside RTGS romanization:
+
+```rust
+use kham_core::soundex::SoundexAlgorithm;
+
+let fts = FtsTokenizer::builder()
+    .soundex(SoundexAlgorithm::Lk82) // adds lk82 code to FtsToken::synonyms
+    .build();
+// Searching the lk82 code matches all words in the same phonetic group
+```
+
 ## Building
 
 ```bash
@@ -439,6 +492,8 @@ cargo test --release                 # all tests
 cargo test -p kham-core --release    # core only
 cargo bench -p kham-core             # core criterion benchmarks
 cargo bench -p kham-sqlite           # SQLite FTS5 criterion benchmarks
+cargo run -p kham-bench-accuracy     # word-boundary P/R/F1 accuracy benchmark
+cargo run -p kham-bench-accuracy -- --threshold 0.95  # exit 1 if F1 < threshold
 
 # Bindings
 wasm-pack build kham-wasm --target web
@@ -476,10 +531,13 @@ Prerequisites per target:
 
 | Document | Contents |
 |---|---|
+| [doc/roadmap.md](doc/roadmap.md) | Release history, pending action checklist, PyThaiNLP corpus import plan |
 | [doc/architecture.md](doc/architecture.md) | Crate graph, pipeline flowcharts, module responsibilities (Mermaid) |
 | [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL and SQLite FTS5 benchmarks |
 | [doc/dict-format.md](doc/dict-format.md) | `dict.bin` binary format, DARTS lifecycle, data sources |
 | [doc/adr-001-ne-person-name-import-strategy.md](doc/adr-001-ne-person-name-import-strategy.md) | Why person names are filtered against `words_th.txt` |
+| [doc/adr-002-syllables-corpus-import-decision.md](doc/adr-002-syllables-corpus-import-decision.md) | Why syllables_th.txt syllables and abbreviations are not imported |
+| [doc/adr-003-orchid-pos-tag-mapping.md](doc/adr-003-orchid-pos-tag-mapping.md) | ORCHID 44-tag → kham-core 13-category POS mapping |
 
 ## License
 

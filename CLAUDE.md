@@ -13,6 +13,7 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 | `kham-cli/` | CLI binary using clap. → [kham-cli/CLAUDE.md](kham-cli/CLAUDE.md) |
 | `kham-pg/` | PostgreSQL text-search parser extension (`cdylib`). → [kham-pg/CLAUDE.md](kham-pg/CLAUDE.md) |
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
+| `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
 
 ## Commands
 
@@ -24,8 +25,17 @@ cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
-cargo run -p kham-cli -- "ข้อความ"         # run CLI
-cargo run -p kham-cli -- --fts "ข้อความ"   # FTS mode: kind/POS/NE/stopword per token
+cargo run -p kham-cli -- "ข้อความ"                         # run CLI
+cargo run -p kham-cli -- --fts "ข้อความ"                   # FTS mode: kind/POS/NE/stop/syn per token
+cargo run -p kham-cli -- --fts --soundex lk82 "ข้อความ"    # FTS + lk82 soundex code in syn= field
+cargo run -p kham-bench-accuracy            # word-boundary P/R/F1 against testdata/
+cargo run -p kham-bench-accuracy -- --threshold 0.95  # CI gate: exit 1 if F1 < 0.95
+cargo run -p kham-bench-accuracy -- --verbose         # show each failing case
+
+# PyThaiNLP comparison (requires: pip install pythainlp)
+python scripts/compare_pythainlp.py                        # diff kham vs PyThaiNLP newmm
+python scripts/compare_pythainlp.py --export-testdata      # disagreements in testdata format
+python scripts/compare_pythainlp.py --export-testdata --agreed  # agreed cases (high confidence)
 
 # Bindings
 wasm-pack build kham-wasm --target web
@@ -105,3 +115,8 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 | ADR | Title |
 |-----|-------|
 | [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) | NE Person Name Import Strategy — Dictionary-Filter Approach |
+| [ADR-002](doc/adr-002-syllables-corpus-import-decision.md) | syllables_th.txt Import Decision — Syllables and Abbreviations Excluded |
+| [ADR-003](doc/adr-003-orchid-pos-tag-mapping.md) | ORCHID POS Tag Mapping to kham-core 13-Category Scheme |
+| [ADR-004](doc/adr-004-family-names-import.md) | Family Names Import and License Correction (CC-BY-SA-4.0) |
+| [ADR-005](doc/adr-005-frequency-corpus-merge.md) | Frequency Corpus Merge — TTC Included, Phupha Excluded |
+| [ADR-006](doc/adr-006-wikipedia-ne-import.md) | Wikipedia Thai Titles — NE PLACE/ORG Import |

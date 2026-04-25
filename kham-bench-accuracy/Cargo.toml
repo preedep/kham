@@ -1,0 +1,17 @@
+[package]
+name = "kham-bench-accuracy"
+description = "Word-boundary precision/recall/F1 benchmark for kham-core segmenter"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "kham-bench-accuracy"
+path = "src/main.rs"
+
+[dependencies]
+kham-core = { workspace = true }
+clap = { version = "4", features = ["derive"] }

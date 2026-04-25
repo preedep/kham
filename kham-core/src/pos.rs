@@ -51,7 +51,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
-static BUILTIN_POS: &str = include_str!("../data/pos_th.tsv");
+static BUILTIN_POS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/pos_th.bin"));
 
 /// Part-of-speech category for a Thai word.
 ///
@@ -157,7 +157,7 @@ pub struct PosTagger(BTreeMap<String, PosTag>);
 impl PosTagger {
     /// Load the built-in POS table (hand-curated, ~200 common Thai words).
     pub fn builtin() -> Self {
-        Self::from_tsv(BUILTIN_POS)
+        Self::from_tsv(&crate::decompress_builtin(BUILTIN_POS))
     }
 
     /// Parse a tab-separated POS table.

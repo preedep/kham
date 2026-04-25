@@ -1,8 +1,10 @@
 # ADR-001: NE Person Name Import Strategy — Dictionary-Filter Approach
 
 **Date:** 2026-04-23  
-**Status:** Accepted  
+**Status:** Accepted (license corrected by ADR-004)  
 **Deciders:** @preedep
+
+> **License correction (2026-04-25):** This ADR originally stated the person name corpora were Apache-2.0. The authoritative source (`pythainlp/corpus/corpus_license.md`) confirms the actual license is **CC-BY-SA-4.0** (thai-names-corpus by Korkeat Wannapat). Attribution headers in `ne_th.tsv` have been corrected. See ADR-004.
 
 ---
 
@@ -115,5 +117,7 @@ false-positive risk is low (they are rare/modern names with no established commo
 ## References
 
 - PyThaiNLP corpus: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
-- `words_th.txt` source: PyThaiNLP Apache-2.0 (`kham-core/data/words_th.txt`)
+- thai-names-corpus: <https://github.com/korkeatw/thai-names-corpus/> (CC-BY-SA-4.0)
+- `words_th.txt` source: PyThaiNLP CC0-1.0 (`kham-core/data/words_th.txt`)
 - Multi-token NE implementation: `kham-core/src/ne.rs` — `NeTagger::tag_tokens`
+- ADR-004: family names import and full license correction

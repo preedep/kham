@@ -8,7 +8,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
-static BUILTIN_FREQ_DATA: &str = include_str!("../data/tnc_freq.txt");
+static BUILTIN_FREQ_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tnc_freq.bin"));
 
 /// A word→frequency lookup table backed by the Thai National Corpus (TNC).
 ///
@@ -41,7 +41,7 @@ impl FreqMap {
     ///
     /// [`Tokenizer`]: crate::Tokenizer
     pub fn builtin() -> Self {
-        Self::from_tsv(BUILTIN_FREQ_DATA)
+        Self::from_tsv(&crate::decompress_builtin(BUILTIN_FREQ_DATA))
     }
 
     /// Look up a word's frequency; returns 0 if not found.
@@ -165,19 +165,19 @@ mod tests {
     // ── freq influences segmentation (integration) ────────────────────────────
 
     #[test]
-    fn freq_breaks_tie_toward_common_segmentation() {
+    fn fewer_tokens_preferred_over_split_components() {
         use crate::Tokenizer;
         use alloc::vec::Vec;
-        // "ตากลม" can be read as "ตา|กลม" (eye + round, both dict words)
-        // or "ตาก|ลม" (to dry + wind, also both dict words).
-        // TNC freq for "ตา" >> "ตาก", so freq scoring should prefer "ตา|กลม".
+        // "ตากลม" is in the dictionary as a compound word (1 token).
+        // Fewer-tokens priority means the compound wins over ตา|กลม or ตาก|ลม (2 tokens each).
+        // This matches PyThaiNLP newmm behaviour.
         let tok = Tokenizer::new();
         let tokens = tok.segment("ตากลม");
         let words: Vec<&str> = tokens.iter().map(|t| t.text).collect();
         assert_eq!(
             words,
-            alloc::vec!["ตา", "กลม"],
-            "freq scoring should prefer 'ตา|กลม' over 'ตาก|ลม' — got {words:?}"
+            alloc::vec!["ตากลม"],
+            "compound word should be preferred over split — got {words:?}"
         );
     }
 }

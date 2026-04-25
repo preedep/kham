@@ -44,7 +44,7 @@ use alloc::vec::Vec;
 
 use crate::token::{NamedEntityKind, Token, TokenKind};
 
-static BUILTIN_NE: &str = include_str!("../data/ne_th.tsv");
+static BUILTIN_NE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/ne_th.bin"));
 
 /// Gazetteer-based named entity tagger.
 ///
@@ -54,7 +54,7 @@ pub struct NeTagger(BTreeMap<String, NamedEntityKind>);
 impl NeTagger {
     /// Load the built-in NE gazetteer (hand-curated Thai NEs).
     pub fn builtin() -> Self {
-        Self::from_tsv(BUILTIN_NE)
+        Self::from_tsv(&crate::decompress_builtin(BUILTIN_NE))
     }
 
     /// Parse a tab-separated NE gazetteer.
