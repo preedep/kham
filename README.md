@@ -21,6 +21,10 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
 - **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
+- **Number normalization** — Thai digit characters (๐–๙) converted to ASCII synonyms in FTS; spelled-out Thai cardinal words parsed to integers (`หนึ่งร้อย` → `100`); Thai Baht currency text parsed and generated (`parse_thai_baht` / `to_thai_baht_text`)
+- **Abbreviation expansion** — `AbbrevMap` with 118-entry built-in TSV (months, era markers, ranks, agencies); greedy longest-first pre-tokenisation expansion so dot-containing forms (`ก.ค.` → `กรกฎาคม`) are replaced before segmentation; opt-in via `FtsTokenizerBuilder::abbrevs()`
+- **Date parsing** — `parse_thai_date` handles 7 input formats (full month, abbreviated month, era marker, `วันที่` prefix, slash/dash-separated, Thai digits) in both Buddhist Era and Gregorian; formats back to ISO 8601 or Thai text
+- **Sentence segmentation** — `split_sentences` splits Thai and mixed-script text on Thai terminators (`๚` `๛`), Paiyannoi (`ฯ`, excluding `ฯลฯ`), punctuation, and newlines with decimal- and abbreviation-aware dot rules
 
 ## Packages
 
@@ -40,7 +44,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.2"
+kham-core = "0.3"
 ```
 
 ```rust
@@ -281,19 +285,129 @@ Builder options:
 
 ```rust
 use kham_core::fts::FtsTokenizer;
+use kham_core::abbrev::AbbrevMap;
 use kham_core::synonym::SynonymMap;
 use kham_core::stopwords::StopwordSet;
 use kham_core::romanizer::RomanizationMap;
 
 let fts = FtsTokenizer::builder()
+    .abbrevs(AbbrevMap::builtin())            // ก.ค. → กรกฎาคม before segmentation
     .synonyms(SynonymMap::from_tsv(include_str!("synonyms.tsv")))
     .stopwords(StopwordSet::from_text("ซื้อ\nขาย\n"))
     .romanization(RomanizationMap::builtin()) // adds RTGS to synonyms: กิน → "kin"
     .ngram_size(3)                            // trigrams for Unknown tokens (0 = disable)
+    .number_normalize(true)                   // Thai digits → ASCII synonym (default: true)
     .build();
 ```
 
 `FtsToken` fields: `text`, `position`, `kind`, `is_stop`, `synonyms`, `trigrams`, `pos`, `ne`.
+
+## Number normalization
+
+`kham-core` provides three number utilities in `kham_core::number`:
+
+```rust
+use kham_core::number::{
+    thai_digits_to_ascii, parse_thai_word, u64_to_thai_word,
+    parse_thai_baht, to_thai_baht_text, BahtAmount,
+};
+
+// Thai digit characters → ASCII
+thai_digits_to_ascii("๑๒๓")              // "123"
+thai_digits_to_ascii("ธนาคาร๑๐๐แห่ง")   // "ธนาคาร100แห่ง"
+
+// Spelled-out Thai number words ↔ integer (fully round-trips)
+parse_thai_word("หนึ่งร้อยยี่สิบสาม")   // Some(123)
+parse_thai_word("สิบล้าน")              // Some(10_000_000)
+u64_to_thai_word(123)                  // "หนึ่งร้อยยี่สิบสาม"
+u64_to_thai_word(10_000_000)           // "สิบล้าน"
+
+// Thai Baht currency text ↔ BahtAmount (fully round-trips)
+parse_thai_baht("หนึ่งร้อยบาทห้าสิบสตางค์")
+// Some(BahtAmount { baht: 100, satang: 50 })
+
+to_thai_baht_text(100, 50)   // "หนึ่งร้อยบาทห้าสิบสตางค์"
+to_thai_baht_text(100, 0)    // "หนึ่งร้อยบาทถ้วน"
+```
+
+In `FtsTokenizer`, number normalization runs automatically: `TokenKind::Number` tokens with Thai digits get their ASCII form added to `synonyms` (so `123` matches `๑๒๓` in search), and Thai number-word tokens get their decimal string added to `synonyms`. Opt out with `.number_normalize(false)`.
+
+## Abbreviation expansion
+
+`kham_core::abbrev::AbbrevMap` expands Thai abbreviations before segmentation so dot-containing patterns are consumed as single units rather than fragmenting at each dot.
+
+```rust
+use kham_core::abbrev::AbbrevMap;
+
+let map = AbbrevMap::builtin();
+
+// Pre-tokenisation: replace abbreviated forms in running text
+assert_eq!(map.expand_text("วันที่5ก.ค.2567"), "วันที่5กรกฎาคม2567");
+assert_eq!(map.expand_text("พ.ศ.2567"),        "พุทธศักราช2567");
+
+// Post-tokenisation: look up a single already-segmented token
+let exps = map.lookup("ดร.").unwrap();
+assert_eq!(exps, &["ดอกเตอร์"]);
+```
+
+The built-in TSV (118 entries) covers all 12 month abbreviations, era markers (`พ.ศ.`, `ค.ศ.`, `ก่อน ค.ศ.`), military ranks, police ranks, government agencies, and Bangkok districts. Ambiguous abbreviations (e.g. `อ.` → อาจารย์ / อำเภอ) return all expansions from `lookup`; `expand_text` uses the primary (first) expansion.
+
+Use with `FtsTokenizer` via `FtsTokenizerBuilder::abbrevs(AbbrevMap::builtin())` — disabled by default.
+
+## Date parsing
+
+`kham_core::date::parse_thai_date` parses Thai date strings in Buddhist Era or Gregorian and formats them back to ISO 8601 or Thai text.
+
+```rust
+use kham_core::date::{parse_thai_date, Era};
+
+// Full month name (Buddhist Era inferred from year ≥ 2300)
+let d = parse_thai_date("5 กรกฎาคม 2567").unwrap();
+assert_eq!(d.day, 5);
+assert_eq!(d.month, 7);
+assert_eq!(d.to_iso8601(), "2024-07-05"); // BE 2567 → CE 2024
+
+// Abbreviated month with era marker
+let d = parse_thai_date("5 ก.ค. พ.ศ. 2567").unwrap();
+assert_eq!(d.to_thai_text(), "5 กรกฎาคม พ.ศ. 2567");
+
+// Thai digits
+let d = parse_thai_date("๕ ก.ค. ๒๕๖๗").unwrap();
+assert_eq!(d.to_iso8601(), "2024-07-05");
+
+// Slash / dash separated
+let d = parse_thai_date("5/7/2567").unwrap();
+assert_eq!(d.era, Era::Buddhist);
+```
+
+Supported formats: full month name, abbreviated month (e.g. `ก.ค.`), explicit era marker (`พ.ศ.` / `ค.ศ.`), `วันที่` prefix, slash-separated, dash-separated, Thai digits. Era is inferred when omitted: year ≥ 2300 → Buddhist Era.
+
+## Sentence segmentation
+
+`kham_core::sentence::split_sentences` splits Thai and mixed-script text into sentences.
+
+```rust
+use kham_core::sentence::split_sentences;
+
+let text = "สวัสดีครับ! วันนี้อากาศดีมาก\nเราไปกินข้าวกันเถอะ";
+let sents = split_sentences(text);
+assert_eq!(sents.len(), 3);
+assert_eq!(sents[0].text, "สวัสดีครับ!");
+assert_eq!(sents[1].text, "วันนี้อากาศดีมาก");
+assert_eq!(sents[2].text, "เราไปกินข้าวกันเถอะ");
+```
+
+Split delimiters and their rules:
+
+| Character | Rule |
+|---|---|
+| `๚` `๛` | Always splits |
+| `ฯ` | Splits unless part of `ฯลฯ` |
+| `\n` | Always splits |
+| `!` `?` | Always splits |
+| `.` | Splits only when followed by whitespace or end-of-string (not in `3.14`, `ก.ค.`, `A.B.C.`) |
+
+Each `Sentence` carries `text: &str`, `span: Range<usize>` (byte offsets), and `char_span: Range<usize>`.
 
 ## Named entity recognition
 

@@ -7,6 +7,7 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 | Module | Purpose |
 |---|---|
 | `normalizer` | Thai text normalization (สระลอย reorder, วรรณยุกต์, NFC) |
+| `number` | Number normalization: Thai digits (๐–๙) → ASCII; spelled-out Thai number words → integer |
 | `pre_tokenizer` | Unicode script classification (Thai / Latin / Number / Emoji / URL) |
 | `tcc` | Thai Character Cluster boundaries (Theeramunkong et al. 2000) |
 | `dict` | Double-Array Trie (DARTS), built-in `words_th.txt` via `include_bytes!` |
@@ -113,6 +114,25 @@ fts.lexemes(text)         -> Vec<String>     // text + synonyms + trigrams — u
 - `ne` only for `TokenKind::Named(k)` — corresponds 1:1 with `kind`
 - NE tagging runs before POS tagging; Named tokens skip POS lookup
 - No `std`-only code — gate FST support behind `#[cfg(feature = "std")]` if ever needed
+
+### `number` — number normalization
+
+```rust
+// Thai digit → ASCII
+thai_digit_to_ascii(c: char) -> Option<char>       // single char; None for non-Thai digits
+thai_digits_to_ascii(text: &str) -> String          // whole string; pass-through if no Thai digits
+is_thai_digit_str(text: &str) -> bool               // true iff all chars are ๐–๙
+
+// Spelled-out Thai number word → integer
+parse_thai_word(text: &str) -> Option<u64>          // None for non-number input or empty
+thai_word_to_decimal(text: &str) -> Option<String>  // convenience: Some("123") or None
+```
+
+**FTS integration** (automatic, opt-out with `.number_normalize(false)`):
+- `TokenKind::Number` tokens containing Thai digits get their ASCII form in `FtsToken::synonyms`.
+- `TokenKind::Thai` tokens recognised as number words get their decimal string in `synonyms`.
+
+Supported range: 0 (`ศูนย์`) through multi-billion values (`u64`). Special forms: `ยี่` (20-prefix), `เอ็ด` (units-1 after สิบ), implied-1 for bare multipliers (`ร้อย` = 100).
 
 ### `pos` — `PosTagger` / `PosTag`
 
