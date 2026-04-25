@@ -316,10 +316,7 @@ fn parse_numeric(s: &str) -> Option<ThaiDate> {
 /// Parses word-based formats like `5 กรกฎาคม 2567` or `วันที่ 5 ก.ค. พ.ศ. 2567`.
 fn parse_word_based(s: &str) -> Option<ThaiDate> {
     // Strip optional วันที่ prefix (14 UTF-8 bytes — 5 chars × 3 bytes + space × 1 byte? No, วันที่ = 4 Thai chars = 12 bytes, plus space)
-    let s = s
-        .strip_prefix("วันที่")
-        .map(|t| t.trim_start())
-        .unwrap_or(s);
+    let s = s.strip_prefix("วันที่").map(|t| t.trim_start()).unwrap_or(s);
 
     // Consume leading digits (day)
     let (day_str, rest) = take_digits(s);
@@ -577,8 +574,7 @@ mod tests {
             ("5 ธ.ค. 2567", 12),
         ];
         for &(input, expected_month) in cases {
-            let d = parse_thai_date(input)
-                .unwrap_or_else(|| panic!("failed to parse: {input}"));
+            let d = parse_thai_date(input).unwrap_or_else(|| panic!("failed to parse: {input}"));
             assert_eq!(d.month, expected_month, "month mismatch for: {input}");
         }
     }
@@ -600,8 +596,7 @@ mod tests {
             ("1 ธันวาคม 2567", 12),
         ];
         for &(input, expected_month) in cases {
-            let d = parse_thai_date(input)
-                .unwrap_or_else(|| panic!("failed to parse: {input}"));
+            let d = parse_thai_date(input).unwrap_or_else(|| panic!("failed to parse: {input}"));
             assert_eq!(d.month, expected_month, "month mismatch for: {input}");
         }
     }
