@@ -19,6 +19,8 @@
 
 extern crate alloc;
 
+pub mod abbrev;
+pub mod date;
 pub mod dict;
 pub mod error;
 pub mod freq;
@@ -31,6 +33,7 @@ pub mod pos;
 pub mod pre_tokenizer;
 pub mod romanizer;
 pub mod segmenter;
+pub mod sentence;
 pub mod stopwords;
 pub mod synonym;
 pub mod tcc;

@@ -27,6 +27,7 @@
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::abbrev::AbbrevMap;
 use crate::ne::NeTagger;
 use crate::ngram::char_ngrams;
 use crate::number::{thai_digits_to_ascii, thai_word_to_decimal};
@@ -69,6 +70,7 @@ pub struct FtsTokenizerBuilder {
     pos_tagger: Option<PosTagger>,
     ne_tagger: Option<NeTagger>,
     romanization: Option<RomanizationMap>,
+    abbrev_map: Option<AbbrevMap>,
     /// `None` means "use default (true)".
     number_normalize: Option<bool>,
 }
@@ -118,6 +120,19 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Attach an abbreviation map for pre-tokenisation expansion.
+    ///
+    /// When set, [`FtsTokenizer::segment_for_fts`] calls
+    /// [`AbbrevMap::expand_text`] on the normalised input before segmentation.
+    /// This replaces abbreviated forms (e.g. `ก.ค.`) with their canonical
+    /// expansions (`กรกฎาคม`) so they are indexed and searchable by full form.
+    ///
+    /// Disabled by default — call this method to opt in.
+    pub fn abbrevs(mut self, m: AbbrevMap) -> Self {
+        self.abbrev_map = Some(m);
+        self
+    }
+
     /// Enable or disable number normalization (default: `true`).
     ///
     /// When enabled:
@@ -145,6 +160,7 @@ impl FtsTokenizerBuilder {
             pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
             ne_tagger: self.ne_tagger.unwrap_or_else(NeTagger::builtin),
             romanization: self.romanization,
+            abbrev_map: self.abbrev_map,
             number_normalize: self.number_normalize.unwrap_or(true),
         }
     }
@@ -172,6 +188,7 @@ pub struct FtsTokenizer {
     pos_tagger: PosTagger,
     ne_tagger: NeTagger,
     romanization: Option<RomanizationMap>,
+    abbrev_map: Option<AbbrevMap>,
     number_normalize: bool,
 }
 
@@ -198,9 +215,15 @@ impl FtsTokenizer {
     /// [`index_tokens`]: FtsTokenizer::index_tokens
     pub fn segment_for_fts(&self, text: &str) -> Vec<FtsToken> {
         let normalized = self.tokenizer.normalize(text);
+        // Expand abbreviations (e.g. ก.ค. → กรกฎาคม) before segmentation so
+        // dot-containing patterns are replaced as single units.
+        let expanded = match self.abbrev_map.as_ref() {
+            Some(am) => am.expand_text(&normalized),
+            None => normalized,
+        };
         let raw_tokens = self
             .ne_tagger
-            .tag_tokens(self.tokenizer.segment(&normalized), &normalized);
+            .tag_tokens(self.tokenizer.segment(&expanded), &expanded);
 
         let mut result = Vec::with_capacity(raw_tokens.len());
         let mut position = 0usize;
@@ -633,6 +656,66 @@ mod tests {
         assert!(
             num.unwrap().synonyms.contains(&String::from("100")),
             "expected ASCII synonym '100' for ๑๐๐"
+        );
+    }
+
+    // ── abbreviation expansion ────────────────────────────────────────────────
+
+    #[test]
+    fn abbrev_map_expands_before_segmentation() {
+        use crate::abbrev::AbbrevMap;
+        let fts = FtsTokenizer::builder()
+            .abbrevs(AbbrevMap::builtin())
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        // ก.ค. → กรกฎาคม before segmentation. The segmenter may split the
+        // expansion further (กรกฎา + คม) — what matters is that dots are gone
+        // and the Thai characters of กรกฎาคม are present.
+        let tokens = fts.segment_for_fts("ก.ค.");
+        let texts: alloc::vec::Vec<&str> = tokens.iter().map(|t| t.text.as_str()).collect();
+        let joined: String = texts.concat();
+        assert!(
+            joined.contains("กรกฎา") || joined.contains("กรกฎาคม"),
+            "expected กรกฎา(คม) characters after abbrev expansion, got: {texts:?}"
+        );
+        assert!(
+            !texts.contains(&"."),
+            "dots should be consumed by abbrev expansion, got: {texts:?}"
+        );
+    }
+
+    #[test]
+    fn abbrev_expansion_disabled_by_default() {
+        // FtsTokenizer::new() has no abbrev_map — ก.ค. stays as individual tokens.
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("ก.ค.");
+        let texts: alloc::vec::Vec<&str> = tokens.iter().map(|t| t.text.as_str()).collect();
+        // Without expansion the dot(s) must still be present as punctuation tokens.
+        assert!(
+            texts.contains(&"."),
+            "without abbrev expansion, dots should remain as tokens, got: {texts:?}"
+        );
+    }
+
+    #[test]
+    fn abbrev_expansion_date_sentence() {
+        use crate::abbrev::AbbrevMap;
+        let fts = FtsTokenizer::builder()
+            .abbrevs(AbbrevMap::builtin())
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        // พ.ศ. → พุทธศักราช; the segmenter may split it further — verify the
+        // chars are present and dots are gone.
+        let tokens = fts.segment_for_fts("พ.ศ.2567");
+        let texts: alloc::vec::Vec<&str> = tokens.iter().map(|t| t.text.as_str()).collect();
+        let joined: String = texts.concat();
+        assert!(
+            joined.contains("พุทธ") || joined.contains("พุทธศักราช"),
+            "expected พุทธ(ศักราช) chars after expanding พ.ศ., got: {texts:?}"
+        );
+        assert!(
+            !texts.contains(&"."),
+            "dots should be consumed by expansion, got: {texts:?}"
         );
     }
 }
