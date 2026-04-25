@@ -29,6 +29,7 @@ use alloc::vec::Vec;
 
 use crate::ne::NeTagger;
 use crate::ngram::char_ngrams;
+use crate::number::{thai_digits_to_ascii, thai_word_to_decimal};
 use crate::pos::{PosTag, PosTagger};
 use crate::romanizer::RomanizationMap;
 use crate::stopwords::StopwordSet;
@@ -68,6 +69,8 @@ pub struct FtsTokenizerBuilder {
     pos_tagger: Option<PosTagger>,
     ne_tagger: Option<NeTagger>,
     romanization: Option<RomanizationMap>,
+    /// `None` means "use default (true)".
+    number_normalize: Option<bool>,
 }
 
 impl FtsTokenizerBuilder {
@@ -115,6 +118,23 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Enable or disable number normalization (default: `true`).
+    ///
+    /// When enabled:
+    /// - [`TokenKind::Number`] tokens that contain Thai digits (๐–๙) get the
+    ///   ASCII digit string added to their [`FtsToken::synonyms`]
+    ///   (e.g. `๑๒๓` → synonym `"123"`).
+    /// - [`TokenKind::Thai`] tokens that are recognised Thai cardinal number
+    ///   words get their decimal value added to `synonyms`
+    ///   (e.g. `หนึ่งร้อย` → synonym `"100"`).
+    ///
+    /// This lets queries using either script match documents written in the
+    /// other. Set to `false` to opt out.
+    pub fn number_normalize(mut self, v: bool) -> Self {
+        self.number_normalize = Some(v);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -125,6 +145,7 @@ impl FtsTokenizerBuilder {
             pos_tagger: self.pos_tagger.unwrap_or_else(PosTagger::builtin),
             ne_tagger: self.ne_tagger.unwrap_or_else(NeTagger::builtin),
             romanization: self.romanization,
+            number_normalize: self.number_normalize.unwrap_or(true),
         }
     }
 }
@@ -151,6 +172,7 @@ pub struct FtsTokenizer {
     pos_tagger: PosTagger,
     ne_tagger: NeTagger,
     romanization: Option<RomanizationMap>,
+    number_normalize: bool,
 }
 
 impl FtsTokenizer {
@@ -200,6 +222,24 @@ impl FtsTokenizer {
                     if let Some(rtgs) = rom.romanize(token.text) {
                         synonyms.push(String::from(rtgs));
                     }
+                }
+            }
+            if self.number_normalize {
+                match token.kind {
+                    // Number token with Thai digits → add ASCII form as synonym.
+                    TokenKind::Number => {
+                        let ascii = thai_digits_to_ascii(token.text);
+                        if ascii != token.text {
+                            synonyms.push(ascii);
+                        }
+                    }
+                    // Thai token that is a recognised number word → add decimal string.
+                    TokenKind::Thai => {
+                        if let Some(decimal) = thai_word_to_decimal(token.text) {
+                            synonyms.push(decimal);
+                        }
+                    }
+                    _ => {}
                 }
             }
             let trigrams = if token.kind == TokenKind::Unknown && self.ngram_size > 0 {
@@ -517,5 +557,82 @@ mod tests {
         let a = FtsTokenizer::new().lexemes("กินข้าว");
         let b = FtsTokenizer::builder().build().lexemes("กินข้าว");
         assert_eq!(a, b);
+    }
+
+    // ── number normalization ──────────────────────────────────────────────────
+
+    #[test]
+    fn thai_digit_token_gets_ascii_synonym() {
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("๑๒๓");
+        let num = tokens.iter().find(|t| t.kind == TokenKind::Number);
+        assert!(num.is_some(), "expected a Number token");
+        let t = num.unwrap();
+        assert!(
+            t.synonyms.contains(&String::from("123")),
+            "Thai digit token should have ASCII synonym, got {:?}",
+            t.synonyms
+        );
+    }
+
+    #[test]
+    fn ascii_digit_token_has_no_extra_synonym() {
+        // ASCII digits need no conversion — synonyms should be empty (no map, no rom).
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("123");
+        let num = tokens.iter().find(|t| t.kind == TokenKind::Number);
+        assert!(num.is_some(), "expected a Number token");
+        assert!(
+            !num.unwrap().synonyms.contains(&String::from("123")),
+            "ASCII digit token should not duplicate itself as a synonym"
+        );
+    }
+
+    #[test]
+    fn thai_number_word_gets_decimal_synonym() {
+        // หนึ่งร้อย may segment as a single Thai token or multiple tokens depending
+        // on the dictionary. We check that at least one token carries "100" in synonyms.
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("หนึ่งร้อย");
+        let has_hundred = tokens
+            .iter()
+            .any(|t| t.synonyms.contains(&String::from("100")));
+        // หนึ่ง alone = Some(1), ร้อย alone = Some(100) — at least ร้อย should match.
+        assert!(
+            has_hundred,
+            "expected a token with decimal synonym '100', tokens: {:?}",
+            tokens
+                .iter()
+                .map(|t| (&t.text, &t.synonyms))
+                .collect::<alloc::vec::Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn number_normalize_false_disables_conversion() {
+        let fts = FtsTokenizer::builder()
+            .number_normalize(false)
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        let tokens = fts.segment_for_fts("๑๒๓");
+        let num = tokens.iter().find(|t| t.kind == TokenKind::Number);
+        assert!(num.is_some());
+        assert!(
+            !num.unwrap().synonyms.contains(&String::from("123")),
+            "number_normalize=false should suppress ASCII synonym"
+        );
+    }
+
+    #[test]
+    fn mixed_thai_digit_in_context() {
+        // "ธนาคาร๑๐๐แห่ง" — the ๑๐๐ part should be a Number token with synonym "100"
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("ธนาคาร๑๐๐แห่ง");
+        let num = tokens.iter().find(|t| t.kind == TokenKind::Number);
+        assert!(num.is_some(), "expected Number token in mixed string");
+        assert!(
+            num.unwrap().synonyms.contains(&String::from("100")),
+            "expected ASCII synonym '100' for ๑๐๐"
+        );
     }
 }

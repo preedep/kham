@@ -21,6 +21,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
 - **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
+- **Number normalization** — Thai digit characters (๐–๙) converted to ASCII synonyms in FTS; spelled-out Thai cardinal words parsed to integers (`หนึ่งร้อย` → `100`); Thai Baht currency text parsed and generated (`parse_thai_baht` / `to_thai_baht_text`)
 
 ## Packages
 
@@ -290,10 +291,41 @@ let fts = FtsTokenizer::builder()
     .stopwords(StopwordSet::from_text("ซื้อ\nขาย\n"))
     .romanization(RomanizationMap::builtin()) // adds RTGS to synonyms: กิน → "kin"
     .ngram_size(3)                            // trigrams for Unknown tokens (0 = disable)
+    .number_normalize(true)                   // Thai digits → ASCII synonym (default: true)
     .build();
 ```
 
 `FtsToken` fields: `text`, `position`, `kind`, `is_stop`, `synonyms`, `trigrams`, `pos`, `ne`.
+
+## Number normalization
+
+`kham-core` provides three number utilities in `kham_core::number`:
+
+```rust
+use kham_core::number::{
+    thai_digits_to_ascii, parse_thai_word, u64_to_thai_word,
+    parse_thai_baht, to_thai_baht_text, BahtAmount,
+};
+
+// Thai digit characters → ASCII
+thai_digits_to_ascii("๑๒๓")              // "123"
+thai_digits_to_ascii("ธนาคาร๑๐๐แห่ง")   // "ธนาคาร100แห่ง"
+
+// Spelled-out Thai number words ↔ integer (fully round-trips)
+parse_thai_word("หนึ่งร้อยยี่สิบสาม")   // Some(123)
+parse_thai_word("สิบล้าน")              // Some(10_000_000)
+u64_to_thai_word(123)                  // "หนึ่งร้อยยี่สิบสาม"
+u64_to_thai_word(10_000_000)           // "สิบล้าน"
+
+// Thai Baht currency text ↔ BahtAmount (fully round-trips)
+parse_thai_baht("หนึ่งร้อยบาทห้าสิบสตางค์")
+// Some(BahtAmount { baht: 100, satang: 50 })
+
+to_thai_baht_text(100, 50)   // "หนึ่งร้อยบาทห้าสิบสตางค์"
+to_thai_baht_text(100, 0)    // "หนึ่งร้อยบาทถ้วน"
+```
+
+In `FtsTokenizer`, number normalization runs automatically: `TokenKind::Number` tokens with Thai digits get their ASCII form added to `synonyms` (so `123` matches `๑๒๓` in search), and Thai number-word tokens get their decimal string added to `synonyms`. Opt out with `.number_normalize(false)`.
 
 ## Named entity recognition
 

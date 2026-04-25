@@ -26,6 +26,7 @@ pub mod fts;
 pub mod ne;
 pub mod ngram;
 pub mod normalizer;
+pub mod number;
 pub mod pos;
 pub mod pre_tokenizer;
 pub mod romanizer;
