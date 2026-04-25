@@ -1,0 +1,70 @@
+# kham Roadmap & Action Checklist
+
+Tracks pending improvements, data imports, and feature work post-v0.3.0.
+
+## Released
+
+| Version | Highlights |
+|---|---|
+| v0.1.0 | Core segmenter, DARTS dict, TCC, pre-tokenizer, CLI, Python/WASM/C bindings |
+| v0.1.2 | PostgreSQL FTS5 extension (`kham-pg`), stopwords, synonyms, ngrams, `FtsTokenizer` |
+| v0.1.3 | pg_regress suite (67 tests across 4 suites) |
+| v0.2.0 | POS tagging, NER, RTGS romanization, number normalization, SQLite FTS5 (`kham-sqlite`) |
+| v0.3.0 | Abbreviation expansion (`AbbrevMap`), Thai date parsing, sentence segmentation |
+
+---
+
+## Active priorities
+
+- [ ] **PGXN upload** — upload `kham_pg-0.3.0.zip` once pgxn.org account is active
+- [ ] **`ts_headline` support** — HEADLINE callback in `kham-pg/src/shim.c` + `lib.rs`
+
+---
+
+## PyThaiNLP corpus imports
+
+Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
+
+### CC0 — no attribution required (embed freely)
+
+- [ ] **`orst_words_th.txt`** → merge into `kham-core/data/words_th.txt`
+  - Official Royal Thai Institution word list; expands the segmentation dictionary
+- [ ] **`negations_th.txt`** → append to `kham-core/data/stopwords_th.txt`
+  - Thai negation words (ไม่, มิ, etc.)
+- [ ] **`etcc.txt`** → review for TCC boundary improvements in `src/tcc.rs`
+  - Enhanced Thai Character Clusters; may refine character cluster detection
+- [ ] **`syllables_th.txt`** → review for TCC / dict improvements
+  - Thai phonetic syllables; could improve sub-word segmentation accuracy
+- [ ] **`ttc_freq.txt`** → optional second frequency source alongside `tnc_freq.txt`
+  - Thai Textbook Corpus word frequencies
+- [ ] **`phupha_word_freqs.txt`** → optional third frequency source
+  - Additional word frequency corpus
+
+### CC-BY-4.0 — attribution required in docs/license headers
+
+- [ ] **`th_en_transliteration_v1.4.tsv`** → expand `kham-core/data/romanization_th.tsv`
+  - ~10,000 Thai→English transliteration pairs; supplement existing RTGS table
+  - Add to attribution: *PyThaiNLP, CC-BY-4.0*
+- [ ] **`pos_orchid_unigram.json`** / **`pos_ud_unigram-v0.2.json`** → grow `kham-core/data/pos_th.tsv`
+  - Extract word→tag pairs; map ORCHID's 40+ tags to kham-core's 13 categories
+  - Add to attribution: *PyThaiNLP, CC-BY-4.0*
+
+### CC-BY-SA-4.0 — share-alike; keep in separate optional TSV files
+
+- [ ] **`person_names_male_th.txt`** + **`person_names_female_th.txt`** → expand Person entries in `kham-core/data/ne_th.tsv`
+  - ~2,000 male + ~2,000 female Thai given names
+  - Gate behind `feature = "extended-ne"`; add CC-BY-SA attribution header to TSV
+- [ ] **`family_names_th.txt`** → expand Person entries in `ne_th.tsv`
+  - ~4,000 Thai family names; same feature-gate approach
+- [ ] **`wikipedia_titles_th.txt`** → selective import for NER Place/Org gazetteer
+  - ~1M titles; filter to proper nouns only before import
+  - CC-BY-SA share-alike applies to derived TSV file
+
+---
+
+## Deferred / low priority
+
+- [ ] **kham-pg token type 7 for Named** — change `Named(_) => 1` → `Named(_) => 7` in `lib.rs`; add `named` lextype in `shim.c`; requires Docker pg_regress update
+- [ ] **kham-sqlite v2** — synonym expansion via `FTS5_TOKEN_COLOCATED`, normalization, stopword filtering
+- [ ] **Spelling correction** — edit-distance based; requires significant ML or DP work
+- [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely

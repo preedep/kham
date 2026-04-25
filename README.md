@@ -476,6 +476,7 @@ Prerequisites per target:
 
 | Document | Contents |
 |---|---|
+| [doc/roadmap.md](doc/roadmap.md) | Release history, pending action checklist, PyThaiNLP corpus import plan |
 | [doc/architecture.md](doc/architecture.md) | Crate graph, pipeline flowcharts, module responsibilities (Mermaid) |
 | [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL and SQLite FTS5 benchmarks |
 | [doc/dict-format.md](doc/dict-format.md) | `dict.bin` binary format, DARTS lifecycle, data sources |
