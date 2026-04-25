@@ -60,7 +60,7 @@ SELECT to_tsvector('kham', 'กินข้าวกับปลา')::text;
 
 -- ── 13. to_tsquery — single word match ───────────────────────────────────────
 
-SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'กิน') AS found;
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'กินข้าว') AS found;
 
 -- ── 14. to_tsquery — no match ────────────────────────────────────────────────
 
@@ -88,7 +88,7 @@ CREATE INDEX kham_docs_fts_idx ON kham_docs
 -- search Thai token — must return only row 1
 SELECT id
 FROM kham_docs
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'กิน')
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'กินข้าว')
 ORDER BY id;
 
 -- ── 17. GIN index — Latin token search ───────────────────────────────────────

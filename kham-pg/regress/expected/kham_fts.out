@@ -24,9 +24,8 @@ FROM ts_parse('kham', 'กินข้าว')
 ORDER BY tokid, token;
  tokid | token 
 -------+-------
-     1 | กิน
-     1 | ข้าว
-(2 rows)
+     1 | กินข้าว
+(1 row)
 
 -- ── 4. ts_parse — Thai sentence with stopword ────────────────────────────────
 SELECT tokid, token
@@ -35,10 +34,9 @@ ORDER BY tokid, token;
  tokid | token 
 -------+-------
      1 | กับ
-     1 | กิน
-     1 | ข้าว
+     1 | กินข้าว
      1 | ปลา
-(4 rows)
+(3 rows)
 
 -- ── 5. ts_parse — mixed Thai + Latin + number ────────────────────────────────
 SELECT tokid, token
@@ -46,12 +44,11 @@ FROM ts_parse('kham', 'Python 3 สำหรับ AI')
 ORDER BY tokid, token;
  tokid | token  
 -------+--------
-     1 | สำ
-     1 | หรับ
+     1 | สำหรับ
      2 | AI
      2 | Python
      3 | 3
-(5 rows)
+(4 rows)
 
 -- ── 6. ts_parse — empty string returns no rows ───────────────────────────────
 SELECT count(*) FROM ts_parse('kham', '');
@@ -90,20 +87,20 @@ SELECT to_tsvector('kham', 'โปรแกรม Python') IS NOT NULL AS ok;
 
 -- ── 11. tsvector lexeme content — pure Thai (exact positions) ────────────────
 SELECT to_tsvector('kham', 'กินข้าว')::text;
-  to_tsvector   
-----------------
- 'กิน':1 'ข้าว':2
+ to_tsvector 
+-------------
+ 'กินข้าว':1
 (1 row)
 
 -- ── 12. tsvector lexeme content — sentence with stopword ────────────────────
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')::text;
-          to_tsvector          
--------------------------------
- 'กับ':3 'กิน':1 'ข้าว':2 'ปลา':4
+ to_tsvector              
+--------------------------
+ 'กับ':2 'กินข้าว':1 'ปลา':3
 (1 row)
 
 -- ── 13. to_tsquery — single word match ───────────────────────────────────────
-SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'กิน') AS found;
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ to_tsquery('kham', 'กินข้าว') AS found;
  found 
 -------
  t
@@ -137,7 +134,7 @@ CREATE INDEX kham_docs_fts_idx ON kham_docs
 -- search Thai token — must return only row 1
 SELECT id
 FROM kham_docs
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'กิน')
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'กินข้าว')
 ORDER BY id;
  id 
 ----

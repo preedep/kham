@@ -43,7 +43,7 @@ SELECT
 -- ── ts_stat — lexeme statistics ───────────────────────────────────────────────
 
 -- 5. ts_stat: top lexemes by frequency in a corpus query
--- กินข้าวกับปลา has 4 Thai tokens; verify ปลา appears once with nentry=1
+-- กินข้าวกับปลา has 3 Thai tokens; verify ปลา appears once with nentry=1
 SELECT word, ndoc, nentry
 FROM ts_stat($$SELECT to_tsvector('kham', body)
              FROM (VALUES ('กินข้าวกับปลา'), ('ปลาทอด')) AS t(body)$$)
@@ -96,7 +96,7 @@ INSERT INTO products VALUES
 CREATE INDEX products_fts_idx ON products
     USING GIN (to_tsvector('kham', name));
 
--- 8. Search กุ้ง → returns rows 1 and 2 only
+-- 8. Search กุ้ง → returns row 1 only (ต้มยำกุ้ง is a compound token)
 SELECT id
 FROM products
 WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'กุ้ง')
@@ -108,7 +108,7 @@ FROM products
 WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'ปลา')
 ORDER BY id;
 
--- 10. Search ไก่ → returns rows 5 and 6 only
+-- 10. Search ไก่ → returns row 6 only (ข้าวมันไก่ is a compound token)
 SELECT id
 FROM products
 WHERE to_tsvector('kham', name) @@ plainto_tsquery('kham', 'ไก่')

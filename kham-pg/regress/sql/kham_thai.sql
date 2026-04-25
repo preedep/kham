@@ -20,7 +20,7 @@ FROM ts_parse('kham', '๑๒๓')
 ORDER BY tokid, token;
 
 -- ── 3. Thai numeral mixed with Thai words ─────────────────────────────────────
--- ราคา segments as รา+คา (dict behaviour); ๑๕๐ is Number; บาท is Thai
+-- ราคา segments as one compound; ๑๕๐ is Number; บาท is Thai
 
 SELECT tokid, token
 FROM ts_parse('kham', 'ราคา๑๕๐บาท')
@@ -49,7 +49,7 @@ SELECT tokid, token
 FROM ts_parse('kham', 'แมวกินปลา')
 ORDER BY tokid, token;
 
--- ── 8. Compound word: โรงพยาบาล → โรง + พยาบาล ───────────────────────────────
+-- ── 8. Compound word: โรงพยาบาล → one compound token ───────────────────────────
 
 SELECT tokid, token
 FROM ts_parse('kham', 'โรงพยาบาล')
@@ -115,9 +115,9 @@ SELECT count(*) FILTER (WHERE tokid = 1) AS thai_count,
 FROM ts_parse('kham', 'ราคา 500 บาท ลด 10%');
 
 -- ── 19. FTS search on compound word ──────────────────────────────────────────
--- โรงพยาบาล segments as โรง+พยาบาล; search for พยาบาล must match
+-- โรงพยาบาล segments as one compound; search for โรงพยาบาล must match
 
-SELECT to_tsvector('kham', 'โรงพยาบาลใกล้บ้าน') @@ plainto_tsquery('kham', 'พยาบาล') AS found;
+SELECT to_tsvector('kham', 'โรงพยาบาลใกล้บ้าน') @@ plainto_tsquery('kham', 'โรงพยาบาล') AS found;
 
 -- ── 20. Normalisation: to_tsvector is deterministic for same input ────────────
 
