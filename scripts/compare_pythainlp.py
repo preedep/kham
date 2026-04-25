@@ -38,6 +38,30 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+# ── Known PyThaiNLP errors ────────────────────────────────────────────────────
+#
+# Cases where kham is linguistically correct but PyThaiNLP newmm disagrees.
+# Root cause: both paths tie on token count and dict-word count; the winner is
+# decided by TNC frequency score, and PyThaiNLP's frequency table differs from
+# kham's, tipping the tie the wrong way.
+#
+# Verified 2026-04-25 via TNC frequency lookup.
+
+KNOWN_PYTHAINLP_ERRORS: dict[str, str] = {
+    "ซื้อหนังสือสามเล่มจากร้าน": (
+        "PyThaiNLP: จา|กร้าน — kham: จาก|ร้าน. "
+        "Both paths are 2 tokens, 2 dict words; TNC freq decides. "
+        "จาก=174,522 + ร้าน=13,560 vs จา=2,288 + กร้าน=142. "
+        "kham is correct; จา (archaic vow) + กร้าน (calloused skin) is meaningless here."
+    ),
+    "รัฐบาลไทยประกาศมาตรการควบคุมโรคระบาด": (
+        "PyThaiNLP: มาตร|การควบคุม — kham: มาตรการ|ควบคุม. "
+        "Both paths are 2 tokens, 2 dict words; TNC freq decides. "
+        "มาตรการ=4,274 + ควบคุม=11,310 vs มาตร=646 + การควบคุม=0 (zero TNC hits). "
+        "kham is correct; มาตรการ (measures/policy) is the standard government term here."
+    ),
+}
+
 # ── Built-in sentence set ─────────────────────────────────────────────────────
 #
 # Covers: common vocabulary, ambiguous compounds, named entities, mixed script,
@@ -258,19 +282,29 @@ def main() -> None:
 
     # ── human-readable report ──
     disagreements = [r for r in results if not r.agreed]
+    genuine_diffs = [r for r in disagreements if r.sentence not in KNOWN_PYTHAINLP_ERRORS]
     to_show = results if (args.show_all or not disagreements) else disagreements
 
     for r in to_show:
-        tag = "[OK  ]" if r.agreed else "[DIFF]"
+        if r.agreed:
+            tag = "[OK     ]"
+        elif r.sentence in KNOWN_PYTHAINLP_ERRORS:
+            tag = "[KHAM-OK]"
+        else:
+            tag = "[DIFF   ]"
         print(f"{tag} {r.sentence!r}")
         if not r.agreed:
             print(f"         kham      : {' | '.join(r.kham)}")
             print(f"         pythainlp : {' | '.join(r.pythainlp)}")
-            print(f"         F1 vs PyThaiNLP: {r.f1:.3f}")
+            if r.sentence in KNOWN_PYTHAINLP_ERRORS:
+                print(f"         note      : {KNOWN_PYTHAINLP_ERRORS[r.sentence]}")
+            else:
+                print(f"         F1 vs PyThaiNLP: {r.f1:.3f}")
         print()
 
     # ── aggregate stats ──
     agreed_n = sum(1 for r in results if r.agreed)
+    known_err_n = sum(1 for r in results if r.sentence in KNOWN_PYTHAINLP_ERRORS and not r.agreed)
     total_tp = sum(r._spans()[0] for r in results)
     total_fp = sum(r._spans()[1] for r in results)
     total_fn = sum(r._spans()[2] for r in results)
@@ -279,12 +313,14 @@ def main() -> None:
     micro_f1 = 2 * micro_p * micro_r / (micro_p + micro_r) if (micro_p + micro_r) else 0.0
 
     print("─" * 64)
-    print(f"Sentences  : {len(results)}")
-    print(f"Agreed     : {agreed_n}/{len(results)}  ({100*agreed_n/len(results):.1f}%)")
-    print(f"Disagreed  : {len(results)-agreed_n}/{len(results)}")
+    print(f"Sentences        : {len(results)}")
+    print(f"Agreed           : {agreed_n}/{len(results)}  ({100*agreed_n/len(results):.1f}%)")
+    if known_err_n:
+        print(f"kham correct (PyThaiNLP wrong) : {known_err_n}  (see KNOWN_PYTHAINLP_ERRORS)")
+    print(f"Genuine diffs    : {len(genuine_diffs)}/{len(results)}")
     print(f"Micro P/R/F1 (PyThaiNLP as reference) : {micro_p:.3f} / {micro_r:.3f} / {micro_f1:.3f}")
     print()
-    if disagreements:
+    if genuine_diffs:
         print("Next steps:")
         print("  python scripts/compare_pythainlp.py --export-testdata          # review disagreements")
         print("  python scripts/compare_pythainlp.py --export-testdata --agreed # add confident cases")

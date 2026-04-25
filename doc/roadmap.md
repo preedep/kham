@@ -40,6 +40,16 @@ Unit tests verify specific known cases but do not measure overall segmentation q
 - CI gate: fail if F1 drops below a configurable threshold vs. a stored baseline
 
 - [x] **Accuracy benchmark** — `kham-bench-accuracy` binary, precision/recall/F1 against gold corpus; `--threshold` CI gate; `--verbose` failing-case output
+- [x] **PyThaiNLP comparison script** — `scripts/compare_pythainlp.py`; 39 built-in sentences; kham vs `word_tokenize(engine='newmm')`; 37/39 agreed (94.9%), F1 0.975; **genuine diffs: 0** (remaining 2 are confirmed PyThaiNLP errors — see below)
+
+### PyThaiNLP segmentation divergences (kham is correct)
+
+Two sentences in `KNOWN_PYTHAINLP_ERRORS` (scripts/compare_pythainlp.py) where kham and PyThaiNLP newmm disagree but kham is linguistically correct. Both are frequency-score tie-breaks where PyThaiNLP's frequency table differs from TNC.
+
+| Sentence | kham (correct) | PyThaiNLP (wrong) | Root cause |
+|---|---|---|---|
+| `ซื้อหนังสือสามเล่มจากร้าน` | `จาก\|ร้าน` | `จา\|กร้าน` | จาก=174k+ร้าน=13k vs จา=2k+กร้าน=142; `จา` (archaic vow) + `กร้าน` (calloused) is meaningless in a shopping context |
+| `รัฐบาลไทยประกาศมาตรการควบคุมโรคระบาด` | `มาตรการ\|ควบคุม` | `มาตร\|การควบคุม` | มาตรการ=4k+ควบคุม=11k vs มาตร=646+การควบคุม=**0 TNC hits**; `มาตรการ` is the standard government term |
 
 ---
 
