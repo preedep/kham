@@ -220,26 +220,51 @@ fn scan_one_tcc(text: &str, pos: usize) -> Option<usize> {
 /// The returned slice always starts with `0` and ends with `text.len()`.
 /// Slicing `text` with consecutive pairs of offsets gives the individual TCCs.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// use kham_core::tcc::tcc_boundaries;
 ///
 /// // "กิน" — กิ is one TCC (ก + อิ), น is another
 /// let bounds = tcc_boundaries("กิน");
-/// assert_eq!(bounds, vec![0, 6, 9]); // กิ=6 bytes, น=3 bytes
+/// assert_eq!(bounds, vec![0, 6, 9]); // กิ = 6 bytes, น = 3 bytes
 /// assert_eq!(*bounds.first().unwrap(), 0);
 /// assert_eq!(*bounds.last().unwrap(), "กิน".len());
 /// ```
 ///
+/// Consecutive boundaries slice directly into the original string:
+///
 /// ```rust
 /// use kham_core::tcc::tcc_boundaries;
 ///
-/// // Mixed script: "hi" (Latin) + "สวัสดี" (Thai)
+/// let text = "กินข้าว";
+/// let bounds = tcc_boundaries(text);
+/// let tccs: Vec<&str> = bounds.windows(2).map(|w| &text[w[0]..w[1]]).collect();
+/// assert_eq!(tccs.join(""), text); // round-trip is lossless
+/// assert!(tccs.len() >= 2);        // at least กิ and นข้ / า / ว
+/// ```
+///
+/// Mixed script: a Latin run is one non-Thai TCC; Thai chars each follow TCC rules:
+///
+/// ```rust
+/// use kham_core::tcc::tcc_boundaries;
+///
 /// let bounds = tcc_boundaries("hiสวัสดี");
-/// // "hi" → one non-Thai TCC, then Thai TCCs
 /// assert_eq!(bounds[0], 0);
-/// assert_eq!(bounds[1], 2); // "hi" = 2 bytes
+/// assert_eq!(bounds[1], 2); // "hi" = 2 ASCII bytes
+/// assert_eq!(*bounds.last().unwrap(), "hiสวัสดี".len());
+/// ```
+///
+/// Tone marks, upper vowels, and trailing vowels group with their consonant:
+///
+/// ```rust
+/// use kham_core::tcc::tcc_boundaries;
+///
+/// // "เก้" — lead vowel เ + ก + tone ้ → one TCC
+/// assert_eq!(tcc_boundaries("เก้").len(), 2); // [0, 9] → 1 TCC of 9 bytes
+///
+/// // "กำ" — ก + Sara Am อำ → one TCC
+/// assert_eq!(tcc_boundaries("กำ").len(), 2);
 /// ```
 pub fn tcc_boundaries(text: &str) -> Vec<usize> {
     if text.is_empty() {
@@ -274,7 +299,7 @@ pub fn tcc_boundaries(text: &str) -> Vec<usize> {
 
 /// Iterate over the TCCs in `text` as `&str` slices.
 ///
-/// # Example
+/// # Examples
 ///
 /// ```rust
 /// use kham_core::tcc::tcc_iter;
@@ -282,6 +307,26 @@ pub fn tcc_boundaries(text: &str) -> Vec<usize> {
 /// // "เกม": เก (lead vowel เ + consonant ก) is TCC 1, ม is TCC 2
 /// let tccs: Vec<&str> = tcc_iter("เกม").collect();
 /// assert_eq!(tccs, vec!["เก", "ม"]);
+/// ```
+///
+/// All TCCs joined reconstruct the original string:
+///
+/// ```rust
+/// use kham_core::tcc::tcc_iter;
+///
+/// let text = "สวัสดีชาวโลก";
+/// let joined: String = tcc_iter(text).collect();
+/// assert_eq!(joined, text);
+/// ```
+///
+/// Counts give the segmenter its candidate split-point count before the DP:
+///
+/// ```rust
+/// use kham_core::tcc::tcc_iter;
+///
+/// // "กิน" has 2 TCCs; "กินข้าว" has more
+/// assert_eq!(tcc_iter("กิน").count(), 2);
+/// assert!(tcc_iter("กินข้าว").count() >= 4);
 /// ```
 pub fn tcc_iter(text: &str) -> impl Iterator<Item = &str> {
     TccIter { text, pos: 0 }

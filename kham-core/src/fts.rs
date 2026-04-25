@@ -234,6 +234,48 @@ impl FtsTokenizer {
     /// (stopwords excluded).
     ///
     /// [`index_tokens`]: FtsTokenizer::index_tokens
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.segment_for_fts("กินข้าวกับปลา");
+    /// // Positions are 0-based and sequential across non-whitespace tokens
+    /// for (i, t) in tokens.iter().enumerate() {
+    ///     assert_eq!(t.position, i);
+    /// }
+    /// // กับ is a common conjunction — marked as a stopword
+    /// let kap = tokens.iter().find(|t| t.text == "กับ").unwrap();
+    /// assert!(kap.is_stop);
+    /// ```
+    ///
+    /// Named entities are tagged automatically — `kind` becomes `TokenKind::Named`:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::TokenKind;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.segment_for_fts("ไปกรุงเทพ");
+    /// assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Named(_))));
+    /// ```
+    ///
+    /// Enable phonetic synonyms with [`FtsTokenizerBuilder::soundex`]:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::soundex::SoundexAlgorithm;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .soundex(SoundexAlgorithm::Lk82)
+    ///     .build();
+    /// let tokens = fts.segment_for_fts("กิน");
+    /// let t = tokens.iter().find(|t| t.text == "กิน").unwrap();
+    /// // synonyms now contains the lk82 code, enabling fuzzy phonetic matching
+    /// assert!(!t.synonyms.is_empty());
+    /// ```
     pub fn segment_for_fts(&self, text: &str) -> Vec<FtsToken> {
         let normalized = self.tokenizer.normalize(text);
         // Expand abbreviations (e.g. ก.ค. → กรกฎาคม) before segmentation so
@@ -331,6 +373,20 @@ impl FtsTokenizer {
     ///
     /// Filters out stopwords and whitespace. Each [`FtsToken`] still carries
     /// its original `position` so phrase-distance scoring remains correct.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.index_tokens("กินข้าวกับปลา");
+    /// // No stopwords in the index
+    /// assert!(tokens.iter().all(|t| !t.is_stop));
+    /// // Positions are preserved from the full sequence for phrase scoring
+    /// let positions: Vec<usize> = tokens.iter().map(|t| t.position).collect();
+    /// assert!(positions.windows(2).all(|w| w[0] < w[1]));
+    /// ```
     pub fn index_tokens(&self, text: &str) -> Vec<FtsToken> {
         self.segment_for_fts(text)
             .into_iter()
@@ -343,6 +399,29 @@ impl FtsTokenizer {
     /// Returns one string per non-stop token, plus synonym expansions and
     /// trigrams for unknown tokens. Duplicates are not removed (the caller or
     /// PostgreSQL handles deduplication).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let lexemes = fts.lexemes("กินข้าวกับปลา");
+    /// // Content words are present; stopword กับ is absent
+    /// assert!(lexemes.iter().any(|l| l == "กิน" || l == "ปลา"));
+    /// assert!(!lexemes.contains(&String::from("กับ")));
+    /// ```
+    ///
+    /// With Thai digit normalization (enabled by default), both scripts match:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let lexemes = fts.lexemes("ธนาคาร๑๐๐แห่ง");
+    /// // ๑๐๐ (Thai digits) → synonym "100" (ASCII) — both appear in lexemes
+    /// assert!(lexemes.contains(&String::from("100")));
+    /// ```
     pub fn lexemes(&self, text: &str) -> Vec<String> {
         let tokens = self.index_tokens(text);
         let mut out: Vec<String> = Vec::with_capacity(tokens.len() * 2);

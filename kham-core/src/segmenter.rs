@@ -128,16 +128,45 @@ impl Tokenizer {
     /// through unchanged. Thai spans are segmented with the newmm DAG
     /// algorithm constrained to TCC boundaries.
     ///
-    /// # Example
+    /// # Examples
     ///
     /// ```rust
     /// use kham_core::{Tokenizer, TokenKind};
     ///
     /// let tok = Tokenizer::new();
-    /// // Mixed Thai + number + Thai
+    /// // Mixed Thai + number + Thai — number token lands at index 1
     /// let tokens = tok.segment("ธนาคาร100แห่ง");
     /// assert_eq!(tokens[1].text, "100");
     /// assert_eq!(tokens[1].kind, TokenKind::Number);
+    /// ```
+    ///
+    /// Joining all token texts reconstructs the original string (whitespace
+    /// is dropped by default, so the joined result omits whitespace):
+    ///
+    /// ```rust
+    /// use kham_core::Tokenizer;
+    ///
+    /// let tok = Tokenizer::new();
+    /// let text = "กินข้าวกับปลา";
+    /// let tokens = tok.segment(text);
+    /// let rebuilt: String = tokens.iter().map(|t| t.text).collect();
+    /// assert_eq!(rebuilt, text);
+    /// ```
+    ///
+    /// Every token carries both byte and char offsets into the original string:
+    ///
+    /// ```rust
+    /// use kham_core::Tokenizer;
+    ///
+    /// let tok = Tokenizer::new();
+    /// let text = "ธนาคาร100แห่ง";
+    /// let tokens = tok.segment(text);
+    /// for t in &tokens {
+    ///     // Byte span: valid UTF-8 slice
+    ///     assert_eq!(&text[t.span.clone()], t.text);
+    ///     // Char span: length matches Unicode scalar count
+    ///     assert_eq!(t.char_span.end - t.char_span.start, t.text.chars().count());
+    /// }
     /// ```
     pub fn segment<'t>(&self, text: &'t str) -> Vec<Token<'t>> {
         if text.is_empty() {
@@ -366,6 +395,18 @@ impl TokenizerBuilder {
     /// Load an additional word list from a string (newline-separated words).
     ///
     /// Words are merged with the built-in dictionary.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::{Tokenizer, TokenKind};
+    ///
+    /// let tok = Tokenizer::builder()
+    ///     .dict_words("ปัญญาประดิษฐ์\n")
+    ///     .build();
+    /// let tokens = tok.segment("ปัญญาประดิษฐ์คือ");
+    /// assert!(tokens.iter().any(|t| t.text == "ปัญญาประดิษฐ์" && t.kind == TokenKind::Thai));
+    /// ```
     pub fn dict_words(mut self, words: &str) -> Self {
         self.dict_words = Some(alloc::string::String::from(words));
         self
@@ -374,6 +415,20 @@ impl TokenizerBuilder {
     /// Configure whether whitespace tokens are included in the output.
     ///
     /// Default: `false` (whitespace is discarded).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::{Tokenizer, TokenKind};
+    ///
+    /// let tok = Tokenizer::builder().keep_whitespace(true).build();
+    /// let tokens = tok.segment("กิน ข้าว");
+    /// assert!(tokens.iter().any(|t| t.kind == TokenKind::Whitespace));
+    /// // Byte spans are contiguous when whitespace is kept
+    /// for w in tokens.windows(2) {
+    ///     assert_eq!(w[0].span.end, w[1].span.start);
+    /// }
+    /// ```
     pub fn keep_whitespace(mut self, keep: bool) -> Self {
         self.keep_whitespace = keep;
         self
