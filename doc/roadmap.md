@@ -43,11 +43,8 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 ### CC-BY-SA-4.0 — share-alike; keep in separate optional TSV files
 
-- [ ] **`person_names_male_th.txt`** + **`person_names_female_th.txt`** → expand Person entries in `kham-core/data/ne_th.tsv`
-  - ~2,000 male + ~2,000 female Thai given names
-  - Gate behind `feature = "extended-ne"`; add CC-BY-SA attribution header to TSV
-- [ ] **`family_names_th.txt`** → expand Person entries in `ne_th.tsv`
-  - ~4,000 Thai family names; same feature-gate approach
+- [x] **`person_names_male_th.txt`** + **`person_names_female_th.txt`** → already in `ne_th.tsv` since v0.2.0 (10,041 entries); attribution corrected to CC-BY-SA-4.0 (was wrongly Apache-2.0). See ADR-001, ADR-004.
+- [x] **`family_names_th.txt`** → 8,980 entries appended to `ne_th.tsv` (CC-BY-SA-4.0, filtered by words_th.txt). See ADR-004.
 - [ ] **`wikipedia_titles_th.txt`** → selective import for NER Place/Org gazetteer
   - ~1M titles; filter to proper nouns only before import
   - CC-BY-SA share-alike applies to derived TSV file
