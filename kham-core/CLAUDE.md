@@ -37,11 +37,13 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 The newmm forward DP uses a 4-field lexicographic `DpScore`. Priority order is fixed — do not reorder:
 
 1. **Minimise unknowns** (`neg_unknowns`) — primary criterion
-2. **Maximise dict matches** (`dict_words`)
-3. **Maximise TNC frequency** (`freq_score`) — unknown edges contribute 0
-4. **Minimise token count** (`neg_tokens`) — final tiebreaker; fewer, longer tokens preferred
+2. **Minimise token count** (`neg_tokens`) — prefer fewer, longer compounds (matches PyThaiNLP newmm)
+3. **Maximise dict matches** (`dict_words`)
+4. **Maximise TNC frequency** (`freq_score`) — final tiebreaker; unknown edges contribute 0
 
 The `Ord` derive compares fields in declaration order — insert new dimensions at the correct priority position.
+
+**Rationale for priority 2:** Splitting a compound into two known words scores *more* dict matches than keeping it as one compound. Placing token-count minimisation above dict-match maximisation prevents spurious splits and aligns kham with PyThaiNLP's newmm behaviour (measured: 94.9% sentence-level agreement, F1 0.975).
 
 ## FTS Modules
 

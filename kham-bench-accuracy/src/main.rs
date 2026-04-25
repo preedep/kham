@@ -47,18 +47,30 @@ struct Metrics {
 impl Metrics {
     fn precision(&self) -> f64 {
         let d = self.tp + self.fp;
-        if d == 0 { 1.0 } else { self.tp as f64 / d as f64 }
+        if d == 0 {
+            1.0
+        } else {
+            self.tp as f64 / d as f64
+        }
     }
 
     fn recall(&self) -> f64 {
         let d = self.tp + self.fn_;
-        if d == 0 { 1.0 } else { self.tp as f64 / d as f64 }
+        if d == 0 {
+            1.0
+        } else {
+            self.tp as f64 / d as f64
+        }
     }
 
     fn f1(&self) -> f64 {
         let p = self.precision();
         let r = self.recall();
-        if p + r == 0.0 { 0.0 } else { 2.0 * p * r / (p + r) }
+        if p + r == 0.0 {
+            0.0
+        } else {
+            2.0 * p * r / (p + r)
+        }
     }
 
     fn merge(&mut self, other: &Metrics) {
@@ -84,7 +96,11 @@ fn parse_file(src: &str) -> Vec<Case<'_>> {
             let mut parts = line.split('|');
             let input = parts.next()?;
             let gold: Vec<&str> = parts.collect();
-            if gold.is_empty() { None } else { Some(Case { input, gold }) }
+            if gold.is_empty() {
+                None
+            } else {
+                Some(Case { input, gold })
+            }
         })
         .collect()
 }
@@ -160,12 +176,19 @@ fn main() {
 
     println!("kham-bench-accuracy — Thai word segmentation accuracy");
     println!();
-    println!("Testdata: {} ({} files)", args.testdata.display(), files.len());
+    println!(
+        "Testdata: {} ({} files)",
+        args.testdata.display(),
+        files.len()
+    );
     println!();
 
     const W: usize = 24;
     let sep = "─".repeat(W + 49);
-    println!("{:<W$} {:>6} {:>6} {:>5} {:>5}  {:>6} {:>6} {:>6}", "File", "Cases", "TP", "FP", "FN", "P", "R", "F1");
+    println!(
+        "{:<W$} {:>6} {:>6} {:>5} {:>5}  {:>6} {:>6} {:>6}",
+        "File", "Cases", "TP", "FP", "FN", "P", "R", "F1"
+    );
     println!("{sep}");
 
     let mut aggregate = Metrics::default();
@@ -178,7 +201,14 @@ fn main() {
         let m = evaluate(&cases, &tokenizer, args.verbose, &name);
         println!(
             "{:<W$} {:>6} {:>6} {:>5} {:>5}  {:>6.3} {:>6.3} {:>6.3}",
-            name, m.cases, m.tp, m.fp, m.fn_, m.precision(), m.recall(), m.f1()
+            name,
+            m.cases,
+            m.tp,
+            m.fp,
+            m.fn_,
+            m.precision(),
+            m.recall(),
+            m.f1()
         );
         aggregate.merge(&m);
     }
@@ -187,15 +217,23 @@ fn main() {
     println!(
         "{:<W$} {:>6} {:>6} {:>5} {:>5}  {:>6.3} {:>6.3} {:>6.3}",
         "AGGREGATE",
-        aggregate.cases, aggregate.tp, aggregate.fp, aggregate.fn_,
-        aggregate.precision(), aggregate.recall(), aggregate.f1()
+        aggregate.cases,
+        aggregate.tp,
+        aggregate.fp,
+        aggregate.fn_,
+        aggregate.precision(),
+        aggregate.recall(),
+        aggregate.f1()
     );
     println!();
 
     if let Some(threshold) = args.threshold {
         let f1 = aggregate.f1();
         if f1 < threshold {
-            eprintln!("FAILED — aggregate F1 {:.3} < threshold {:.3}", f1, threshold);
+            eprintln!(
+                "FAILED — aggregate F1 {:.3} < threshold {:.3}",
+                f1, threshold
+            );
             std::process::exit(1);
         }
         println!("Passed — F1 {:.3} >= threshold {:.3}", f1, threshold);

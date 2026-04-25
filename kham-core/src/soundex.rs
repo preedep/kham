@@ -336,12 +336,12 @@ fn ms_vowel_code(
 
 fn ms_final_code(c: Option<char>) -> u8 {
     match c {
-        Some('ก') => b'1',                             // velar stop
+        Some('ก') => b'1', // velar stop
         Some('น') | Some('ณ') | Some('ญ') | Some('ร') | Some('ล') | Some('ฬ') => b'2', // alveolar sonorant
-        Some('ม') => b'3',                             // bilabial nasal
-        Some('ง') => b'4',                             // velar nasal
-        Some('ย') | Some('ว') => b'5',                // glide
-        _ => b'6',                                     // open syllable / no final
+        Some('ม') => b'3',             // bilabial nasal
+        Some('ง') => b'4',             // velar nasal
+        Some('ย') | Some('ว') => b'5', // glide
+        _ => b'6',                     // open syllable / no final
     }
 }
 
@@ -592,8 +592,8 @@ fn std_soundex_digit(c: char) -> char {
 /// ```
 /// use kham_core::soundex::sounds_like_cross_lang;
 ///
-/// assert!(sounds_like_cross_lang("Robert",  "Rupert"));  // same English Soundex group
-/// assert!(sounds_like_cross_lang("McDonald", "MacDonald"));
+/// assert!(sounds_like_cross_lang("Robert",  "Rupert"));  // same code: "671763"
+/// assert!(sounds_like_cross_lang("กาน", "คาน"));         // ก and ค → same group
 /// assert!(!sounds_like_cross_lang("Robert",  "Smith"));
 /// ```
 pub fn sounds_like_cross_lang(a: &str, b: &str) -> bool {
@@ -693,7 +693,6 @@ fn is_cl_skip(c: char) -> bool {
         | '\u{0E47}'..='\u{0E4E}' // mai tai khu, tone marks, ์, ๎, nikhahit
     )
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -848,7 +847,10 @@ mod tests {
 
     #[test]
     fn soundex_dispatches_to_metasound() {
-        assert_eq!(soundex("กาน", SoundexAlgorithm::MetaSound), metasound("กาน"));
+        assert_eq!(
+            soundex("กาน", SoundexAlgorithm::MetaSound),
+            metasound("กาน")
+        );
     }
 
     // ── sounds_like ───────────────────────────────────────────────────────────
@@ -955,7 +957,7 @@ mod tests {
     fn thai_english_soundex_thai_vowels_skipped_english_vowels_to_7() {
         // Thai vowel diacritics are skipped entirely
         assert_eq!(thai_english_soundex("กิน"), "25"); // ิ (U+0E34) is skipped
-        // English vowels in non-first position → '7' (retained, not dropped)
+                                                      // English vowels in non-first position → '7' (retained, not dropped)
         assert!(thai_english_soundex("Robert").contains('7')); // 'o' and 'e' → '7'
     }
 

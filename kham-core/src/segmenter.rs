@@ -178,15 +178,15 @@ impl Tokenizer {
 ///
 /// Fields are ordered so that `Ord` naturally expresses the newmm preference:
 /// 1. Minimise unknowns (fewer unknowns → `neg_unknowns` less negative → greater).
-/// 2. Maximise dictionary matches.
-/// 3. Maximise cumulative TNC frequency (higher freq → more common segmentation).
-/// 4. Minimise total token count as the final tiebreaker.
+/// 2. Minimise total token count (prefer longer compounds over split components).
+/// 3. Maximise dictionary matches.
+/// 4. Maximise cumulative TNC frequency as the final tiebreaker.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct DpScore {
     neg_unknowns: i32,
+    neg_tokens: i32,
     dict_words: i32,
     freq_score: u64,
-    neg_tokens: i32,
 }
 
 impl DpScore {
@@ -598,13 +598,13 @@ mod tests {
         assert_eq!(rebuilt, "กินข้าวกับปลา");
     }
 
-    // ── DpScore ordering (TNC frequency scoring) ─────────────────────────────
+    // ── DpScore ordering ──────────────────────────────────────────────────────
     //
     // The score is a 4-field lexicographic key:
     //   1. neg_unknowns  — fewer unknowns is strictly better
-    //   2. dict_words    — more dictionary matches is better
-    //   3. freq_score    — higher cumulative TNC frequency is better
-    //   4. neg_tokens    — fewer total tokens is the final tiebreaker
+    //   2. neg_tokens    — fewer tokens (prefer longer compounds over split components)
+    //   3. dict_words    — more dictionary matches breaks token-count ties
+    //   4. freq_score    — higher cumulative TNC frequency as the final tiebreaker
 
     #[test]
     fn dp_score_fewer_unknowns_is_primary() {
@@ -615,55 +615,56 @@ mod tests {
     }
 
     #[test]
-    fn dp_score_more_dict_words_beats_fewer() {
-        // Same unknowns (0); more dict matches wins.
-        let one_dict = DpScore::ZERO.dict_edge(0);
-        let two_dict = DpScore::ZERO.dict_edge(0).dict_edge(0);
-        assert!(two_dict > one_dict);
+    fn dp_score_fewer_tokens_beats_more_dict_words() {
+        // Fewer tokens wins over more dict matches: เดินทาง (1 token, 1 match)
+        // beats เดิน+ทาง (2 tokens, 2 matches).
+        let compound = DpScore::ZERO.dict_edge(0); // 1 token, 1 dict
+        let split = DpScore::ZERO.dict_edge(0).dict_edge(0); // 2 tokens, 2 dict
+        assert!(compound > split);
     }
 
     #[test]
-    fn dp_score_higher_freq_breaks_dict_tie() {
-        // Same unknowns and dict count; higher TNC freq wins.
+    fn dp_score_higher_freq_breaks_token_tie() {
+        // Same unknowns and token count; higher TNC freq wins.
         let low_freq = DpScore::ZERO.dict_edge(10);
         let high_freq = DpScore::ZERO.dict_edge(100);
         assert!(high_freq > low_freq);
     }
 
     #[test]
-    fn dp_score_freq_dominates_token_count() {
-        // Higher freq wins even when the competing path has fewer tokens.
+    fn dp_score_fewer_tokens_beats_higher_freq() {
+        // Fewer tokens wins even when the competing path has higher TNC frequency.
         let high_freq_more_tokens = DpScore {
             neg_unknowns: 0,
+            neg_tokens: -2,
             dict_words: 1,
             freq_score: 200,
-            neg_tokens: -2,
         };
         let low_freq_fewer_tokens = DpScore {
             neg_unknowns: 0,
+            neg_tokens: -1,
             dict_words: 1,
             freq_score: 100,
-            neg_tokens: -1,
         };
-        assert!(high_freq_more_tokens > low_freq_fewer_tokens);
+        assert!(low_freq_fewer_tokens > high_freq_more_tokens);
     }
 
     #[test]
-    fn dp_score_fewer_tokens_is_final_tiebreaker() {
-        // Same unknowns, dict count, and freq; fewer tokens wins.
-        let fewer = DpScore {
+    fn dp_score_more_dict_words_breaks_token_tie() {
+        // Same unknowns and token count; more dict matches wins.
+        let fewer_dict = DpScore {
             neg_unknowns: 0,
-            dict_words: 2,
-            freq_score: 100,
             neg_tokens: -2,
+            dict_words: 1,
+            freq_score: 0,
         };
-        let more = DpScore {
+        let more_dict = DpScore {
             neg_unknowns: 0,
+            neg_tokens: -2,
             dict_words: 2,
-            freq_score: 100,
-            neg_tokens: -3,
+            freq_score: 0,
         };
-        assert!(fewer > more);
+        assert!(more_dict > fewer_dict);
     }
 
     #[test]

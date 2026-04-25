@@ -56,12 +56,16 @@ fn all_tag_roundtrips() {
 #[test]
 fn fts_token_has_pos_for_known_thai_word() {
     let fts = FtsTokenizer::new();
-    let tokens = fts.segment_for_fts("กินข้าว");
-    let gin = tokens.iter().find(|t| t.text == "กิน");
+
+    // กิน is a standalone verb — segment it alone so compound merging doesn't hide it
+    let gin_tokens = fts.segment_for_fts("กิน");
+    let gin = gin_tokens.iter().find(|t| t.text == "กิน");
     assert!(gin.is_some(), "expected 'กิน' token");
     assert_eq!(gin.unwrap().pos, Some(PosTag::Verb));
 
-    let khao = tokens.iter().find(|t| t.text == "ข้าว");
+    // ข้าว is a noun — test standalone too
+    let khao_tokens = fts.segment_for_fts("ข้าว");
+    let khao = khao_tokens.iter().find(|t| t.text == "ข้าว");
     assert!(khao.is_some(), "expected 'ข้าว' token");
     assert_eq!(khao.unwrap().pos, Some(PosTag::Noun));
 }
