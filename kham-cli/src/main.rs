@@ -26,6 +26,7 @@ use std::time::Instant;
 use clap::Parser;
 use colored::Colorize;
 use kham_core::fts::FtsTokenizer;
+use kham_core::soundex::SoundexAlgorithm;
 use kham_core::{TokenKind, Tokenizer};
 use log::{debug, info, warn};
 
@@ -89,17 +90,27 @@ struct Cli {
     /// Run the full FTS pipeline (FtsTokenizer).
     ///
     /// Prints one token per line with tab-separated fields:
-    ///   text  kind=KIND  pos=POS  ne=NE  stop=BOOL
+    ///   text  kind=KIND  pos=POS  ne=NE  stop=BOOL  syn=SYNONYMS
     ///
     /// KIND is the token script category (Thai, Latin, Number, Person, Place, Org, …).
     /// POS is the part-of-speech tag (Verb, Noun, Adj, …) or "-" for OOV/non-Thai.
     /// NE  is the named entity category (Person, Place, Org) or "-" if not an NE.
     /// BOOL is true if the token matched the built-in stopword list.
+    /// SYNONYMS is a comma-separated list of synonym strings, or "-" if none.
     ///
     /// Pipe through `column -t` for aligned columns:
     ///   kham --fts "ทักษิณเดินทางไปไทย" | column -t
     #[arg(long)]
     fts: bool,
+
+    /// Phonetic encoding algorithm for FTS mode (lk82, udom83, metasound).
+    ///
+    /// Emits the soundex code into the `syn=` field for Thai and Named tokens.
+    /// Has no effect without --fts.
+    ///
+    /// Example: kham --fts --soundex lk82 "กินข้าวกับปลา"
+    #[arg(long, value_name = "ALGO")]
+    soundex: Option<String>,
 }
 
 // ---------------------------------------------------------------------------
@@ -136,6 +147,10 @@ fn main() {
     let cli = Cli::parse();
 
     debug!("CLI args: {:?}", cli);
+
+    if cli.soundex.is_some() && !cli.fts {
+        warn!("--soundex has no effect without --fts");
+    }
 
     if cli.fts {
         run_fts_mode(&cli);
@@ -273,6 +288,18 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
 // FTS pipeline mode
 // ---------------------------------------------------------------------------
 
+fn parse_soundex_algo(s: &str) -> SoundexAlgorithm {
+    match s.to_lowercase().as_str() {
+        "lk82" => SoundexAlgorithm::Lk82,
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        other => {
+            eprintln!("kham: unknown soundex algorithm {other:?}; valid: lk82, udom83, metasound");
+            std::process::exit(1);
+        }
+    }
+}
+
 fn run_fts_mode(cli: &Cli) {
     if cli.dict.is_some() {
         warn!("--dict is not supported with --fts and will be ignored");
@@ -280,7 +307,13 @@ fn run_fts_mode(cli: &Cli) {
 
     debug!("Building FtsTokenizer");
     let t0 = Instant::now();
-    let fts = FtsTokenizer::new();
+    let fts = if let Some(algo_str) = &cli.soundex {
+        let algo = parse_soundex_algo(algo_str);
+        debug!("FtsTokenizer: soundex={:?}", algo);
+        FtsTokenizer::builder().soundex(algo).build()
+    } else {
+        FtsTokenizer::new()
+    };
     debug!(
         "FtsTokenizer ready ({:.3}ms)",
         t0.elapsed().as_secs_f64() * 1000.0
@@ -326,13 +359,19 @@ fn process_fts_line(fts: &FtsTokenizer, text: &str) {
     for t in &tokens {
         let pos = t.pos.map(|p| p.as_str()).unwrap_or("-");
         let ne = t.ne.map(|n| n.as_str()).unwrap_or("-");
+        let syn = if t.synonyms.is_empty() {
+            "-".to_string()
+        } else {
+            t.synonyms.join(",")
+        };
         println!(
-            "{}\tkind={}\tpos={}\tne={}\tstop={}",
+            "{}\tkind={}\tpos={}\tne={}\tstop={}\tsyn={}",
             t.text,
             kind_str(t.kind),
             pos,
             ne,
             t.is_stop,
+            syn,
         );
     }
 }

@@ -205,13 +205,20 @@ kham --sep " / " "สวัสดีชาวโลก"    # สวัสดี 
 kham --kind "ธนาคาร100แห่ง"        # ธนาคาร:Thai|100:Number|แห่ง:Thai
 kham --spans "กินข้าวกับปลา"       # กิน:0-3|ข้าว:3-7|กับ:7-10|ปลา:10-13
 
-# FTS pipeline — kind, POS, NE, stopword (one token per line)
+# FTS pipeline — kind, POS, NE, stopword, synonyms (one token per line)
 kham --fts "ทักษิณเดินทางไปกรุงเทพ"
-# ทักษิณ  kind=Named  pos=-     ne=Person  stop=false
-# เดิน    kind=Thai   pos=Verb  ne=-       stop=false
-# ทาง     kind=Thai   pos=-     ne=-       stop=true
-# ไป      kind=Thai   pos=Verb  ne=-       stop=true
-# กรุงเทพ kind=Named  pos=-     ne=Place   stop=false
+# ทักษิณ  kind=Person  pos=-     ne=Person  stop=false  syn=-
+# เดิน    kind=Thai    pos=Verb  ne=-       stop=false  syn=-
+# ทาง     kind=Thai    pos=Noun  ne=-       stop=true   syn=-
+# ไป      kind=Thai    pos=Verb  ne=-       stop=true   syn=-
+# กรุงเทพ kind=Place   pos=-     ne=Place   stop=false  syn=-
+
+# FTS + phonetic encoding — syn= shows the lk82 code for Thai/Named tokens
+kham --fts --soundex lk82 "กินข้าวกับปลา" | column -t
+# กิน   kind=Thai  pos=Verb  ne=-  stop=false  syn=1600
+# ข้าว  kind=Thai  pos=Noun  ne=-  stop=false  syn=1900
+# กับ   kind=Thai  pos=Conj  ne=-  stop=true   syn=1400
+# ปลา   kind=Thai  pos=Noun  ne=-  stop=false  syn=4800
 
 echo "กินข้าว" | kham           # stdin
 RUST_LOG=debug kham "กินข้าว"  # per-token trace + timing

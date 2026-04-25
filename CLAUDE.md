@@ -25,8 +25,9 @@ cargo build                          # build all crates
 cargo test                           # run all tests
 cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
-cargo run -p kham-cli -- "ข้อความ"         # run CLI
-cargo run -p kham-cli -- --fts "ข้อความ"   # FTS mode: kind/POS/NE/stopword per token
+cargo run -p kham-cli -- "ข้อความ"                         # run CLI
+cargo run -p kham-cli -- --fts "ข้อความ"                   # FTS mode: kind/POS/NE/stop/syn per token
+cargo run -p kham-cli -- --fts --soundex lk82 "ข้อความ"    # FTS + lk82 soundex code in syn= field
 cargo run -p kham-bench-accuracy            # word-boundary P/R/F1 against testdata/
 cargo run -p kham-bench-accuracy -- --threshold 0.95  # CI gate: exit 1 if F1 < 0.95
 cargo run -p kham-bench-accuracy -- --verbose         # show each failing case
