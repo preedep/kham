@@ -25,6 +25,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Abbreviation expansion** — `AbbrevMap` with 118-entry built-in TSV (months, era markers, ranks, agencies); greedy longest-first pre-tokenisation expansion so dot-containing forms (`ก.ค.` → `กรกฎาคม`) are replaced before segmentation; opt-in via `FtsTokenizerBuilder::abbrevs()`
 - **Date parsing** — `parse_thai_date` handles 7 input formats (full month, abbreviated month, era marker, `วันที่` prefix, slash/dash-separated, Thai digits) in both Buddhist Era and Gregorian; formats back to ISO 8601 or Thai text
 - **Sentence segmentation** — `split_sentences` splits Thai and mixed-script text on Thai terminators (`๚` `๛`), Paiyannoi (`ฯ`, excluding `ฯลฯ`), punctuation, and newlines with decimal- and abbreviation-aware dot rules
+- **Phonetic encoding (Soundex)** — four Thai soundex algorithms: lk82 (4-char, 12 groups), udom83 (4-char, 14 groups with finer sibilant/liquid distinctions), MetaSound (per-syllable `[initial][vowel][final]`), and Thai–English cross-language Soundex (Suwanvisat & Prasitjutrakul 1998); FTS integration via `.soundex(SoundexAlgorithm)` builder option emits phonetic codes as synonyms for fuzzy name matching
 
 ## Packages
 
@@ -295,6 +296,7 @@ let fts = FtsTokenizer::builder()
     .synonyms(SynonymMap::from_tsv(include_str!("synonyms.tsv")))
     .stopwords(StopwordSet::from_text("ซื้อ\nขาย\n"))
     .romanization(RomanizationMap::builtin()) // adds RTGS to synonyms: กิน → "kin"
+    .soundex(SoundexAlgorithm::Lk82)         // adds lk82 code to synonyms for Thai/Named tokens
     .ngram_size(3)                            // trigrams for Unknown tokens (0 = disable)
     .number_normalize(true)                   // Thai digits → ASCII synonym (default: true)
     .build();
@@ -431,6 +433,50 @@ Multi-token matching merges compound names split by the segmenter:
 
 See [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) for the person-name import decision.
 
+## Phonetic encoding (Soundex)
+
+`kham_core::soundex` provides four Thai phonetic encoding algorithms for fuzzy name matching and spell-correction:
+
+```rust
+use kham_core::soundex::{soundex, sounds_like, SoundexAlgorithm};
+use kham_core::soundex::{lk82, udom83, metasound};
+use kham_core::soundex::{thai_english_soundex, sounds_like_cross_lang};
+
+// lk82 — 4-char code, 12 consonant groups (most widely used)
+assert_eq!(lk82("กาน"), lk82("ขาน")); // ก and ข in the same group → "1600"
+assert_eq!(lk82("กาน"), "1600");
+
+// udom83 — finer sibilant/liquid distinctions
+assert_ne!(udom83("ลาน"), udom83("ราน")); // ล and ร are split in udom83
+assert_ne!(udom83("สาน"), udom83("ชาน")); // sibilant ≠ affricate
+
+// MetaSound — 3 chars per syllable: [initial][vowel][final]
+assert_eq!(metasound("กาน"), "112"); // initial=ก(1) vowel=า(1) final=น(2)
+assert_ne!(metasound("กาน"), metasound("กาม")); // different final
+
+// Unified API
+assert!(sounds_like("กาน", "คาน", SoundexAlgorithm::Lk82));
+
+// Thai–English cross-language (Suwanvisat & Prasitjutrakul 1998)
+// — encodes Thai and English to a shared code space without a romanizer
+assert_eq!(thai_english_soundex("Robert"), thai_english_soundex("Rupert"));
+// Thai transliteration and English source share a common prefix
+let en = thai_english_soundex("McDonald");
+let th = thai_english_soundex("แมคโดนัลด์");
+assert_eq!(&en[..3], &th[..3]); // "523"
+```
+
+FTS integration — emit the soundex code as a synonym alongside RTGS romanization:
+
+```rust
+use kham_core::soundex::SoundexAlgorithm;
+
+let fts = FtsTokenizer::builder()
+    .soundex(SoundexAlgorithm::Lk82) // adds lk82 code to FtsToken::synonyms
+    .build();
+// Searching the lk82 code matches all words in the same phonetic group
+```
+
 ## Building
 
 ```bash
@@ -439,6 +485,8 @@ cargo test --release                 # all tests
 cargo test -p kham-core --release    # core only
 cargo bench -p kham-core             # core criterion benchmarks
 cargo bench -p kham-sqlite           # SQLite FTS5 criterion benchmarks
+cargo run -p kham-bench-accuracy     # word-boundary P/R/F1 accuracy benchmark
+cargo run -p kham-bench-accuracy -- --threshold 0.95  # exit 1 if F1 < threshold
 
 # Bindings
 wasm-pack build kham-wasm --target web

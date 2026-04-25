@@ -13,6 +13,7 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 | `kham-cli/` | CLI binary using clap. → [kham-cli/CLAUDE.md](kham-cli/CLAUDE.md) |
 | `kham-pg/` | PostgreSQL text-search parser extension (`cdylib`). → [kham-pg/CLAUDE.md](kham-pg/CLAUDE.md) |
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
+| `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
 
 ## Commands
 
@@ -26,6 +27,9 @@ cargo test -p kham-core              # test core only
 cargo bench                          # run benchmarks (criterion)
 cargo run -p kham-cli -- "ข้อความ"         # run CLI
 cargo run -p kham-cli -- --fts "ข้อความ"   # FTS mode: kind/POS/NE/stopword per token
+cargo run -p kham-bench-accuracy            # word-boundary P/R/F1 against testdata/
+cargo run -p kham-bench-accuracy -- --threshold 0.95  # CI gate: exit 1 if F1 < 0.95
+cargo run -p kham-bench-accuracy -- --verbose         # show each failing case
 
 # Bindings
 wasm-pack build kham-wasm --target web

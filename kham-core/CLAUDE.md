@@ -21,6 +21,7 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 | `ne` | `NeTagger` / `NamedEntityKind` — gazetteer-based NER |
 | `fts` | `FtsTokenizer` / `FtsToken` — full pipeline for PostgreSQL FTS |
 | `romanizer` | `RomanizationMap` — RTGS table-lookup Thai → Latin |
+| `soundex` | Thai phonetic encoding — lk82, udom83, MetaSound, Thai–English cross-language |
 
 ## Dictionary
 
@@ -173,6 +174,56 @@ NamedEntityKind::Place.as_str() -> &'static str   // "Place"
 **Multi-token matching:** `tag_tokens` tries spans of 5→1 consecutive Thai tokens; first gazetteer hit wins. Compound names split by the segmenter (e.g. กรุง+เทพ → กรุงเทพ) are merged into one `Named` token with combined spans. TSV entries must match the segmenter's concatenated output exactly — verify with `Tokenizer::new().segment("candidate")`.
 
 Data: `kham-core/data/ne_th.tsv` — Thai provinces (77), full country list from PyThaiNLP (~246, Apache-2.0), world cities, regions, organisations, universities, public figures (~400 total).
+
+### `soundex` — Thai phonetic encoding
+
+Four algorithms, all pure-Rust `no_std`; no data file (tables are inline `match` expressions).
+
+```rust
+use kham_core::soundex::{soundex, sounds_like, SoundexAlgorithm};
+use kham_core::soundex::{lk82, udom83, metasound};
+use kham_core::soundex::{thai_english_soundex, english_soundex, sounds_like_cross_lang};
+
+// Unified enum API (lk82 / udom83 / MetaSound)
+soundex("กาน", SoundexAlgorithm::Lk82)      // "1600" — always 4 chars
+soundex("กาน", SoundexAlgorithm::Udom83)    // "1900" — always 4 chars
+soundex("กาน", SoundexAlgorithm::MetaSound) // "112"  — 3 chars per syllable
+
+sounds_like("กาน", "ขาน", SoundexAlgorithm::Lk82)    // true — same group
+sounds_like("ลาน", "ราน", SoundexAlgorithm::Udom83)   // false — ล/ร split in udom83
+
+// Direct functions
+lk82("กรุงเทพ")   // "1873"
+udom83("สาน")    // differs from udom83("ชาน") — sibilant ≠ affricate
+metasound("กาน") // "112": initial=ก(1) vowel=า(1) final=น(2)
+
+// Thai–English cross-language (Suwanvisat & Prasitjutrakul 1998)
+// — direct Thai+English table, no romanizer; vowels→'7', ง→"52", variable length
+thai_english_soundex("Robert")     // "671763"
+thai_english_soundex("กิน")        // "25"  (ก→2, น→5; vowel ิ skipped)
+sounds_like_cross_lang("Robert", "Rupert")  // true
+```
+
+**FTS integration** — `.soundex(SoundexAlgorithm)` builder appends the code to
+`FtsToken::synonyms` for Thai and Named tokens (not set by default; only lk82/udom83
+recommended — MetaSound is variable-length and collision-prone at word level):
+
+```rust
+let fts = FtsTokenizer::builder()
+    .soundex(SoundexAlgorithm::Lk82)
+    .build();
+// กิน → synonyms includes its lk82 code; fuzzy FTS matches near-homophones
+```
+
+**Algorithm summary:**
+
+| Function | Output length | Notes |
+|---|---|---|
+| `lk82` | 4 chars | 12 groups; most widely used in Thai NLP |
+| `udom83` | 4 chars | 14 groups; finer sibilant/liquid distinctions |
+| `metasound` | 3 chars/syllable | Per-syllable `[initial][vowel][final]` |
+| `thai_english_soundex` | variable | Paper (1998) combined Thai+English table |
+| `english_soundex` | 4 chars | Standard Odell–Russell Soundex |
 
 ### `romanizer` — `RomanizationMap`
 
