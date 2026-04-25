@@ -610,6 +610,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "kham-bench-accuracy"
+version = "0.3.0"
+dependencies = [
+ "clap 4.6.0",
+ "kham-core",
+]
+
+[[package]]
 name = "kham-capi"
 version = "0.3.0"
 dependencies = [

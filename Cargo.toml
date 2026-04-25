@@ -2,6 +2,7 @@
 members = [
     "kham-core",
     "kham-cli",
+    "kham-bench-accuracy",
     "kham-python",
     "kham-wasm",
     "kham-capi",

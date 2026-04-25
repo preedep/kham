@@ -39,7 +39,7 @@ Unit tests verify specific known cases but do not measure overall segmentation q
 - Runs via `cargo run -p kham-bench-accuracy` — not part of `cargo bench` (which is throughput only)
 - CI gate: fail if F1 drops below a configurable threshold vs. a stored baseline
 
-- [ ] **Accuracy benchmark** — `kham-bench-accuracy` binary, precision/recall/F1 against gold corpus
+- [x] **Accuracy benchmark** — `kham-bench-accuracy` binary, precision/recall/F1 against gold corpus; `--threshold` CI gate; `--verbose` failing-case output
 
 ---
 
