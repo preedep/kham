@@ -105,3 +105,5 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 | ADR | Title |
 |-----|-------|
 | [ADR-001](doc/adr-001-ne-person-name-import-strategy.md) | NE Person Name Import Strategy — Dictionary-Filter Approach |
+| [ADR-002](doc/adr-002-syllables-corpus-import-decision.md) | syllables_th.txt Import Decision — Syllables and Abbreviations Excluded |
+| [ADR-003](doc/adr-003-orchid-pos-tag-mapping.md) | ORCHID POS Tag Mapping to kham-core 13-Category Scheme |

@@ -27,7 +27,7 @@ fn verb_noun_adj_lookup() {
 #[test]
 fn oov_returns_none() {
     let t = PosTagger::builtin();
-    assert_eq!(t.tag("เปปซี่"), None);
+    assert_eq!(t.tag("กรุ๊งกริ๊ง"), None); // onomatopoeia, not in any corpus
     assert_eq!(t.tag(""), None);
 }
 
@@ -69,8 +69,8 @@ fn fts_token_has_pos_for_known_thai_word() {
 #[test]
 fn fts_token_pos_none_for_oov() {
     let fts = FtsTokenizer::new();
-    // OOV Thai word — pos should be None
-    let tokens = fts.segment_for_fts("เปปซี่");
+    // Onomatopoeia not in any corpus — every segment should be POS-less
+    let tokens = fts.segment_for_fts("กรุ๊งกริ๊ง");
     for t in &tokens {
         assert!(t.pos.is_none(), "OOV token '{}' should have no POS", t.text);
     }

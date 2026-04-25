@@ -481,6 +481,8 @@ Prerequisites per target:
 | [doc/benchmarks.md](doc/benchmarks.md) | Throughput numbers, dict construction, PostgreSQL and SQLite FTS5 benchmarks |
 | [doc/dict-format.md](doc/dict-format.md) | `dict.bin` binary format, DARTS lifecycle, data sources |
 | [doc/adr-001-ne-person-name-import-strategy.md](doc/adr-001-ne-person-name-import-strategy.md) | Why person names are filtered against `words_th.txt` |
+| [doc/adr-002-syllables-corpus-import-decision.md](doc/adr-002-syllables-corpus-import-decision.md) | Why syllables_th.txt syllables and abbreviations are not imported |
+| [doc/adr-003-orchid-pos-tag-mapping.md](doc/adr-003-orchid-pos-tag-mapping.md) | ORCHID 44-tag → kham-core 13-category POS mapping |
 
 ## License
 

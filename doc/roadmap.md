@@ -29,9 +29,8 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 - [x] **`orst_words_th.txt`** → merged into `kham-core/data/words_th.txt` (74 new words, CC0)
 - [x] **`negations_th.txt`** → already present in `stopwords_th.txt` (ไม่, แต่); no action needed
-- [ ] **`etcc.txt`** → not directly applicable to `tcc.rs`; it is a 133k-entry dictionary for ETCC longest-match tokenization (a different algorithm). Could be a future `feature = "etcc"` tokenizer.
-- [ ] **`syllables_th.txt`** → review for TCC / dict improvements
-  - Thai phonetic syllables; could improve sub-word segmentation accuracy
+- [ ] **`etcc.txt`** → not directly applicable to `tcc.rs`; it is a 133k-entry dictionary for ETCC longest-match tokenization (a different algorithm). Could be a future `feature = "etcc"` tokenizer. See ADR-002.
+- [x] **`syllables_th.txt`** → reviewed; syllable entries skipped (over-segmentation risk); abbreviation entries skipped (no expansions provided). See ADR-002.
 - [ ] **`ttc_freq.txt`** → optional second frequency source alongside `tnc_freq.txt`
   - Thai Textbook Corpus word frequencies
 - [ ] **`phupha_word_freqs.txt`** → optional third frequency source
@@ -39,12 +38,8 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 ### CC-BY-4.0 — attribution required in docs/license headers
 
-- [ ] **`th_en_transliteration_v1.4.tsv`** → expand `kham-core/data/romanization_th.tsv`
-  - ~10,000 Thai→English transliteration pairs; supplement existing RTGS table
-  - Add to attribution: *PyThaiNLP, CC-BY-4.0*
-- [ ] **`pos_orchid_unigram.json`** / **`pos_ud_unigram-v0.2.json`** → grow `kham-core/data/pos_th.tsv`
-  - Extract word→tag pairs; map ORCHID's 40+ tags to kham-core's 13 categories
-  - Add to attribution: *PyThaiNLP, CC-BY-4.0*
+- [ ] **`th_en_transliteration_v1.4.tsv`** → deferred; this is transliteration (loan word → English source), not RTGS romanization. Would need a separate `transliterate()` API.
+- [x] **`pos_orchid_unigram.json`** → 8,691 new entries appended to `kham-core/data/pos_th.tsv` (CC-BY-4.0, PyThaiNLP). See ADR-003.
 
 ### CC-BY-SA-4.0 — share-alike; keep in separate optional TSV files
 
