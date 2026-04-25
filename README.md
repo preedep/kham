@@ -14,7 +14,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only, no `std` dependency)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; custom dictionaries loaded at runtime
-- **TNC frequency scoring** — Thai National Corpus (CC0) raw counts guide the DP scorer to prefer statistically common segmentations
+- **Compound-first DP scoring** — DP scorer prioritises fewer, longer tokens (compound preservation) over splitting into more dict matches, then uses TNC frequency as a tiebreaker; achieves 94.9% sentence-level agreement with PyThaiNLP newmm (F1 0.975)
 - **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration

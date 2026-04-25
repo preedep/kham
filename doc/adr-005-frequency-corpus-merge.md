@@ -8,12 +8,14 @@
 
 ## Context
 
-kham-core's DP segmentation scorer uses `FreqMap` (`src/freq.rs`) as the **third tiebreaker** in the 4-field `DpScore`:
+kham-core's DP segmentation scorer uses `FreqMap` (`src/freq.rs`) as the **fourth tiebreaker** in the 4-field `DpScore`:
 
 1. Minimise unknowns
-2. Maximise dict-word matches
-3. **Maximise TNC frequency** ← FreqMap contribution
-4. Minimise token count
+2. Minimise token count (compound-first; matches PyThaiNLP newmm)
+3. Maximise dict-word matches
+4. **Maximise TNC frequency** ← FreqMap contribution
+
+> **Note (2026-04-25):** Priority 2 was changed from "Maximise dict-word matches" to "Minimise token count". Splitting a compound into two known words scores more dict matches than keeping it whole, causing spurious splits. Placing token-count minimisation above dict-match maximisation fixes this and raises sentence-level agreement with PyThaiNLP newmm from 2.6% → 94.9% (F1: 0.418 → 0.975).
 
 The built-in frequency data comes from `kham-core/data/tnc_freq.txt` (Thai National Corpus, CC0, 106,120 word types). Two additional CC0 corpora were available for evaluation:
 
