@@ -18,7 +18,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Pre-compiled DARTS** — Double-Array Trie built once at compile time and loaded from a binary blob at runtime (~64 µs vs ~960 ms construction)
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration
-- **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
+- **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, RTGS romanization, and Thai phonetic soundex (lk82 by default) via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets; soundex algorithm selectable per-table via `tokenize='kham soundex udom83'`
 - **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~36,600 entries covering Thai provinces, 246 countries, 17,000+ Wikipedia places/orgs, and 9,000+ person and family names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 - **Number normalization** — Thai digit characters (๐–๙) converted to ASCII synonyms in FTS; spelled-out Thai cardinal words parsed to integers (`หนึ่งร้อย` → `100`); Thai Baht currency text parsed and generated (`parse_thai_baht` / `to_thai_baht_text`)
@@ -183,6 +183,14 @@ SELECT title FROM articles WHERE articles MATCH 'อากาศ';
 -- RTGS romanization (built-in — no config required)
 SELECT title FROM articles WHERE articles MATCH 'kin';
 -- อาหารไทย  (กิน is indexed as both "กิน" and its RTGS form "kin")
+
+-- Thai phonetic soundex — lk82 enabled by default; near-homophones share a code
+SELECT title FROM articles WHERE articles MATCH '1619';  -- lk82 code for กินข้าว
+-- อาหารไทย
+
+-- Override or disable soundex per table
+CREATE VIRTUAL TABLE articles2 USING fts5(title, body, tokenize='kham soundex udom83');
+CREATE VIRTUAL TABLE articles3 USING fts5(title, body, tokenize='kham soundex none');
 
 -- Snippet highlighting (byte-accurate offsets into normalized text)
 SELECT snippet(articles, 1, '>>>', '<<<', '...', 6)

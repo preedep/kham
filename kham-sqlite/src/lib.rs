@@ -6,10 +6,16 @@
 //! - Named entity recognition (places, persons, organisations)
 //! - Synonym expansion via `FTS5_TOKEN_COLOCATED` (configurable TSV map)
 //! - RTGS romanization added as colocated synonyms (กิน → "kin")
+//! - Thai phonetic soundex codes as colocated synonyms for fuzzy matching
 //!
 //! ```sql
 //! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
+//! -- Default tokenizer (lk82 soundex enabled)
 //! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
+//! -- Explicit soundex algorithm (positional: 'kham soundex <algo>')
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83');
+//! -- Disable soundex
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');
 //! INSERT INTO docs VALUES ('กินข้าวกับปลา');
 //! SELECT * FROM docs WHERE docs MATCH 'ปลา';
 //! SELECT snippet(docs, 0, '<b>', '</b>', '...', 5) FROM docs WHERE docs MATCH 'ปลา';
@@ -63,6 +69,7 @@ use std::panic::catch_unwind;
 use kham_core::fts::FtsTokenizer;
 use kham_core::normalizer;
 use kham_core::romanizer::RomanizationMap;
+use kham_core::soundex::SoundexAlgorithm;
 
 // ---------------------------------------------------------------------------
 // SQLite / FTS5 constants
@@ -146,18 +153,80 @@ struct KhamInstance {
 }
 
 // ---------------------------------------------------------------------------
+// xCreate argument parsing
+// ---------------------------------------------------------------------------
+
+/// Parse soundex algorithm from the `xCreate` argument list.
+///
+/// FTS5 passes `tokenize='kham soundex lk82'` as positional space-separated
+/// arguments: `az_arg[0]="kham"`, `az_arg[1]="soundex"`, `az_arg[2]="lk82"`.
+/// This function scans for the keyword `"soundex"` and reads the next argument
+/// as the algorithm name.
+///
+/// Supported algorithm values: `"lk82"` (default), `"udom83"`, `"metasound"`, `"none"`.
+/// Unknown values fall back to lk82.
+fn parse_soundex_arg(az_arg: *const *const c_char, n_arg: c_int) -> Option<SoundexAlgorithm> {
+    let n = n_arg as usize;
+    // FTS5 strips the tokenizer name ("kham") before calling xCreate, so az_arg[0]
+    // is the first user-supplied argument (e.g. "soundex").
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "soundex" {
+            // Next argument is the algorithm name.
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return Some(SoundexAlgorithm::Lk82);
+            }
+            let val = match unsafe { std::ffi::CStr::from_ptr(val_ptr) }.to_str() {
+                Ok(s) => s,
+                Err(_) => return Some(SoundexAlgorithm::Lk82),
+            };
+            return match val {
+                "lk82" => Some(SoundexAlgorithm::Lk82),
+                "udom83" => Some(SoundexAlgorithm::Udom83),
+                "metasound" => Some(SoundexAlgorithm::MetaSound),
+                "none" => None,
+                _ => Some(SoundexAlgorithm::Lk82),
+            };
+        }
+    }
+    Some(SoundexAlgorithm::Lk82) // default when no soundex argument
+}
+
+// ---------------------------------------------------------------------------
 // FTS5 tokenizer callbacks
 // ---------------------------------------------------------------------------
 
 /// Allocate a new per-table tokenizer instance, building the `FtsTokenizer` once.
+///
+/// Accepts an optional `soundex <algo>` argument pair (lk82 | udom83 | metasound | none).
+/// Example: `tokenize='kham soundex udom83'`. When absent, lk82 is used by default.
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
-    _az_arg: *const *const c_char,
-    _n_arg: c_int,
+    az_arg: *const *const c_char,
+    n_arg: c_int,
     pp_out: *mut *mut KhamFts5Tokenizer,
 ) -> c_int {
     if pp_out.is_null() {
         return SQLITE_ERROR;
+    }
+    let soundex_algo = parse_soundex_arg(az_arg, n_arg);
+    let mut builder = FtsTokenizer::builder().romanization(RomanizationMap::builtin());
+    if let Some(algo) = soundex_algo {
+        builder = builder.soundex(algo);
     }
     let instance = Box::new(KhamInstance {
         vtable: KhamFts5Tokenizer {
@@ -165,10 +234,8 @@ unsafe extern "C" fn kham_fts5_create(
             x_delete: Some(kham_fts5_delete),
             x_tokenize: Some(kham_fts5_tokenize),
         },
-        // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS.
-        fts: FtsTokenizer::builder()
-            .romanization(RomanizationMap::builtin())
-            .build(),
+        // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS + soundex.
+        fts: builder.build(),
     });
     // SAFETY: vtable is the first field of KhamInstance (#[repr(C)]),
     // so *mut KhamInstance and *mut KhamFts5Tokenizer alias the same address.

@@ -17,7 +17,7 @@ SQLite FTS5  ──▶  src/shim.c (C helpers)  ──▶  lib.rs (Rust entry po
                                              xTokenize → normalize → segment_for_fts
                                                                → xToken (primary)
                                                                → xToken FTS5_TOKEN_COLOCATED
-                                                                        (synonyms + RTGS)
+                                                                        (synonyms + RTGS + soundex)
 ```
 
 - `shim.c` provides C helpers (`kham_sqlite_setup_api`, `kham_sqlite_get_fts5api`) called from Rust
@@ -92,18 +92,28 @@ struct KhamFts5Api {
 For documents stored with stacked tone marks or unresolved Sara Am (rare in practice), offsets
 may shift by a few bytes in those spans.
 
-## Synonym expansion (FTS5_TOKEN_COLOCATED)
+## Synonym expansion and soundex (FTS5_TOKEN_COLOCATED)
 
-For each non-stop token, any synonyms and RTGS romanization forms are emitted as colocated
-tokens at the same `(iStart, iEnd)` position.  This enables queries like:
+For each non-stop token, synonyms, RTGS romanization forms, and soundex phonetic codes are
+emitted as colocated tokens at the same `(iStart, iEnd)` position.
 
 ```sql
 SELECT * FROM docs WHERE docs MATCH 'kin';   -- matches กิน via RTGS
-SELECT * FROM docs WHERE docs MATCH 'eat';   -- matches กิน if synonym map includes "กิน → eat"
+SELECT * FROM docs WHERE docs MATCH '4800';  -- matches ปลา via lk82 soundex code
+SELECT * FROM docs WHERE docs MATCH '1600';  -- matches กาน/ขาน/คาน (near-homophones, lk82)
 ```
 
-RTGS romanization is enabled by default (built in `xCreate` with `RomanizationMap::builtin()`).
-Custom synonym maps are not yet exposed via `xCreate` arguments (v2 roadmap).
+RTGS romanization is enabled by default (`RomanizationMap::builtin()`).
+Soundex defaults to **lk82** and can be overridden via the `soundex <algo>` `xCreate` argument:
+
+```sql
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');               -- default: lk82
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83');
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex metasound');
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');  -- disable soundex
+```
+
+Custom synonym maps are not yet exposed via `xCreate` arguments.
 
 ## Build Requirements
 
@@ -148,6 +158,14 @@ SELECT * FROM docs WHERE docs MATCH 'กรุงเทพ';   -- NE merged from
 SELECT * FROM docs WHERE docs MATCH 'kin';       -- matches กิน
 SELECT * FROM docs WHERE docs MATCH 'krungthep'; -- matches กรุงเทพ (if in RTGS map)
 
+-- Soundex phonetic fuzzy search (lk82 by default)
+SELECT * FROM docs WHERE docs MATCH '4800';      -- matches ปลา (lk82 code)
+SELECT * FROM docs WHERE docs MATCH '1600';      -- matches กาน/ขาน/คาน (near-homophones)
+
+-- Override soundex algorithm
+CREATE VIRTUAL TABLE docs2 USING fts5(body, tokenize='kham soundex udom83');
+CREATE VIRTUAL TABLE docs3 USING fts5(body, tokenize='kham soundex none'); -- disable
+
 -- Phrase search
 SELECT * FROM docs WHERE docs MATCH '"กิน ข้าว"';
 
@@ -161,13 +179,13 @@ All non-whitespace token kinds are forwarded to SQLite FTS5 without stopword fil
 
 | `TokenKind`              | Forwarded? | Notes |
 |--------------------------|-----------|-------|
-| `Thai`                   | ✓ | + synonyms/RTGS as colocated |
+| `Thai`                   | ✓ | + synonyms / RTGS / soundex as colocated |
 | `Latin`                  | ✓ | |
 | `Number`                 | ✓ | |
 | `Punctuation`            | ✓ | |
 | `Emoji`                  | ✓ | |
 | `Unknown`                | ✓ | trigrams emitted as colocated |
-| `Named(_)`               | ✓ | merged by NE tagger; + RTGS |
+| `Named(_)`               | ✓ | merged by NE tagger; + RTGS / soundex |
 | `Whitespace`             | — | excluded by `segment_for_fts` |
 
 ## Build Commands
