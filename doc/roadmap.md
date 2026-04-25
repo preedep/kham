@@ -43,9 +43,7 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 - [x] **`person_names_male_th.txt`** + **`person_names_female_th.txt`** → already in `ne_th.tsv` since v0.2.0 (10,041 entries); attribution corrected to CC-BY-SA-4.0 (was wrongly Apache-2.0). See ADR-001, ADR-004.
 - [x] **`family_names_th.txt`** → 8,980 entries appended to `ne_th.tsv` (CC-BY-SA-4.0, filtered by words_th.txt). See ADR-004.
-- [ ] **`wikipedia_titles_th.txt`** → selective import for NER Place/Org gazetteer
-  - ~1M titles; filter to proper nouns only before import
-  - CC-BY-SA share-alike applies to derived TSV file
+- [x] **`wikipedia_titles_th.txt`** → 17,240 entries appended to `ne_th.tsv` (7,705 PLACE + 9,535 ORG, CC-BY-SA-4.0). See ADR-006.
 
 ---
 
