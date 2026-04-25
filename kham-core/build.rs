@@ -234,6 +234,32 @@ fn serialize_darts(base: &[i32], check: &[i32]) -> Vec<u8> {
 }
 
 // ---------------------------------------------------------------------------
+// Data file compression
+// ---------------------------------------------------------------------------
+
+fn compress_data_file(manifest: &str, out_dir: &str, src: &str, dst: &str) {
+    let src_path = Path::new(manifest).join(src);
+    let dst_path = Path::new(out_dir).join(dst);
+
+    println!("cargo:rerun-if-changed={}", src_path.display());
+
+    let data = fs::read(&src_path)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", src_path.display()));
+    let compressed = miniz_oxide::deflate::compress_to_vec_zlib(&data, 6);
+
+    println!(
+        "cargo:warning={}: {} -> {} bytes ({:.0}%)",
+        dst,
+        data.len(),
+        compressed.len(),
+        compressed.len() as f64 / data.len() as f64 * 100.0
+    );
+
+    fs::write(&dst_path, &compressed)
+        .unwrap_or_else(|e| panic!("failed to write {}: {e}", dst_path.display()));
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -261,4 +287,8 @@ fn main() {
         check.len(),
         blob.len()
     );
+
+    compress_data_file(&manifest, &out_dir, "data/tnc_freq.txt", "tnc_freq.bin");
+    compress_data_file(&manifest, &out_dir, "data/ne_th.tsv", "ne_th.bin");
+    compress_data_file(&manifest, &out_dir, "data/pos_th.tsv", "pos_th.bin");
 }

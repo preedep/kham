@@ -42,3 +42,10 @@ pub mod token;
 pub use error::KhamError;
 pub use segmenter::{Tokenizer, TokenizerBuilder};
 pub use token::{NamedEntityKind, Token, TokenKind};
+
+/// Decompress zlib-compressed built-in data produced by the build script.
+pub(crate) fn decompress_builtin(data: &[u8]) -> alloc::string::String {
+    let bytes = miniz_oxide::inflate::decompress_to_vec_zlib(data)
+        .expect("built-in data decompression failed");
+    alloc::string::String::from_utf8(bytes).expect("built-in data is valid UTF-8")
+}

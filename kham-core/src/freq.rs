@@ -8,7 +8,7 @@
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 
-static BUILTIN_FREQ_DATA: &str = include_str!("../data/tnc_freq.txt");
+static BUILTIN_FREQ_DATA: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/tnc_freq.bin"));
 
 /// A word→frequency lookup table backed by the Thai National Corpus (TNC).
 ///
@@ -41,7 +41,7 @@ impl FreqMap {
     ///
     /// [`Tokenizer`]: crate::Tokenizer
     pub fn builtin() -> Self {
-        Self::from_tsv(BUILTIN_FREQ_DATA)
+        Self::from_tsv(&crate::decompress_builtin(BUILTIN_FREQ_DATA))
     }
 
     /// Look up a word's frequency; returns 0 if not found.
