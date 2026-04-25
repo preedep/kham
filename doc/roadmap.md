@@ -27,12 +27,9 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 ### CC0 — no attribution required (embed freely)
 
-- [ ] **`orst_words_th.txt`** → merge into `kham-core/data/words_th.txt`
-  - Official Royal Thai Institution word list; expands the segmentation dictionary
-- [ ] **`negations_th.txt`** → append to `kham-core/data/stopwords_th.txt`
-  - Thai negation words (ไม่, มิ, etc.)
-- [ ] **`etcc.txt`** → review for TCC boundary improvements in `src/tcc.rs`
-  - Enhanced Thai Character Clusters; may refine character cluster detection
+- [x] **`orst_words_th.txt`** → merged into `kham-core/data/words_th.txt` (74 new words, CC0)
+- [x] **`negations_th.txt`** → already present in `stopwords_th.txt` (ไม่, แต่); no action needed
+- [ ] **`etcc.txt`** → not directly applicable to `tcc.rs`; it is a 133k-entry dictionary for ETCC longest-match tokenization (a different algorithm). Could be a future `feature = "etcc"` tokenizer.
 - [ ] **`syllables_th.txt`** → review for TCC / dict improvements
   - Thai phonetic syllables; could improve sub-word segmentation accuracy
 - [ ] **`ttc_freq.txt`** → optional second frequency source alongside `tnc_freq.txt`
