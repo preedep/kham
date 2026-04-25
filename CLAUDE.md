@@ -108,3 +108,4 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 | [ADR-002](doc/adr-002-syllables-corpus-import-decision.md) | syllables_th.txt Import Decision — Syllables and Abbreviations Excluded |
 | [ADR-003](doc/adr-003-orchid-pos-tag-mapping.md) | ORCHID POS Tag Mapping to kham-core 13-Category Scheme |
 | [ADR-004](doc/adr-004-family-names-import.md) | Family Names Import and License Correction (CC-BY-SA-4.0) |
+| [ADR-005](doc/adr-005-frequency-corpus-merge.md) | Frequency Corpus Merge — TTC Included, Phupha Excluded |

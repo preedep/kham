@@ -31,10 +31,8 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 - [x] **`negations_th.txt`** → already present in `stopwords_th.txt` (ไม่, แต่); no action needed
 - [ ] **`etcc.txt`** → not directly applicable to `tcc.rs`; it is a 133k-entry dictionary for ETCC longest-match tokenization (a different algorithm). Could be a future `feature = "etcc"` tokenizer. See ADR-002.
 - [x] **`syllables_th.txt`** → reviewed; syllable entries skipped (over-segmentation risk); abbreviation entries skipped (no expansions provided). See ADR-002.
-- [ ] **`ttc_freq.txt`** → optional second frequency source alongside `tnc_freq.txt`
-  - Thai Textbook Corpus word frequencies
-- [ ] **`phupha_word_freqs.txt`** → optional third frequency source
-  - Additional word frequency corpus
+- [x] **`ttc_freq.txt`** → 2,410 TTC-only words appended to `tnc_freq.txt` (CC0). See ADR-005.
+- [x] **`phupha_word_freqs.txt`** → excluded; character-level data, not word-level. See ADR-005.
 
 ### CC-BY-4.0 — attribution required in docs/license headers
 
