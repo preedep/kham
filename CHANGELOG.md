@@ -61,31 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **C FFI (`kham-capi`)**
 - `kham-capi/include/kham.h` regenerated via cbindgen and now tracked in the repository
-- `NeTagger`: gazetteer-based tagger with greedy longest-match multi-token support
-- Built-in NE gazetteer (`ne_th.tsv`): 10 488 entries — countries (PyThaiNLP) and Thai person names (dictionary-filter strategy, ADR-001)
-- `TokenKind::Named(NeType)` variant in `Token`; FTS pipeline injects NE surface form as synonym
-- kham-pg: token type 7 (`named`) registered in `kham_lextypes`; SQL config maps `named` through `kham_dict`
-
-**Part-of-Speech Tagging (`kham-core`)**
-- `PosTagger`: lookup-based Thai POS tagger; `pos_th.tsv` with 338 entries
-- `FtsTokenizer` builder: `.pos(true)` annotates tokens; POS tag injected as synonym lexeme
-
-**RTGS Romanization (`kham-core`)**
-- `RomanizationMap`: table-driven Thai → Roman mapping (`romanization_th.tsv`, 415 entries)
-- `romanize()`, `romanize_or_raw()`, `romanize_tokens()` — zero-alloc syllable-level mapping
-- `FtsTokenizer` builder: `.romanize(true)` injects Roman form as synonym for Thai tokens
-
-**FTS Pipeline (`kham-core` + `kham-cli`)**
-- `FtsTokenizer` now wires POS, NE, romanization, stopwords, and synonym expansion in a single pass
-- CLI `--fts` flag: outputs kind / POS / NE / stopword metadata per token
-
-**Documentation**
-- `doc/architecture.md`, `doc/benchmarks.md`, `doc/dict-format.md` split from README
-- `doc/adr-001-ne-person-name-import-strategy.md` — ADR for NE gazetteer import approach
-- Per-crate `CLAUDE.md` files: `kham-core/`, `kham-cli/`, `kham-pg/`
-
-**C FFI (`kham-capi`)**
-- `kham-capi/include/kham.h` regenerated via cbindgen (now tracked in repo)
 
 ## [0.1.3] - 2026-04-19
 
