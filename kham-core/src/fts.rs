@@ -752,13 +752,12 @@ mod tests {
         for t in &tokens {
             // A soundex code is 4 ASCII chars (lk82/udom83); no synonym should look like one.
             for syn in &t.synonyms {
-                let looks_like_soundex = syn.len() == 4
-                    && syn.chars().all(|c| c.is_ascii_alphanumeric());
+                let looks_like_soundex =
+                    syn.len() == 4 && syn.chars().all(|c| c.is_ascii_alphanumeric());
                 assert!(
                     !looks_like_soundex,
                     "unexpected soundex-like synonym '{}' on token '{}'",
-                    syn,
-                    t.text
+                    syn, t.text
                 );
             }
         }

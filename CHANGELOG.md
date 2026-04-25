@@ -5,6 +5,65 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-25
+
+### Added
+
+**Thai phonetic encoding — `soundex` module (`kham-core`)**
+- `lk82(word)` — Lorchirachoonkul 1982; 4-char code, 12 consonant groups; most widely deployed Thai soundex
+- `udom83(word)` — Udompanich 1983; 4-char code, 14 groups with finer sibilant/liquid distinctions (ส vs ช, ล vs ร)
+- `metasound(word)` — Snae & Brückner 2009; per-syllable `[initial][vowel][final]` encoding
+- `thai_english_soundex(word)` / `english_soundex(word)` — Suwanvisat & Prasitjutrakul 1998 cross-language table; encodes Thai and English into a shared phonetic space without a romanizer
+- `soundex(word, SoundexAlgorithm)` — unified enum dispatch; `sounds_like(a, b, algo)` convenience helper
+- `sounds_like_lk82`, `sounds_like_udom83`, `sounds_like_cross_lang` — boolean proximity helpers
+- FTS integration: `FtsTokenizerBuilder::soundex(SoundexAlgorithm)` appends phonetic code to `FtsToken::synonyms` for Thai and Named tokens (opt-in; lk82/udom83 recommended)
+- `SoundexAlgorithm` enum: `Lk82 | Udom83 | MetaSound`
+
+**CLI — `kham-cli`**
+- `--soundex <ALGO>` flag (requires `--fts`): `lk82`, `udom83`, `metasound`, `cross_lang`; phonetic code appears in `syn=` FTS output field
+
+**Accuracy benchmark — `kham-bench-accuracy`**
+- New binary crate; reads `input|tok1|tok2|…` testdata files, computes word-boundary precision / recall / F1
+- `--threshold <F>` — exits non-zero if F1 falls below threshold (CI gate)
+- `--verbose` — prints each failing testdata case
+
+**Developer tooling**
+- `scripts/compare_pythainlp.py` — compares kham vs PyThaiNLP `word_tokenize(engine='newmm')` on 39 built-in sentences; supports `--show-all`, `--export-testdata`, `--agreed`; annotates known PyThaiNLP errors with `[KHAM-OK]` tag and TNC frequency evidence
+
+**Data expansions (`kham-core`)**
+- NE gazetteer (`ne_th.tsv`): +17,240 Wikipedia Thai-title entries (places, organisations, CC-BY-SA-4.0) and +8,980 Thai family names → gazetteer grows from ~10,400 to ~36,600 entries
+- POS table (`pos_th.tsv`): +8,691 ORCHID-derived entries (CC-BY-4.0) → from 338 to ~9,000 entries across 13 categories
+- Frequency table (`tnc_freq.txt`): +2,410 TTC-only words merged in (CC0, Thai Textbook Corpus)
+
+**Build / binary size**
+- `tnc_freq.txt`, `ne_th.tsv`, `pos_th.tsv` zlib-compressed at compile time via `build.rs`; decompressed at first use — reduces embedded data size significantly
+
+### Changed
+
+**Segmentation algorithm — compound-first DP scoring (breaking)**
+
+`DpScore` field order changed: `neg_unknowns → neg_tokens → dict_words → freq_score`
+(was `neg_unknowns → dict_words → freq_score → neg_tokens`).
+
+Minimising token count is now priority 2, above maximising dict-word matches. Previously, splitting a compound word into two known words scored *higher* than keeping it whole (more dict matches = better score), causing systematic over-segmentation. The new order preserves compound words and matches PyThaiNLP newmm behaviour.
+
+**Measured impact** (39-sentence benchmark vs PyThaiNLP newmm as reference):
+
+| Metric | Before | After |
+|---|---|---|
+| Sentence agreement | 1/39 (2.6%) | 37/39 (94.9%) |
+| Micro F1 | 0.418 | 0.975 |
+| Genuine diffs | — | **0** (2 remaining are confirmed PyThaiNLP errors) |
+
+Callers who relied on the previous splitting behaviour will see different token output for compound words (e.g. `กินข้าว` → one token, not two; `วันนี้` → one token, not two).
+
+### Fixed
+
+- Soundex doctest: `sounds_like_cross_lang("McDonald", "MacDonald")` was incorrect (not equal); replaced with `sounds_like_cross_lang("กาน", "คาน")`
+- `pos.rs` integration test: `fts_token_has_pos_for_known_thai_word` used `"กินข้าว"` and expected separate `กิน` / `ข้าว` tokens — now tests each word standalone since the compound is one token
+
+---
+
 ## [0.3.0] - 2026-04-25
 
 ### Added
@@ -160,6 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.4.0]: https://github.com/preedep/kham/releases/tag/v0.4.0
 [0.3.0]: https://github.com/preedep/kham/releases/tag/v0.3.0
 [0.2.0]: https://github.com/preedep/kham/releases/tag/v0.2.0
 [0.1.3]: https://github.com/preedep/kham/releases/tag/v0.1.3

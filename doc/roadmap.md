@@ -11,6 +11,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.1.3 | pg_regress suite (67 tests across 4 suites) |
 | v0.2.0 | POS tagging, NER, RTGS romanization, number normalization, SQLite FTS5 (`kham-sqlite`) |
 | v0.3.0 | Abbreviation expansion (`AbbrevMap`), Thai date parsing, sentence segmentation |
+| v0.4.0 | Compound-first DP scoring (F1 0.418→0.975 vs PyThaiNLP), Thai Soundex (lk82/udom83/MetaSound/cross-lang), NE/POS/freq data expansion, `kham-bench-accuracy`, `--soundex` CLI flag |
 
 ---
 

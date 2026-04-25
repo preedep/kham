@@ -19,7 +19,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Text normalization** — วรรณยุกต์ dedup and Sara Am composition before segmentation
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, synonym expansion, POS tagging, named entity recognition, RTGS romanization, and OOV n-gram fallback; ready for PostgreSQL `tsvector` and SQLite FTS5 integration
 - **SQLite FTS5 extension** — loadable `libkham_sqlite` registers a `kham` tokenizer with full NLP pipeline: normalization, NE tagging, synonym expansion, and RTGS romanization via `FTS5_TOKEN_COLOCATED`; `highlight()` and `snippet()` work via byte-accurate offsets into normalized text
-- **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~10,400 entries covering Thai provinces, 246 countries, and 10,000+ person names
+- **Named entity recognition** — gazetteer-based NER with greedy multi-token matching (up to 5 consecutive tokens); ~36,600 entries covering Thai provinces, 246 countries, 17,000+ Wikipedia places/orgs, and 9,000+ person and family names
 - **Part-of-speech tagging** — 13-category lookup table for Thai tokens
 - **Number normalization** — Thai digit characters (๐–๙) converted to ASCII synonyms in FTS; spelled-out Thai cardinal words parsed to integers (`หนึ่งร้อย` → `100`); Thai Baht currency text parsed and generated (`parse_thai_baht` / `to_thai_baht_text`)
 - **Abbreviation expansion** — `AbbrevMap` with 118-entry built-in TSV (months, era markers, ranks, agencies); greedy longest-first pre-tokenisation expansion so dot-containing forms (`ก.ค.` → `กรกฎาคม`) are replaced before segmentation; opt-in via `FtsTokenizerBuilder::abbrevs()`
@@ -45,7 +45,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.3"
+kham-core = "0.4"
 ```
 
 ```rust
