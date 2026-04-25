@@ -59,7 +59,7 @@ SELECT to_tsvector('kham', 'กินข้าวกับปลา')
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')
     @@ phraseto_tsquery('kham', 'กินข้าว ปลา') AS phrase_non_adjacent;
 
--- 11. Phrase — second pair adjacent (pos 3 & 4) → true
+-- 11. Phrase — second pair adjacent (pos 2 & 3) → true
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')
     @@ phraseto_tsquery('kham', 'กับ ปลา') AS phrase_second_pair;
 

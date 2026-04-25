@@ -94,7 +94,7 @@ SELECT to_tsvector('kham', 'กินข้าว')::text;
 
 -- ── 12. tsvector lexeme content — sentence with stopword ────────────────────
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')::text;
- to_tsvector              
+       to_tsvector        
 --------------------------
  'กับ':2 'กินข้าว':1 'ปลา':3
 (1 row)

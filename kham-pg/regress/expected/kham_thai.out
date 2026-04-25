@@ -77,11 +77,11 @@ ORDER BY tokid, token;
      1 | แมว
 (3 rows)
 
--- ── 8. Compound word: โรงพยาบาล → one compound token ────────────────────────
+-- ── 8. Compound word: โรงพยาบาล → one compound token ───────────────────────────
 SELECT tokid, token
 FROM ts_parse('kham', 'โรงพยาบาล')
 ORDER BY tokid, token;
- tokid | token     
+ tokid |   token   
 -------+-----------
      1 | โรงพยาบาล
 (1 row)
