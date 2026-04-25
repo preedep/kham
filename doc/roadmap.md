@@ -21,6 +21,28 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 
 ---
 
+## Accuracy benchmark
+
+Unit tests verify specific known cases but do not measure overall segmentation quality or catch regressions across real text. An accuracy benchmark would report **precision / recall / F1** at word-boundary level and enable comparisons against PyThaiNLP and nlpO3.
+
+**Corpus constraints:** BEST corpus is excluded (non-CC0). Options for gold-standard data:
+
+- Curate a CC0 gold set from `kham-core/testdata/` (safe, limited coverage)
+- Source a CC0/CC-BY corpus (e.g., ORCHID subsets or a manually annotated set)
+- Generate synthetic benchmarks from the existing dictionary + known segmentations
+
+**Suggested implementation:**
+
+- New binary crate `kham-bench-accuracy` (separate from criterion perf benchmarks)
+- Reads `input|tok1|tok2|…` files from `kham-core/testdata/` (same format as integration tests)
+- Outputs per-file and aggregate precision / recall / F1
+- Runs via `cargo run -p kham-bench-accuracy` — not part of `cargo bench` (which is throughput only)
+- CI gate: fail if F1 drops below a configurable threshold vs. a stored baseline
+
+- [ ] **Accuracy benchmark** — `kham-bench-accuracy` binary, precision/recall/F1 against gold corpus
+
+---
+
 ## PyThaiNLP corpus imports
 
 Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
@@ -54,22 +76,25 @@ and name matching (especially transliterated foreign names). All rule-based vari
 pure-Rust `no_std` compatible. Suggested module: `kham-core/src/soundex.rs`, public API:
 `soundex_lk82(word: &str) -> String`, etc.
 
+Module: `kham-core/src/soundex.rs`. Public API: `SoundexAlgorithm` enum + `soundex(word, algo)` + `sounds_like(a, b, algo)` + direct `lk82(word)` / `udom83(word)` / `metasound(word)` functions.
+
 | Algorithm | Effort | Notes |
 |---|---|---|
-| **lk82** (Lorchirachoonkul 1982) | Low | 4-level Thai phonetic code; most widely used in Thai NLP; well-documented encoding table |
-| **udom83** (Udompanich 1983) | Low | Alternative 4-level scheme; different consonant groupings from lk82; implement alongside lk82 |
-| **MetaSound** (Snae & Brückner 2009) | Medium | Hybrid Soundex + Metaphone rules optimised for Thai; handles vowel length and tone class |
+| **lk82** (Lorchirachoonkul 1982) | Low | 4-char alphanumeric code; most widely used in Thai NLP |
+| **udom83** (Udompanich 1983) | Low | Finer sibilant/liquid groupings; 4-char code |
+| **MetaSound** (Snae & Brückner 2009) | Medium | Per-syllable [initial][vowel][final] triple; variable-length code |
 | **Thai–English cross-language** (Suwanvisat & Prasitjutrakul 1998) | Medium | Encodes transliterated Thai↔English names to the same code; requires both Thai and English phonetic tables |
-| **HMM + trigram hybrid** | High | Uses Hidden Markov Models and phonetic trigrams for initial consonant, vowel, and final consonant clusters; requires labelled training data — defer until ML infrastructure exists |
+| **HMM + trigram hybrid** | High | Uses Hidden Markov Models and phonetic trigrams; requires labelled training data — defer until ML infrastructure exists |
 
 **FTS integration opportunity:** lk82/udom83 codes could be emitted as synonyms in
 `FtsTokenizer` (alongside RTGS romanization), enabling phonetic-fuzzy full-text search
 with zero schema change.
 
-- [ ] **lk82** — implement encoding table, unit tests, integrate as optional `FtsTokenizer` synonym source
-- [ ] **udom83** — implement alongside lk82; share consonant-grouping infrastructure
-- [ ] **MetaSound** — implement after lk82/udom83 are stable; share vowel-stripping logic
-- [ ] **Thai–English cross-language Soundex** — depends on MetaSound + romanizer; medium priority
+- [x] **lk82** — implemented; 12 consonant groups, 4-char code, unit tests
+- [x] **udom83** — implemented alongside lk82; finer sibilant/liquid groupings, unit tests
+- [x] **MetaSound** — per-syllable [initial][vowel][final] triple; variable-length code, unit tests
+- [x] **FTS integration** — `.soundex(SoundexAlgorithm)` builder on `FtsTokenizer`; emits code into `synonyms` for Thai/Named tokens; 5 tests
+- [x] **Thai–English cross-language Soundex** — `thai_english_soundex(word, &rom)` + `english_soundex(word)` + `sounds_like_cross_lang`; works transparently for Thai→English and English→English pairs
 - [ ] **HMM + trigram hybrid** — deferred; requires ML training data
 
 ---

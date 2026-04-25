@@ -34,6 +34,7 @@ pub mod pre_tokenizer;
 pub mod romanizer;
 pub mod segmenter;
 pub mod sentence;
+pub mod soundex;
 pub mod stopwords;
 pub mod synonym;
 pub mod tcc;

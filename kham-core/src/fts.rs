@@ -33,6 +33,7 @@ use crate::ngram::char_ngrams;
 use crate::number::{thai_digits_to_ascii, thai_word_to_decimal};
 use crate::pos::{PosTag, PosTagger};
 use crate::romanizer::RomanizationMap;
+use crate::soundex::{soundex, SoundexAlgorithm};
 use crate::stopwords::StopwordSet;
 use crate::synonym::SynonymMap;
 use crate::token::{NamedEntityKind, TokenKind};
@@ -73,6 +74,7 @@ pub struct FtsTokenizerBuilder {
     abbrev_map: Option<AbbrevMap>,
     /// `None` means "use default (true)".
     number_normalize: Option<bool>,
+    soundex: Option<SoundexAlgorithm>,
 }
 
 impl FtsTokenizerBuilder {
@@ -150,6 +152,23 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Emit a Thai phonetic soundex code as an additional synonym for Thai and Named tokens.
+    ///
+    /// When set, each Thai and Named token whose text contains Thai consonants gets its
+    /// soundex code appended to [`FtsToken::synonyms`], enabling phonetic fuzzy matching
+    /// in full-text search (e.g. querying `"1600"` matches กาน, ขาน, and คาน with lk82).
+    ///
+    /// [`SoundexAlgorithm::Lk82`] and [`SoundexAlgorithm::Udom83`] produce fixed
+    /// 4-character codes and are the recommended choices for FTS indexing.
+    /// [`SoundexAlgorithm::MetaSound`] produces variable-length codes and is more
+    /// collision-prone at word level — prefer lk82 or udom83 for general FTS use.
+    ///
+    /// Disabled by default — call this method to opt in.
+    pub fn soundex(mut self, algo: SoundexAlgorithm) -> Self {
+        self.soundex = Some(algo);
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
@@ -162,6 +181,7 @@ impl FtsTokenizerBuilder {
             romanization: self.romanization,
             abbrev_map: self.abbrev_map,
             number_normalize: self.number_normalize.unwrap_or(true),
+            soundex: self.soundex,
         }
     }
 }
@@ -190,6 +210,7 @@ pub struct FtsTokenizer {
     romanization: Option<RomanizationMap>,
     abbrev_map: Option<AbbrevMap>,
     number_normalize: bool,
+    soundex: Option<SoundexAlgorithm>,
 }
 
 impl FtsTokenizer {
@@ -244,6 +265,12 @@ impl FtsTokenizer {
                 if let Some(ref rom) = self.romanization {
                     if let Some(rtgs) = rom.romanize(token.text) {
                         synonyms.push(String::from(rtgs));
+                    }
+                }
+                if let Some(algo) = self.soundex {
+                    let code = soundex(token.text, algo);
+                    if !code.chars().all(|c| c == '0') {
+                        synonyms.push(code);
                     }
                 }
             }
@@ -694,6 +721,103 @@ mod tests {
         assert!(
             texts.contains(&"."),
             "without abbrev expansion, dots should remain as tokens, got: {texts:?}"
+        );
+    }
+
+    // ── soundex synonyms ──────────────────────────────────────────────────────
+
+    #[test]
+    fn soundex_lk82_appended_to_thai_synonyms() {
+        use crate::soundex::lk82;
+        let fts = FtsTokenizer::builder()
+            .soundex(SoundexAlgorithm::Lk82)
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        let tokens = fts.segment_for_fts("กิน");
+        let t = tokens.iter().find(|t| t.text == "กิน");
+        assert!(t.is_some(), "expected token 'กิน'");
+        let expected_code = lk82("กิน");
+        assert!(
+            t.unwrap().synonyms.contains(&expected_code),
+            "expected lk82 code '{expected_code}' in synonyms, got {:?}",
+            t.unwrap().synonyms
+        );
+    }
+
+    #[test]
+    fn soundex_not_emitted_by_default() {
+        // Without .soundex() in the builder, no soundex codes should appear.
+        let fts = FtsTokenizer::new();
+        let tokens = fts.segment_for_fts("กินข้าว");
+        for t in &tokens {
+            // A soundex code is 4 ASCII chars (lk82/udom83); no synonym should look like one.
+            for syn in &t.synonyms {
+                let looks_like_soundex = syn.len() == 4
+                    && syn.chars().all(|c| c.is_ascii_alphanumeric());
+                assert!(
+                    !looks_like_soundex,
+                    "unexpected soundex-like synonym '{}' on token '{}'",
+                    syn,
+                    t.text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn soundex_same_sounding_words_share_code_in_index() {
+        // กาน and ขาน share lk82 code "1600"; both should carry it as a synonym.
+        use crate::soundex::lk82;
+        let fts = FtsTokenizer::builder()
+            .soundex(SoundexAlgorithm::Lk82)
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        let code = lk82("กาน");
+        for word in &["กาน", "ขาน", "คาน"] {
+            let tokens = fts.segment_for_fts(word);
+            let t = tokens.first().expect("expected at least one token");
+            assert!(
+                t.synonyms.contains(&code),
+                "'{word}' should carry lk82 code '{code}', got {:?}",
+                t.synonyms
+            );
+        }
+    }
+
+    #[test]
+    fn soundex_not_emitted_for_non_thai_tokens() {
+        let fts = FtsTokenizer::builder()
+            .soundex(SoundexAlgorithm::Lk82)
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        let tokens = fts.segment_for_fts("hello 123");
+        for t in &tokens {
+            for syn in &t.synonyms {
+                let looks_like_soundex =
+                    syn.len() == 4 && syn.chars().all(|c| c.is_ascii_alphanumeric());
+                assert!(
+                    !looks_like_soundex,
+                    "non-Thai token '{}' should not get a soundex synonym, got '{syn}'",
+                    t.text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn soundex_udom83_appended() {
+        use crate::soundex::udom83;
+        let fts = FtsTokenizer::builder()
+            .soundex(SoundexAlgorithm::Udom83)
+            .stopwords(StopwordSet::from_text(""))
+            .build();
+        let tokens = fts.segment_for_fts("กิน");
+        let t = tokens.iter().find(|t| t.text == "กิน").unwrap();
+        let expected = udom83("กิน");
+        assert!(
+            t.synonyms.contains(&expected),
+            "expected udom83 code '{expected}' in synonyms, got {:?}",
+            t.synonyms
         );
     }
 
