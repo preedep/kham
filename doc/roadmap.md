@@ -47,6 +47,33 @@ Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
 
 ---
 
+## Thai phonetic encoding (Soundex)
+
+Phonetic encoding groups words/names by sound — useful for fuzzy search, spell correction,
+and name matching (especially transliterated foreign names). All rule-based variants are
+pure-Rust `no_std` compatible. Suggested module: `kham-core/src/soundex.rs`, public API:
+`soundex_lk82(word: &str) -> String`, etc.
+
+| Algorithm | Effort | Notes |
+|---|---|---|
+| **lk82** (Lorchirachoonkul 1982) | Low | 4-level Thai phonetic code; most widely used in Thai NLP; well-documented encoding table |
+| **udom83** (Udompanich 1983) | Low | Alternative 4-level scheme; different consonant groupings from lk82; implement alongside lk82 |
+| **MetaSound** (Snae & Brückner 2009) | Medium | Hybrid Soundex + Metaphone rules optimised for Thai; handles vowel length and tone class |
+| **Thai–English cross-language** (Suwanvisat & Prasitjutrakul 1998) | Medium | Encodes transliterated Thai↔English names to the same code; requires both Thai and English phonetic tables |
+| **HMM + trigram hybrid** | High | Uses Hidden Markov Models and phonetic trigrams for initial consonant, vowel, and final consonant clusters; requires labelled training data — defer until ML infrastructure exists |
+
+**FTS integration opportunity:** lk82/udom83 codes could be emitted as synonyms in
+`FtsTokenizer` (alongside RTGS romanization), enabling phonetic-fuzzy full-text search
+with zero schema change.
+
+- [ ] **lk82** — implement encoding table, unit tests, integrate as optional `FtsTokenizer` synonym source
+- [ ] **udom83** — implement alongside lk82; share consonant-grouping infrastructure
+- [ ] **MetaSound** — implement after lk82/udom83 are stable; share vowel-stripping logic
+- [ ] **Thai–English cross-language Soundex** — depends on MetaSound + romanizer; medium priority
+- [ ] **HMM + trigram hybrid** — deferred; requires ML training data
+
+---
+
 ## Deferred / low priority
 
 - [ ] **kham-pg token type 7 for Named** — change `Named(_) => 1` → `Named(_) => 7` in `lib.rs`; add `named` lextype in `shim.c`; requires Docker pg_regress update
