@@ -32,6 +32,11 @@ cargo run -p kham-bench-accuracy            # word-boundary P/R/F1 against testd
 cargo run -p kham-bench-accuracy -- --threshold 0.95  # CI gate: exit 1 if F1 < 0.95
 cargo run -p kham-bench-accuracy -- --verbose         # show each failing case
 
+# PyThaiNLP comparison (requires: pip install pythainlp)
+python scripts/compare_pythainlp.py                        # diff kham vs PyThaiNLP newmm
+python scripts/compare_pythainlp.py --export-testdata      # disagreements in testdata format
+python scripts/compare_pythainlp.py --export-testdata --agreed  # agreed cases (high confidence)
+
 # Bindings
 wasm-pack build kham-wasm --target web
 maturin develop -m kham-python/Cargo.toml
