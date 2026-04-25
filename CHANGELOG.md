@@ -21,11 +21,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**NLP modules (`kham-core`)**
-- `pos` — `PosTagger` / `PosTag` (13 categories: NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP); TSV-driven lookup table; wired into `FtsToken::pos`
-- `ne` — `NeTagger` / `NamedEntityKind` (Person / Place / Org); gazetteer-based greedy multi-token matching up to 5 consecutive tokens; ~10,400 entries covering Thai provinces, 246 countries, world cities, organisations, and person names; wired into `FtsToken::ne` and `TokenKind::Named`
-- `romanizer` — `RomanizationMap`: RTGS table-lookup romanization; RTGS forms appended to `FtsToken::synonyms` when enabled via `FtsTokenizerBuilder::romanization()`
-- `number` — `thai_digits_to_ascii`, `parse_thai_word`, `u64_to_thai_word`, `parse_thai_baht`, `to_thai_baht_text`, `BahtAmount`; FTS auto-adds ASCII synonyms for Thai digit and number-word tokens (opt-out with `.number_normalize(false)`)
+**Named Entity Recognition (`kham-core`)**
+- `NeTagger`: gazetteer-based tagger with greedy longest-match multi-token support (up to 5 consecutive tokens)
+- Built-in NE gazetteer (`ne_th.tsv`): 10,488 entries — countries (PyThaiNLP Apache-2.0) and Thai person names (dictionary-filter strategy, ADR-001)
+- `TokenKind::Named(NamedEntityKind)` variant in `Token`; `NamedEntityKind`: Person / Place / Org
+- FTS pipeline: NE surface form injected as synonym; `FtsToken::ne` field set for Named tokens
+- kham-pg: token type 7 (`named`) registered in `kham_lextypes`; SQL config maps `named` through `kham_dict`
+
+**Part-of-Speech Tagging (`kham-core`)**
+- `PosTagger`: lookup-based Thai POS tagger; `pos_th.tsv` with 338 entries (13 categories: NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP)
+- `FtsToken::pos` field wired into the FTS pipeline; NE-tagged tokens skip POS lookup
+
+**RTGS Romanization (`kham-core`)**
+- `RomanizationMap`: table-driven Thai → Roman mapping; `romanization_th.tsv` with 415 entries
+- `romanize()`, `romanize_or_raw()`, `romanize_tokens()` — zero-alloc syllable-level mapping
+- `FtsTokenizerBuilder::romanization(RomanizationMap)` — opt-in; RTGS form injected as synonym for Thai and Named tokens
+
+**Number normalization (`kham-core`)**
+- `thai_digits_to_ascii`, `parse_thai_word`, `u64_to_thai_word`, `parse_thai_baht`, `to_thai_baht_text`, `BahtAmount`
+- FTS auto-adds ASCII synonyms for Thai digit tokens and number-word tokens; opt-out with `FtsTokenizerBuilder::number_normalize(false)`
 
 **SQLite FTS5 extension (`kham-sqlite`)**
 - New `kham-sqlite` cdylib: loadable SQLite extension registering a `kham` FTS5 tokenizer
@@ -34,10 +48,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Exports `sqlite3_kham_init` (explicit load) and `sqlite3_khamsqlite_init` (implicit)
 - Criterion benchmark suite for SQLite FTS5 throughput
 
-**FTS pipeline (`kham-core`)**
-- NE tagging runs before POS tagging; `Named` tokens skip POS lookup and have `pos: None`
-- `FtsTokenizerBuilder::romanization(RomanizationMap)` — opt-in RTGS romanization to synonyms
+**FTS pipeline (`kham-core` + `kham-cli`)**
+- `FtsTokenizer` wires POS, NE, romanization, stopwords, and synonym expansion in a single pipeline pass
+- NE tagging runs before POS tagging; `Named` tokens have `pos: None`
 - `FtsTokenizerBuilder::number_normalize(bool)` — opt-out of Thai digit/word normalization (default: `true`)
+- CLI `--fts` flag: outputs kind / POS / NE / stopword metadata per token
+
+**Documentation**
+- `doc/architecture.md`, `doc/benchmarks.md`, `doc/dict-format.md` split out from README
+- `doc/adr-001-ne-person-name-import-strategy.md` — ADR for NE gazetteer person-name import approach
+- Per-crate `CLAUDE.md` files: `kham-core/`, `kham-cli/`, `kham-pg/`
+
+**C FFI (`kham-capi`)**
+- `kham-capi/include/kham.h` regenerated via cbindgen and now tracked in the repository
 
 ## [0.1.3] - 2026-04-19
 
