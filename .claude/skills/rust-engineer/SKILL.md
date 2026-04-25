@@ -39,6 +39,40 @@ Load detailed guidance based on context:
 
 ## Key Patterns with Examples
 
+### Rustdoc Examples
+
+Every public `fn`, `struct`, `enum`, and `trait` needs at least one `# Examples` block.
+Entry-point APIs (the ones users reach first) should have multiple examples covering different scenarios.
+
+```rust
+/// Parse a word and return its length in chars.
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```rust
+/// assert_eq!(word_len("กิน"), 3);
+/// ```
+///
+/// Empty string returns zero:
+///
+/// ```rust
+/// assert_eq!(word_len(""), 0);
+/// ```
+pub fn word_len(s: &str) -> usize {
+    s.chars().count()
+}
+```
+
+**Rules:**
+- Every example must be a runnable doctest — `cargo test --doc` must pass.
+- Use `# //` to hide boilerplate setup lines that distract from the point being shown.
+- Use ` ```rust,no_run ` only for examples that require file I/O or network (cannot run in doctest harness).
+- For `no_std` crates: doctests run with `std` by default — `Vec`, `String`, `println!` are fine in examples even if the crate is `no_std`.
+- Each example should assert something (`assert_eq!`, `assert!`) rather than just printing — assertions make the expected behaviour explicit and catch regressions.
+- When the crate has a project-specific rule (e.g., Thai + English text in examples), follow it in every new example.
+
 ### Ownership & Lifetimes
 
 ```rust
