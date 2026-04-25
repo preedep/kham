@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-25
+
+### Added
+
+**New NLP modules (`kham-core`)**
+- `abbrev` — `AbbrevMap` with 118-entry built-in TSV (months, era markers, military/police ranks, government agencies, Bangkok districts); greedy longest-first pre-tokenisation text expansion; post-tokenisation single-token lookup; ambiguous abbreviations return all expansions
+- `date` — Thai date normalization: parses 7 input formats (full month, abbreviated month, era marker, `วันที่` prefix, slash/dash-separated, Thai digits) in both Buddhist Era and Gregorian; formats to ISO 8601 or Thai text; heuristic era inference (year ≥ 2300 → Buddhist Era)
+- `sentence` — Thai sentence segmentation: splits on Thai terminators (`๚` `๛`), Paiyannoi (`ฯ`, excluding `ฯลฯ`), universal punctuation (`!` `?`), newlines, and `.` when followed by whitespace or end-of-string; decimal- and abbreviation-aware dot rules prevent false splits
+
+**FTS pipeline (`kham-core`)**
+- `FtsTokenizerBuilder::abbrevs(AbbrevMap)` — opt-in pre-segmentation abbreviation expansion; disabled by default
+
+## [0.2.0] - 2026-04-24
+
+### Added
+
+**NLP modules (`kham-core`)**
+- `pos` — `PosTagger` / `PosTag` (13 categories: NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP); TSV-driven lookup table; wired into `FtsToken::pos`
+- `ne` — `NeTagger` / `NamedEntityKind` (Person / Place / Org); gazetteer-based greedy multi-token matching up to 5 consecutive tokens; ~10,400 entries covering Thai provinces, 246 countries, world cities, organisations, and person names; wired into `FtsToken::ne` and `TokenKind::Named`
+- `romanizer` — `RomanizationMap`: RTGS table-lookup romanization; RTGS forms appended to `FtsToken::synonyms` when enabled via `FtsTokenizerBuilder::romanization()`
+- `number` — `thai_digits_to_ascii`, `parse_thai_word`, `u64_to_thai_word`, `parse_thai_baht`, `to_thai_baht_text`, `BahtAmount`; FTS auto-adds ASCII synonyms for Thai digit and number-word tokens (opt-out with `.number_normalize(false)`)
+
+**SQLite FTS5 extension (`kham-sqlite`)**
+- New `kham-sqlite` cdylib: loadable SQLite extension registering a `kham` FTS5 tokenizer
+- Full NLP pipeline: normalization → segmentation → NE tagging → synonym expansion → RTGS romanization via `FTS5_TOKEN_COLOCATED`
+- Byte-accurate offsets into normalized text enable `highlight()` and `snippet()`
+- Exports `sqlite3_kham_init` (explicit load) and `sqlite3_khamsqlite_init` (implicit)
+- Criterion benchmark suite for SQLite FTS5 throughput
+
+**FTS pipeline (`kham-core`)**
+- NE tagging runs before POS tagging; `Named` tokens skip POS lookup and have `pos: None`
+- `FtsTokenizerBuilder::romanization(RomanizationMap)` — opt-in RTGS romanization to synonyms
+- `FtsTokenizerBuilder::number_normalize(bool)` — opt-out of Thai digit/word normalization (default: `true`)
+
 ## [0.1.3] - 2026-04-19
 
 ### Added
@@ -103,6 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.3.0]: https://github.com/preedep/kham/releases/tag/v0.3.0
+[0.2.0]: https://github.com/preedep/kham/releases/tag/v0.2.0
 [0.1.3]: https://github.com/preedep/kham/releases/tag/v0.1.3
 [0.1.2]: https://github.com/preedep/kham/releases/tag/v0.1.2
 [0.1.1]: https://github.com/preedep/kham/releases/tag/v0.1.1
