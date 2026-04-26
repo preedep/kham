@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-04-26
+
+### Added
+
+**Python bindings (`kham-python`) — full kham-core parity**
+- `normalize(text)`, `romanize(text)`, `soundex(text, algorithm)` top-level functions
+- `segment_sentences(text) -> list[str]` — sentence splitting
+- `parse_date(text) -> str | None` — Thai date normalization → ISO 8601
+- `expand_abbrevs(text) -> str` — abbreviation expansion
+- `normalize_number(text) -> str | None` — Thai number word → Arabic
+- `fts_tokens(text) -> list[FtsToken]` — full NLP pipeline (NE, POS, synonyms, stopwords)
+- `FtsToken` with `text`, `byte_start/end`, `char_start/end`, `kind`, `pos`, `ne`, `is_stop`, `synonyms`
+
+**WASM bindings (`kham-wasm`) — full kham-core parity**
+- `normalize(text)`, `romanize(text)`, `soundex(text, algorithm)` exports
+- `segment_sentences(text): string[]` — sentence splitting
+- `parse_date(text): string | null` — Thai date normalization → ISO 8601
+- `expand_abbrevs(text): string` — abbreviation expansion
+- `normalize_number(text): string | null` — Thai number word → Arabic
+- `fts_tokens(text): FtsToken[]` — full NLP pipeline
+- `FtsToken` JS class with `text`, `byte_start/end`, `char_start/end`, `kind`, `pos`, `ne`, `is_stop`, `synonyms`
+
+**C FFI (`kham-capi`) — full kham-core parity**
+- `kham_normalize()` / `kham_normalized_free()` — text normalization
+- `kham_romanize()` / `kham_romanized_free()` — RTGS romanization
+- `kham_soundex()` / `kham_soundex_free()` — phonetic encoding (lk82 / udom83 / metasound / crosslang)
+- `kham_segment_sentences()` / `kham_sentence_list_free()` — sentence splitting
+- `kham_parse_date()` / `kham_date_free()` — Thai date → ISO 8601
+- `kham_expand_abbrevs()` / `kham_abbrevs_free()` — abbreviation expansion
+- `kham_normalize_number()` / `kham_number_free()` — number normalization
+- `kham_fts_tokens()` / `kham_fts_token_list_free()` — full NLP pipeline
+- `KhamFtsToken` struct with NE kind, POS tag, stopword flag, and synonym array
+
+**Website (`kham-web`)**
+- Number Conversion widget — 4-tab demo (Arabic↔Thai digits, Thai number words, Baht text)
+- Normalizer widget — character-level diff display with U+ code toggle
+- Soundex widget — lk82/udom83/MetaSound/cross-language phonetic demo
+- Rust / Python / WASM code tabs on every API section
+- FTS mode, romanization, and sentence splitting added to live demo
+
+### Fixed
+- Python test expectations corrected to match dictionary-aware (compound-first) segmentation output
+- Rustfmt import ordering in all three binding crates (`kham-python`, `kham-wasm`, `kham-capi`)
+
+---
+
 ## [0.5.0] - 2026-04-26
 
 ### Added
@@ -245,6 +291,8 @@ Callers who relied on the previous splitting behaviour will see different token 
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.5.1]: https://github.com/preedep/kham/releases/tag/v0.5.1
+[0.5.0]: https://github.com/preedep/kham/releases/tag/v0.5.0
 [0.4.0]: https://github.com/preedep/kham/releases/tag/v0.4.0
 [0.3.0]: https://github.com/preedep/kham/releases/tag/v0.3.0
 [0.2.0]: https://github.com/preedep/kham/releases/tag/v0.2.0
