@@ -21,7 +21,7 @@ const modules = [
   description="kham v0.5.0 API reference for Rust, Python, and WASM — Tokenizer, FtsTokenizer, soundex, number, sentence, romanizer, normalizer."
   lang="en"
 >
-  <div class="max-w-5xl mx-auto px-6 py-16">
+  <div class="max-w-6xl mx-auto px-6 py-16">
 
     <!-- Header -->
     <div class="mb-10">
@@ -76,16 +76,16 @@ const modules = [
     </div>
 
     <!-- Sections -->
-    <div class="space-y-20">
+    <div class="space-y-24">
 
       <!-- ── Tokenizer ── -->
       <section id="tokenizer" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">Tokenizer</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/struct.Tokenizer.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           High-level tokenizer backed by a compressed DAWG dictionary and TNC frequency table.
           Uses the newmm (maximal matching) algorithm with TCC boundaries.
           Rust tokens are <strong>zero-copy</strong> slices of the input string.
@@ -168,12 +168,12 @@ const toks  = segment(clean);`,
 
       <!-- ── Token / TokenKind ── -->
       <section id="token" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">Token / TokenKind</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/struct.Token.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Every <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment()</code> call
           returns tokens carrying the original text plus two span types: byte offsets (Rust slicing)
           and Unicode scalar-value offsets (Python / JS indexing).
@@ -242,12 +242,12 @@ for (const t of tokens) {
 
       <!-- ── Normalizer ── -->
       <section id="normalizer" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">normalizer</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/normalizer/index.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Two-rule normalization pass: <strong>(1)</strong> deduplicate consecutive tone marks — keep the last one;
           <strong>(2)</strong> compose nikhahit (อํ U+0E4D) + sara aa (อา U+0E32) into sara am (อำ U+0E33).
           Call before segmenting when input may come from user keyboards or OCR.
@@ -314,12 +314,12 @@ const words = segment(normalize(rawInput));`,
 
       <!-- ── FtsTokenizer ── -->
       <section id="fts" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">FtsTokenizer</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/fts/struct.FtsTokenizer.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Full NLP pipeline in a single pass: normalize → segment → NE → stopwords → POS → synonyms → romanization.
           In Python and WASM this is the primary way to access POS and NE metadata.
         </p>
@@ -402,7 +402,7 @@ for (const t of tokens) {
 
       <!-- ── PosTagger ── -->
       <section id="pos" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">PosTagger</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/pos/struct.PosTagger.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
@@ -501,12 +501,12 @@ for (const t of tokens) {
 
       <!-- ── NeTagger ── -->
       <section id="ne" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">NeTagger</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/ne/struct.NeTagger.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Gazetteer-based NER with three categories: <strong>Person</strong>, <strong>Place</strong>, <strong>Org</strong>.
           In Python and WASM, NE tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code>.
         </p>
@@ -571,12 +571,12 @@ for (const t of tokens) {
 
       <!-- ── RomanizationMap ── -->
       <section id="romanizer" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">RomanizationMap</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/romanizer/struct.RomanizationMap.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           RTGS (Royal Thai General System) table-lookup romanization.
           Falls back to the original Thai text for out-of-vocabulary words.
         </p>
@@ -639,12 +639,12 @@ for (const t of pairs) {
 
       <!-- ── number ── -->
       <section id="number" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">number</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/number/index.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Thai numeral utilities: convert Thai digit characters (๐–๙) to ASCII,
           parse/generate Thai cardinal number words, and render Thai Baht currency text.
         </p>
@@ -735,12 +735,12 @@ if (r.valid) console.log(r.baht, r.satang);  // 100  0`,
 
       <!-- ── sentence ── -->
       <section id="sentence" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">sentence</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/sentence/index.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Sentence boundary detection. Splits on newlines, Thai markers (ฯ ๚ ๛),
           and Western punctuation (<code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">! ? .</code> followed by space).
           Each sentence span carries char offsets for Python/JS string slicing.
@@ -803,12 +803,12 @@ for (const s of sents) {
 
       <!-- ── soundex ── -->
       <section id="soundex" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
+        <div class="flex items-start justify-between gap-4 mb-3">
           <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">soundex</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/soundex/index.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 dark:text-slate-400 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Thai phonetic encoding: <strong>lk82</strong> (12 groups, 4-char), <strong>udom83</strong> (14 groups, 4-char),
           <strong>MetaSound</strong> (3 chars/syllable). Plus a Thai–English cross-language algorithm
           (Suwanvisat &amp; Prasitjutrakul 1998) for transliterated name search.
