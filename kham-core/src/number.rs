@@ -1086,13 +1086,31 @@ mod tests {
         );
     }
 
+    // ── large numbers (> u32::MAX) ────────────────────────────────────────────
+
+    #[test]
+    fn ten_billion_word() {
+        // 10,000,000,000 — previously overflowed u32 in WASM binding
+        assert_eq!(u64_to_thai_word(10_000_000_000), "หนึ่งหมื่นล้าน");
+    }
+
+    #[test]
+    fn hundred_billion_word() {
+        assert_eq!(u64_to_thai_word(100_000_000_000), "หนึ่งแสนล้าน");
+    }
+
+    #[test]
+    fn baht_text_ten_billion() {
+        assert_eq!(to_thai_baht_text(10_000_000_000, 0), "หนึ่งหมื่นล้านบาทถ้วน");
+    }
+
     // ── roundtrip parse_thai_word ↔ u64_to_thai_word ─────────────────────────
 
     #[test]
     fn roundtrip_parse_then_generate() {
         let cases = [
             0u64, 1, 9, 10, 11, 20, 21, 99, 100, 101, 111, 999, 1_000, 10_000, 100_000, 1_000_000,
-            10_000_000, 3_456_789,
+            10_000_000, 3_456_789, 10_000_000_000, 100_000_000_000,
         ];
         for n in cases {
             let word = u64_to_thai_word(n);

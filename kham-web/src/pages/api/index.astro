@@ -874,11 +874,11 @@ thai_digits_to_ascii("ราคา ๑๒๓ บาท");   // "ราคา 123
 thai_word_to_number("หนึ่งร้อยยี่สิบสาม");  // "123"
 thai_word_to_number("กินข้าว");              // ""  (not a number)
 
-// Number → Thai word (u32 max ~4.29 billion)
-number_to_thai_word(42n);          // "สี่สิบสอง"
-number_to_thai_word(1_000_000n);   // "หนึ่งล้าน"
+// Number → Thai word (u64 as BigInt — up to 9,007,199,254,740,991 safely)
+number_to_thai_word(42n);           // "สี่สิบสอง"
+number_to_thai_word(10_000_000_000n); // "หนึ่งหมื่นล้าน"
 
-// Baht text
+// Baht text (baht is BigInt)
 number_to_baht_text(1234n, 50);
 // "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"
 
