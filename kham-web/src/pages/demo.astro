@@ -2,6 +2,7 @@
 import Layout from '../layouts/Layout.astro';
 import LiveDemo from '../components/LiveDemo.astro';
 import SoundexWidget from '../components/SoundexWidget.astro';
+import NormalizerWidget from '../components/NormalizerWidget.astro';
 ---
 
 <Layout
@@ -24,8 +25,13 @@ import SoundexWidget from '../components/SoundexWidget.astro';
     </div>
 
     <!-- Soundex widget -->
-    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
       <SoundexWidget />
+    </div>
+
+    <!-- Normalizer widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+      <NormalizerWidget />
     </div>
 
     <!-- Info cards -->

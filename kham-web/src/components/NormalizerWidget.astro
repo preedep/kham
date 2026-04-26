@@ -1,0 +1,240 @@
+---
+// Each sample: { label, raw, comment }
+// raw uses JS string literals — rendered via script so the bytes aren't mangled by the HTML parser.
+const examples = [
+  {
+    id: 'tone',
+    label: 'Duplicate tone',
+    comment: 'Double ้้ collapsed to ้',
+    // ข้้าว — ข + mai tho (0E49) + mai tho (0E49) + า + ว
+    raw: 'ข้้าว',
+  },
+  {
+    id: 'sara-am',
+    label: 'Sara Am compose',
+    comment: 'อํ + า → อำ',
+    // กํากับ — ก + nikhahit (0E4D) + า + ก + ั + บ
+    raw: 'กํากับ',
+  },
+  {
+    id: 'clean',
+    label: 'Already clean',
+    comment: 'No change needed',
+    raw: 'กินข้าวกับปลา',
+  },
+];
+---
+
+<div class="normalizer-root font-sans">
+  <!-- Header -->
+  <div class="mb-5">
+    <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Text Normalizer</h2>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+      Collapses duplicate tone marks and composes nikhahit&nbsp;+&nbsp;sara aa into sara am (อำ).
+    </p>
+  </div>
+
+  <!-- Input + quick examples -->
+  <div class="mb-4">
+    <label for="norm-input" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Input</label>
+    <textarea
+      id="norm-input"
+      rows="2"
+      placeholder="พิมพ์ข้อความภาษาไทย…"
+      aria-label="Text to normalize"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-slate-400"
+    ></textarea>
+
+    <div class="flex flex-wrap items-center gap-2 mt-2">
+      <span class="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+      {examples.map(e => (
+        <button
+          type="button"
+          class="norm-example text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors"
+          data-raw={e.raw}
+          data-comment={e.comment}
+          aria-label={`Try: ${e.label}`}
+        >
+          {e.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <!-- Result -->
+  <div>
+    <div class="flex items-center justify-between mb-1.5">
+      <label class="text-xs font-medium text-slate-600 dark:text-slate-400">Normalized output</label>
+      <span id="norm-status" class="text-xs font-medium text-slate-400 dark:text-slate-500"></span>
+    </div>
+
+    <!-- Diff display -->
+    <div
+      id="norm-diff"
+      aria-live="polite"
+      class="min-h-[56px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 text-base leading-relaxed text-slate-400 dark:text-slate-500 italic"
+    >
+      <span class="select-none">Output appears here…</span>
+    </div>
+
+    <!-- Legend -->
+    <div id="norm-legend" class="hidden mt-2 flex flex-wrap items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-3 h-3 rounded-sm bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700"></span>
+        removed
+      </span>
+      <span class="flex items-center gap-1">
+        <span class="inline-block w-3 h-3 rounded-sm bg-emerald-100 dark:bg-emerald-900/40 border border-emerald-300 dark:border-emerald-700"></span>
+        composed
+      </span>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function () {
+  let wasmMod = null;
+
+  async function loadWasm() {
+    if (wasmMod) return wasmMod;
+    const mod = await import('/wasm/kham_wasm.js');
+    await mod.default();
+    wasmMod = mod;
+    return wasmMod;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Character-level diff
+  // ---------------------------------------------------------------------------
+  // Strategy: walk the input and output chars in parallel.
+  // We know the normalizer only:
+  //   (a) removes duplicate tone marks (skips extra copies)
+  //   (b) replaces nikhahit(0E4D)+saraa(0E32) with sara_am(0E33)
+  // So |output| <= |input| always.
+  // We build annotated spans for the diff display.
+
+  const TONE_MARKS = new Set([0x0E48, 0x0E49, 0x0E4A, 0x0E4B]);
+  const NIKHAHIT  = 0x0E4D;
+  const SARA_AA   = 0x0E32;
+  const SARA_AM   = 0x0E33;
+
+  function buildDiffHtml(input, output) {
+    if (input === output) {
+      // escape and return plain
+      return escHtml(output);
+    }
+
+    const iChars = [...input];
+    const oChars = [...output];
+
+    let html = '';
+    let i = 0, o = 0;
+
+    while (i < iChars.length) {
+      const ic = iChars[i];
+      const oc = oChars[o];
+
+      if (o >= oChars.length) {
+        // remaining input chars were dropped
+        html += `<span class="inline-block rounded px-0.5 bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400 line-through text-xs align-middle" title="removed: U+${ic.codePointAt(0).toString(16).toUpperCase().padStart(4,'0')}">${escHtml(ic)}</span>`;
+        i++;
+        continue;
+      }
+
+      if (ic === oc) {
+        html += escHtml(ic);
+        i++; o++;
+        continue;
+      }
+
+      // Check sara-am composition: nikhahit + sara-aa → sara-am
+      if (
+        ic.codePointAt(0) === NIKHAHIT &&
+        i + 1 < iChars.length &&
+        iChars[i + 1].codePointAt(0) === SARA_AA &&
+        oc && oc.codePointAt(0) === SARA_AM
+      ) {
+        html += `<span class="inline-block rounded px-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400" title="composed: อํ + า → อำ">${escHtml(oc)}</span>`;
+        i += 2; o++;
+        continue;
+      }
+
+      // Dropped character (e.g. duplicate tone mark)
+      const cp = ic.codePointAt(0);
+      const name = TONE_MARKS.has(cp) ? 'duplicate tone mark' : `U+${cp.toString(16).toUpperCase().padStart(4,'0')}`;
+      html += `<span class="inline-block rounded px-0.5 bg-red-100 dark:bg-red-900/40 text-red-500 dark:text-red-400 line-through text-xs align-middle" title="removed: ${name}">${escHtml(ic)}</span>`;
+      i++;
+      // do NOT advance o — output char stays to be matched later
+    }
+
+    return html;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // ---------------------------------------------------------------------------
+  // UI update
+  // ---------------------------------------------------------------------------
+
+  async function run() {
+    const input = document.getElementById('norm-input').value;
+    const diffEl   = document.getElementById('norm-diff');
+    const statusEl = document.getElementById('norm-status');
+    const legendEl = document.getElementById('norm-legend');
+
+    if (!input.trim()) {
+      diffEl.innerHTML = '<span class="select-none italic text-slate-400 dark:text-slate-500">Output appears here…</span>';
+      statusEl.textContent = '';
+      legendEl.classList.add('hidden');
+      return;
+    }
+
+    try {
+      const mod = await loadWasm();
+      const output = mod.normalize(input);
+
+      if (input === output) {
+        diffEl.innerHTML = `<span class="text-slate-800 dark:text-slate-100 not-italic">${escHtml(output)}</span>`;
+        statusEl.textContent = 'Already normalized ✓';
+        statusEl.className = 'text-xs font-medium text-emerald-600 dark:text-emerald-400';
+        legendEl.classList.add('hidden');
+      } else {
+        const inLen  = [...input].length;
+        const outLen = [...output].length;
+        const delta  = inLen - outLen;
+        const label  = delta === 1 ? '1 char removed' : `${delta} chars removed`;
+        statusEl.textContent = label;
+        statusEl.className = 'text-xs font-medium text-amber-600 dark:text-amber-400';
+
+        diffEl.innerHTML = `<span class="text-slate-800 dark:text-slate-100 not-italic">${buildDiffHtml(input, output)}</span>`;
+        legendEl.classList.remove('hidden');
+      }
+    } catch (err) {
+      console.error('kham normalize error:', err);
+      diffEl.innerHTML = '<span class="text-red-500">Error — see console</span>';
+      statusEl.textContent = '';
+      legendEl.classList.add('hidden');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
+
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('norm-input')?.addEventListener('input', run);
+
+    document.querySelectorAll('.norm-example').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const ta = document.getElementById('norm-input');
+        ta.value = btn.dataset.raw;
+        run();
+      });
+    });
+
+    loadWasm().catch(() => {});
+  });
+})();
+</script>

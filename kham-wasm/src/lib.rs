@@ -357,6 +357,20 @@ pub fn romanize(text: &str) -> Vec<RomanToken> {
         .collect()
 }
 
+/// Normalise Thai text and return the canonical form.
+///
+/// Applies two transformations:
+/// 1. **Duplicate tone marks** — consecutive tone marks (อ่ อ้ อ๊ อ๋) are
+///    collapsed to the last one (e.g. `ก่้` → `ก้`).
+/// 2. **Sara Am composition** — nikhahit + sara aa (`อํ` + `อา`) is
+///    composed into sara am (`อำ`).
+///
+/// Returns the input unchanged if no normalisation is needed.
+#[wasm_bindgen]
+pub fn normalize(text: &str) -> String {
+    kham_core::normalizer::normalize(text)
+}
+
 /// Encode a single Thai word using the selected phonetic algorithm.
 ///
 /// `algo` must be one of `"lk82"` (default), `"udom83"`, or `"metasound"`.
