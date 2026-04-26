@@ -17,7 +17,7 @@ const {
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, 'https://kham.io').href;
-const ogImage = 'https://kham.io/og.svg';
+const ogImage = 'https://kham.io/og.png';
 const thPath = lang === 'en'
   ? `/th${Astro.url.pathname === '/' ? '/' : Astro.url.pathname}`
   : Astro.url.pathname;
