@@ -1,6 +1,7 @@
 [package]
 name = "kham-bench-accuracy"
 description = "Word-boundary precision/recall/F1 benchmark for kham-core segmenter"
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

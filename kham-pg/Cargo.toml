@@ -1,6 +1,7 @@
 [package]
 name = "kham-pg"
 description = "PostgreSQL text-search extension for Thai (kham-pg)"
+publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
