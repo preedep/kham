@@ -94,7 +94,10 @@ const kindColors: Record<string, string> = {
       </div>
     )}
 
-    <p id="demo-count" class="text-xs text-slate-400 mt-3" aria-live="polite"></p>
+    <div class="flex items-center gap-4 mt-3">
+      <p id="demo-count" class="text-xs text-slate-400" aria-live="polite"></p>
+      <p id="demo-time" class="text-xs text-slate-400" aria-live="polite"></p>
+    </div>
   </div>
 </div>
 
@@ -125,10 +128,11 @@ const kindColors: Record<string, string> = {
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${kind}</span>`;
   }
 
-  function renderResults(tokens) {
+  function renderResults(tokens, elapsed) {
     const pills = document.getElementById('demo-pills');
     const tbody = document.getElementById('demo-tbody');
     const count = document.getElementById('demo-count');
+    const time = document.getElementById('demo-time');
     const results = document.getElementById('demo-results');
 
     // Pills
@@ -151,6 +155,11 @@ const kindColors: Record<string, string> = {
     }
 
     if (count) count.textContent = `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`;
+    if (time && elapsed !== undefined) {
+      time.textContent = elapsed < 1
+        ? `${(elapsed * 1000).toFixed(0)} µs`
+        : `${elapsed.toFixed(2)} ms`;
+    }
     results.classList.remove('hidden');
   }
 
@@ -175,8 +184,10 @@ const kindColors: Record<string, string> = {
     setLoading(true);
     try {
       const mod = await loadWasm();
+      const t0 = performance.now();
       const tokens = mod.segment_tokens(text);
-      renderResults(tokens);
+      const elapsed = performance.now() - t0;
+      renderResults(tokens, elapsed);
     } catch (err) {
       console.error('kham-wasm error:', err);
       const status = document.getElementById('demo-status');
