@@ -44,7 +44,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.4"
+kham-core = "0.5"
 ```
 
 ```rust
