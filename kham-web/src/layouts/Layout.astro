@@ -59,6 +59,16 @@ const enPath = lang === 'th'
     <link rel="alternate" hreflang="x-default" href={new URL(enPath, 'https://kham.io').href} />
 
     <title>{title}</title>
+    <!-- Theme init: runs before paint to prevent flash -->
+    <script is:inline>
+      (function () {
+        var stored = localStorage.getItem('theme');
+        var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (stored === 'dark' || (!stored && prefersDark)) {
+          document.documentElement.classList.add('dark');
+        }
+      })();
+    </script>
   </head>
   <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col min-h-screen transition-colors">
     <!-- Skip to main content (accessibility) -->

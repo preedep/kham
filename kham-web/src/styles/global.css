@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Enable class-based dark mode so JS toggle overrides system preference */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+
+.dark {
+  color-scheme: dark;
 }
