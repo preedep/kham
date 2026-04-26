@@ -7,7 +7,7 @@
 //!
 //! Then from JavaScript / TypeScript:
 //! ```js
-//! import init, { segment, segment_tokens } from "./pkg/kham_wasm.js";
+//! import init, { segment, segment_tokens, segment_fts } from "./pkg/kham_wasm.js";
 //! await init();
 //!
 //! // Simple: array of token strings
@@ -22,9 +22,15 @@
 //! // ธนาคาร 0 6 Thai
 //! // 100    6 9 Number
 //! // แห่ง   9 13 Thai
+//!
+//! // FTS: rich NLP metadata per token
+//! const ftsToks = segment_fts("นายกรัฐมนตรีกินข้าว");
+//! for (const t of ftsToks) {
+//!     console.log(t.text, t.kind, t.pos, t.ne, t.is_stop);
+//! }
 //! ```
 
-use kham_core::{TokenKind, Tokenizer};
+use kham_core::{fts::FtsTokenizer, TokenKind, Tokenizer};
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -108,6 +114,89 @@ impl Token {
 }
 
 // ---------------------------------------------------------------------------
+// FtsToken
+// ---------------------------------------------------------------------------
+
+/// A token produced by the FTS pipeline with full NLP metadata.
+///
+/// Fields:
+/// - `text` — token string (normalized)
+/// - `position` — ordinal index in the non-whitespace token sequence (0-based)
+/// - `kind` — same values as [`Token::kind`]
+/// - `is_stop` — `true` if this token is in the stopword list
+/// - `synonyms` — synonym expansions and number / soundex variants (may be empty)
+/// - `trigrams` — character trigrams for Unknown tokens; empty for all other kinds
+/// - `pos` — ORCHID-derived POS tag string, or `null` if OOV / non-Thai
+///   (`"Noun"` | `"Verb"` | `"Adj"` | `"Adv"` | `"Particle"` | `"ProperNoun"`
+///   | `"Pronoun"` | `"Numeral"` | `"Classifier"` | `"Conjunction"`
+///   | `"Auxiliary"` | `"Determiner"` | `"Preposition"`)
+/// - `ne` — named entity category, or `null` if not recognised
+///   (`"Person"` | `"Place"` | `"Org"`)
+#[wasm_bindgen]
+pub struct FtsToken {
+    text: String,
+    position: usize,
+    kind: &'static str,
+    is_stop: bool,
+    synonyms: Vec<String>,
+    trigrams: Vec<String>,
+    pos: Option<&'static str>,
+    ne: Option<&'static str>,
+}
+
+#[wasm_bindgen]
+impl FtsToken {
+    /// The token text (may be normalised relative to the raw input).
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// Ordinal position in the non-whitespace token sequence (0-based).
+    #[wasm_bindgen(getter)]
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
+    /// Token kind string — same values as [`Token::kind`].
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.kind.to_owned()
+    }
+
+    /// `true` if this token matches the built-in Thai stopword list.
+    #[wasm_bindgen(getter)]
+    pub fn is_stop(&self) -> bool {
+        self.is_stop
+    }
+
+    /// Synonym expansions (empty array if none). Includes number normalizations
+    /// and soundex codes when those pipeline stages are active.
+    #[wasm_bindgen(getter)]
+    pub fn synonyms(&self) -> Vec<JsValue> {
+        self.synonyms.iter().map(|s| JsValue::from_str(s)).collect()
+    }
+
+    /// Character trigrams for `Unknown` tokens; empty array for all other kinds.
+    #[wasm_bindgen(getter)]
+    pub fn trigrams(&self) -> Vec<JsValue> {
+        self.trigrams.iter().map(|s| JsValue::from_str(s)).collect()
+    }
+
+    /// POS tag string, or `null` if OOV or non-Thai.
+    #[wasm_bindgen(getter)]
+    pub fn pos(&self) -> Option<String> {
+        self.pos.map(|s| s.to_owned())
+    }
+
+    /// Named entity category string, or `null` if not in the NE gazetteer.
+    #[wasm_bindgen(getter)]
+    pub fn ne(&self) -> Option<String> {
+        self.ne.map(|s| s.to_owned())
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public functions
 // ---------------------------------------------------------------------------
 
@@ -158,6 +247,38 @@ pub fn segment_tokens(text: &str) -> Vec<Token> {
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_str(t.kind),
+        })
+        .collect()
+}
+
+/// Segment Thai text through the full FTS pipeline and return an array of
+/// [`FtsToken`] objects with NLP metadata.
+///
+/// The built-in pipeline includes: text normalisation, word segmentation,
+/// named-entity recognition, stopword tagging, POS tagging, and synonym
+/// expansion (number normalisation). Whitespace tokens are excluded.
+///
+/// # Arguments
+///
+/// * `text` — Input string (valid UTF-8).
+///
+/// # Returns
+///
+/// A JavaScript `Array` of [`FtsToken`] objects.
+#[wasm_bindgen]
+pub fn segment_fts(text: &str) -> Vec<FtsToken> {
+    FtsTokenizer::new()
+        .segment_for_fts(text)
+        .into_iter()
+        .map(|t| FtsToken {
+            text: t.text,
+            position: t.position,
+            kind: kind_str(t.kind),
+            is_stop: t.is_stop,
+            synonyms: t.synonyms,
+            trigrams: t.trigrams,
+            pos: t.pos.map(|p| p.as_str()),
+            ne: t.ne.map(|n| n.as_str()),
         })
         .collect()
 }

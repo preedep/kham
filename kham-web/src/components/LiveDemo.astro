@@ -44,7 +44,7 @@ const samples = [
   </div>
 
   <!-- Controls row -->
-  <div class="flex items-center gap-3 mb-6">
+  <div class="flex flex-wrap items-center gap-3 mb-6">
     <button
       id="demo-run"
       type="button"
@@ -58,6 +58,19 @@ const samples = [
       </svg>
       <span id="demo-btn-label">Segment</span>
     </button>
+
+    {!compact && (
+      <!-- Mode toggle: Segment / FTS -->
+      <div class="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-0.5" role="group" aria-label="Analysis mode">
+        <button id="demo-mode-seg" type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="seg" aria-pressed="true">
+          Segment
+        </button>
+        <button id="demo-mode-fts" type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="fts" aria-pressed="false">
+          FTS
+        </button>
+      </div>
+    )}
+
     <span id="demo-status" class="text-sm text-slate-500 hidden" role="status" aria-live="polite"></span>
   </div>
 
@@ -129,15 +142,7 @@ const samples = [
     {!compact && (
       <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm text-left" aria-label="Token details">
-          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
-            <tr>
-              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
-              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
-              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
-              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Chars</th>
-              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Bytes</th>
-            </tr>
-          </thead>
+          <thead id="demo-thead" class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700"></thead>
           <tbody id="demo-tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
         </table>
       </div>
@@ -156,18 +161,41 @@ const samples = [
 <script is:inline>
 (function () {
   const KIND_COLORS = {
-    Thai:        'bg-blue-100 text-blue-800',
-    Latin:       'bg-green-100 text-green-800',
-    Number:      'bg-yellow-100 text-yellow-800',
-    Punctuation: 'bg-slate-100 text-slate-700',
-    Emoji:       'bg-purple-100 text-purple-800',
-    Whitespace:  'bg-slate-100 text-slate-500',
-    Unknown:     'bg-red-100 text-red-700',
+    Thai:        { pill: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',        dot: 'bg-blue-400' },
+    Latin:       { pill: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',   dot: 'bg-green-400' },
+    Number:      { pill: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300', dot: 'bg-yellow-400' },
+    Punctuation: { pill: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',       dot: 'bg-slate-400' },
+    Emoji:       { pill: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300', dot: 'bg-purple-400' },
+    Whitespace:  { pill: 'bg-slate-100 text-slate-500',                                             dot: 'bg-slate-300' },
+    Unknown:     { pill: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',            dot: 'bg-red-400' },
+  };
+
+  const NE_COLORS = {
+    Person: { pill: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300', badge: 'bg-purple-200 text-purple-700 dark:bg-purple-800/60 dark:text-purple-300', dot: 'bg-purple-400' },
+    Place:  { pill: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',         badge: 'bg-teal-200 text-teal-700 dark:bg-teal-800/60 dark:text-teal-300',       dot: 'bg-teal-400' },
+    Org:    { pill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',     badge: 'bg-amber-200 text-amber-700 dark:bg-amber-800/60 dark:text-amber-300',   dot: 'bg-amber-400' },
+  };
+
+  const POS_COLORS = {
+    Noun:        'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    Verb:        'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    Adj:         'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+    Adv:         'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
+    ProperNoun:  'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-200',
+    Pronoun:     'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    Numeral:     'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
+    Classifier:  'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
+    Particle:    'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
+    Conjunction: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
+    Auxiliary:   'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
+    Determiner:  'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
+    Preposition: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
   };
 
   let wasmMod = null;
   let lastTokens = [];
   let activeFilter = 'All';
+  let ftsMode = false;
 
   async function loadWasm() {
     if (wasmMod) return wasmMod;
@@ -178,8 +206,22 @@ const samples = [
   }
 
   function kindBadge(kind) {
-    const cls = KIND_COLORS[kind] || 'bg-slate-100 text-slate-700';
+    const c = KIND_COLORS[kind];
+    const cls = c ? c.pill : 'bg-slate-100 text-slate-700';
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${kind}</span>`;
+  }
+
+  function posBadge(pos) {
+    if (!pos) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
+    const cls = POS_COLORS[pos] || 'bg-slate-100 text-slate-600';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${pos}</span>`;
+  }
+
+  function neBadge(ne) {
+    if (!ne) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
+    const c = NE_COLORS[ne];
+    const cls = c ? c.badge : 'bg-slate-100 text-slate-600';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${ne}</span>`;
   }
 
   function visibleTokens() {
@@ -197,25 +239,90 @@ const samples = [
     return words.join('|');
   }
 
+  function buildTableHeader(isFts) {
+    if (isFts) {
+      return `<tr>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">POS</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">NE</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Stop</th>
+        <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Synonyms</th>
+      </tr>`;
+    }
+    return `<tr>
+      <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
+      <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
+      <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
+      <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Chars</th>
+      <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Bytes</th>
+    </tr>`;
+  }
+
+  function buildTableRow(t, i, isFts) {
+    const base = 'hover:bg-slate-50 dark:hover:bg-slate-800/40';
+    const stopCls = (isFts && t.is_stop) ? 'opacity-50' : '';
+    if (isFts) {
+      const syns = Array.isArray(t.synonyms) ? t.synonyms : [];
+      const synText = syns.length
+        ? syns.map(s => `<span class="inline-block bg-slate-100 dark:bg-slate-700 rounded px-1 font-mono text-xs">${s}</span>`).join(' ')
+        : '<span class="text-slate-300 dark:text-slate-600">—</span>';
+      return `<tr class="${base} ${stopCls}">
+        <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
+        <td class="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">${t.text}</td>
+        <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
+        <td class="px-4 py-2.5">${posBadge(t.pos)}</td>
+        <td class="px-4 py-2.5">${neBadge(t.ne)}</td>
+        <td class="px-4 py-2.5 text-center">${t.is_stop
+          ? '<span class="text-xs text-slate-400 dark:text-slate-500">stop</span>'
+          : '<span class="text-slate-300 dark:text-slate-600">—</span>'
+        }</td>
+        <td class="px-4 py-2.5">${synText}</td>
+      </tr>`;
+    }
+    return `<tr class="${base}">
+      <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
+      <td class="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">${t.text}</td>
+      <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.char_start}–${t.char_end}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.byte_start}–${t.byte_end}</td>
+    </tr>`;
+  }
+
   function renderPillsAndTable(tokens) {
-    const pills = document.getElementById('demo-pills');
-    const tbody = document.getElementById('demo-tbody');
+    const pills  = document.getElementById('demo-pills');
+    const thead  = document.getElementById('demo-thead');
+    const tbody  = document.getElementById('demo-tbody');
 
-    pills.innerHTML = tokens.map(t => {
-      const cls = KIND_COLORS[t.kind] || 'bg-slate-100 text-slate-700';
-      return `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${cls}" role="listitem">${t.text}</span>`;
-    }).join('');
+    if (ftsMode) {
+      pills.innerHTML = tokens.map(t => {
+        const stopCls = t.is_stop ? 'opacity-40 line-through' : '';
+        let pillCls;
+        if (t.ne && NE_COLORS[t.ne]) {
+          pillCls = NE_COLORS[t.ne].pill;
+        } else {
+          const c = KIND_COLORS[t.kind];
+          pillCls = c ? c.pill : 'bg-slate-100 text-slate-700';
+        }
+        const posSub = (t.pos && !t.is_stop)
+          ? `<span class="block text-center text-[10px] leading-tight mt-0.5 opacity-70">${t.pos}</span>`
+          : '';
+        return `<span class="inline-flex flex-col items-center px-3 py-1 rounded-lg text-sm font-medium ${pillCls} ${stopCls}" role="listitem">
+          <span>${t.text}</span>${posSub}
+        </span>`;
+      }).join('');
+    } else {
+      pills.innerHTML = tokens.map(t => {
+        const c = KIND_COLORS[t.kind];
+        const cls = c ? c.pill : 'bg-slate-100 text-slate-700';
+        return `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${cls}" role="listitem">${t.text}</span>`;
+      }).join('');
+    }
 
+    if (thead) thead.innerHTML = buildTableHeader(ftsMode);
     if (tbody) {
-      tbody.innerHTML = tokens.map((t, i) => `
-        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
-          <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
-          <td class="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">${t.text}</td>
-          <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
-          <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.char_start}–${t.char_end}</td>
-          <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.byte_start}–${t.byte_end}</td>
-        </tr>
-      `).join('');
+      tbody.innerHTML = tokens.map((t, i) => buildTableRow(t, i, ftsMode)).join('');
     }
   }
 
@@ -224,15 +331,39 @@ const samples = [
     if (!stats) return;
     const counts = {};
     tokens.forEach(t => { counts[t.kind] = (counts[t.kind] || 0) + 1; });
-    stats.innerHTML = Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([kind, n]) => {
-        const cls = KIND_COLORS[kind] || 'bg-slate-100 text-slate-700';
-        return `<span class="inline-flex items-center gap-1">
-          <span class="inline-block w-2 h-2 rounded-full ${cls.split(' ')[0]}"></span>
-          <span>${kind}: <strong>${n}</strong></span>
-        </span>`;
-      }).join('');
+
+    if (ftsMode) {
+      const stopCount = tokens.filter(t => t.is_stop).length;
+      const neCount   = tokens.filter(t => t.ne).length;
+      const posCount  = tokens.filter(t => t.pos).length;
+      const extra = [
+        stopCount ? `<span>Stopwords: <strong>${stopCount}</strong></span>` : null,
+        neCount   ? `<span>Named entities: <strong>${neCount}</strong></span>` : null,
+        posCount  ? `<span>POS-tagged: <strong>${posCount}</strong></span>` : null,
+      ].filter(Boolean).join('');
+
+      stats.innerHTML = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([kind, n]) => {
+          const c = NE_COLORS[kind] || KIND_COLORS[kind];
+          const dot = c ? c.dot : 'bg-slate-400';
+          return `<span class="inline-flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full ${dot}"></span>
+            <span>${kind}: <strong>${n}</strong></span>
+          </span>`;
+        }).join('') + (extra ? `<span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span>${extra}` : '');
+    } else {
+      stats.innerHTML = Object.entries(counts)
+        .sort((a, b) => b[1] - a[1])
+        .map(([kind, n]) => {
+          const c = KIND_COLORS[kind];
+          const dot = c ? c.dot : 'bg-slate-400';
+          return `<span class="inline-flex items-center gap-1">
+            <span class="inline-block w-2 h-2 rounded-full ${dot}"></span>
+            <span>${kind}: <strong>${n}</strong></span>
+          </span>`;
+        }).join('');
+    }
   }
 
   function updateFilterButtons() {
@@ -246,10 +377,21 @@ const samples = [
     });
   }
 
+  function updateModeButtons() {
+    document.querySelectorAll('.demo-mode-tab').forEach(btn => {
+      const active = (btn.dataset.mode === 'fts') === ftsMode;
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.className = `demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+        active
+          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+      }`;
+    });
+  }
+
   function renderResults(tokens, elapsed) {
     lastTokens = tokens;
-    const count = document.getElementById('demo-count');
-    const time  = document.getElementById('demo-time');
+    const count   = document.getElementById('demo-count');
     const results = document.getElementById('demo-results');
 
     renderPillsAndTable(visibleTokens());
@@ -261,12 +403,10 @@ const samples = [
       const timeStr = elapsed < 1
         ? `${(elapsed * 1000).toFixed(0)} µs`
         : `${elapsed.toFixed(2)} ms`;
-      // non-compact: badge with clock icon
       const timeBadge = document.getElementById('demo-time');
       const timeVal   = document.getElementById('demo-time-val');
       if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
-      // compact: plain text
-      else if (time) time.textContent = timeStr;
+      else if (timeBadge) timeBadge.textContent = timeStr;
     }
     results.classList.remove('hidden');
   }
@@ -293,7 +433,7 @@ const samples = [
     try {
       const mod = await loadWasm();
       const t0 = performance.now();
-      const tokens = mod.segment_tokens(text);
+      const tokens = ftsMode ? mod.segment_fts(text) : mod.segment_tokens(text);
       const elapsed = performance.now() - t0;
       renderResults(tokens, elapsed);
     } catch (err) {
@@ -307,6 +447,8 @@ const samples = [
   }
 
   document.addEventListener('DOMContentLoaded', () => {
+    updateModeButtons();
+
     // Segment button
     const run = document.getElementById('demo-run');
     if (run) run.addEventListener('click', runSegment);
@@ -328,6 +470,15 @@ const samples = [
         }
       });
     }
+
+    // Mode toggle buttons
+    document.querySelectorAll('.demo-mode-tab').forEach(btn => {
+      btn.addEventListener('click', () => {
+        ftsMode = btn.dataset.mode === 'fts';
+        updateModeButtons();
+        if (lastTokens.length > 0) runSegment();
+      });
+    });
 
     // Kind filter buttons
     document.querySelectorAll('.demo-filter').forEach(btn => {
