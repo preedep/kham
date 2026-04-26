@@ -1,0 +1,26 @@
+---
+const year = new Date().getFullYear();
+---
+
+<footer class="border-t border-slate-200 bg-slate-50">
+  <div class="max-w-6xl mx-auto px-6 py-10">
+    <div class="flex flex-col md:flex-row justify-between items-center gap-6">
+      <div class="flex items-center gap-2 text-slate-600">
+        <span class="text-blue-600 font-bold text-lg">ข</span>
+        <span class="font-semibold text-slate-800">kham</span>
+        <span class="text-sm">— Thai word segmentation in Rust</span>
+      </div>
+
+      <nav class="flex flex-wrap justify-center gap-6 text-sm text-slate-600">
+        <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">GitHub</a>
+        <a href="https://crates.io/crates/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">crates.io</a>
+        <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">docs.rs</a>
+        <a href="https://www.npmjs.com/package/kham-wasm" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">npm</a>
+      </nav>
+
+      <p class="text-sm text-slate-500">
+        &copy; {year} kham contributors &mdash; MIT OR Apache-2.0
+      </p>
+    </div>
+  </div>
+</footer>
