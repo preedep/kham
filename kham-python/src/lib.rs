@@ -57,9 +57,9 @@ use kham_core::{
     romanizer::RomanizationMap,
     sentence::split_sentences as core_split,
     soundex::{
-        sounds_like as core_sounds_like, sounds_like_cross_lang as core_sounds_like_cross,
-        soundex as core_soundex, thai_english_soundex as core_thai_english_soundex,
-        SoundexAlgorithm,
+        soundex as core_soundex, sounds_like as core_sounds_like,
+        sounds_like_cross_lang as core_sounds_like_cross,
+        thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
     TokenKind, Tokenizer,
 };
