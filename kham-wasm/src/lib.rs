@@ -38,6 +38,11 @@
 
 use kham_core::{
     fts::FtsTokenizer,
+    number::{
+        parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
+        thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
+        u64_to_thai_word as core_number_to_word,
+    },
     romanizer::RomanizationMap,
     sentence::split_sentences as core_split,
     soundex::{soundex as core_soundex, SoundexAlgorithm},
@@ -408,4 +413,100 @@ pub fn split_sentences(text: &str) -> Vec<Sentence> {
             char_end: s.char_span.end,
         })
         .collect()
+}
+
+// ---------------------------------------------------------------------------
+// BahtResult
+// ---------------------------------------------------------------------------
+
+/// Result of parsing a Thai Baht currency string via [`parse_baht_text`].
+/// Always check [`BahtResult::valid`] before using [`BahtResult::baht`] /
+/// [`BahtResult::satang`].
+#[wasm_bindgen]
+pub struct BahtResult {
+    baht: u32,
+    satang: u8,
+    valid: bool,
+}
+
+#[wasm_bindgen]
+impl BahtResult {
+    /// Whole baht amount.
+    #[wasm_bindgen(getter)]
+    pub fn baht(&self) -> u32 {
+        self.baht
+    }
+
+    /// Satang (0–99; 100 satang = 1 baht).
+    #[wasm_bindgen(getter)]
+    pub fn satang(&self) -> u8 {
+        self.satang
+    }
+
+    /// `true` if the input was a valid Thai Baht string.
+    #[wasm_bindgen(getter)]
+    pub fn valid(&self) -> bool {
+        self.valid
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Number conversion functions
+// ---------------------------------------------------------------------------
+
+/// Convert Thai digit characters (๐–๙) in `text` to ASCII digits.
+/// Non-Thai characters are passed through unchanged.
+#[wasm_bindgen]
+pub fn thai_digits_to_ascii(text: &str) -> String {
+    core_thai_digits_to_ascii(text)
+}
+
+/// Convert a number to its Thai cardinal word representation.
+///
+/// e.g. `123` → `"หนึ่งร้อยยี่สิบสาม"`, `0` → `"ศูนย์"`.
+#[wasm_bindgen]
+pub fn number_to_thai_word(n: u32) -> String {
+    core_number_to_word(n as u64)
+}
+
+/// Parse a Thai cardinal number word and return its decimal string.
+///
+/// Returns an empty string when the input is not a recognised number word.
+/// e.g. `"หนึ่งร้อยยี่สิบสาม"` → `"123"`, `"กินข้าว"` → `""`.
+#[wasm_bindgen]
+pub fn thai_word_to_number(text: &str) -> String {
+    match core_parse_thai_word(text) {
+        Some(n) => n.to_string(),
+        None => String::new(),
+    }
+}
+
+/// Render a Baht amount as Thai currency text.
+///
+/// `satang` must be 0–99 (100 satang = 1 baht).
+/// e.g. `(123, 50)` → `"หนึ่งร้อยยี่สิบสามบาทห้าสิบสตางค์"`,
+///      `(100, 0)` → `"หนึ่งร้อยบาทถ้วน"`.
+#[wasm_bindgen]
+pub fn number_to_baht_text(baht: u32, satang: u8) -> String {
+    core_to_baht_text(baht as u64, satang)
+}
+
+/// Parse a Thai Baht currency string into a [`BahtResult`].
+///
+/// Returns a result with `valid = false` when the input is not a recognised
+/// Thai Baht string (no `บาท` marker, or unrecognised number words).
+#[wasm_bindgen]
+pub fn parse_baht_text(text: &str) -> BahtResult {
+    match core_parse_baht(text) {
+        Some(b) => BahtResult {
+            baht: b.baht.min(u32::MAX as u64) as u32,
+            satang: b.satang,
+            valid: true,
+        },
+        None => BahtResult {
+            baht: 0,
+            satang: 0,
+            valid: false,
+        },
+    }
 }

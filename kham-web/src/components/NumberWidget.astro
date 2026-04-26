@@ -1,0 +1,415 @@
+---
+const tabs = [
+  { id: 'word',   label: '→ Thai Word' },
+  { id: 'parse',  label: '→ Number'    },
+  { id: 'digits', label: 'Thai Digits' },
+  { id: 'baht',   label: 'Baht Text'  },
+];
+---
+
+<div class="number-widget-root font-sans">
+  <!-- Header + tabs -->
+  <div class="flex flex-wrap items-start justify-between gap-3 mb-5">
+    <div>
+      <h2 class="text-lg font-semibold text-slate-900 dark:text-slate-100">Number Conversion</h2>
+      <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+        Thai number words, Thai digits (๐–๙), and Baht currency text.
+      </p>
+    </div>
+    <div class="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-0.5 flex-wrap" role="tablist" aria-label="Conversion mode">
+      {tabs.map((t, i) => (
+        <button
+          type="button"
+          role="tab"
+          class="num-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors"
+          data-tab={t.id}
+          aria-selected={i === 0 ? 'true' : 'false'}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  </div>
+
+  <!-- ── Tab: → Thai Word ── -->
+  <div id="num-panel-word" class="num-panel">
+    <label for="num-word-input" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
+      Number <span class="text-slate-400">(0 – 4,294,967,295)</span>
+    </label>
+    <input
+      id="num-word-input"
+      type="number"
+      min="0"
+      max="4294967295"
+      placeholder="1234"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
+    />
+
+    <div class="mt-3 flex flex-col items-center justify-center min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 gap-1">
+      <span class="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500">Thai word</span>
+      <span id="num-word-output" class="text-xl font-medium text-slate-300 dark:text-slate-600">—</span>
+      <span id="num-word-roundtrip" class="text-xs text-slate-400 dark:text-slate-500 hidden"></span>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <span class="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+      {[0, 10, 21, 123, 1000, 1000000].map(n => (
+        <button type="button" class="num-word-example text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors font-mono" data-n={n}>{n.toLocaleString()}</button>
+      ))}
+    </div>
+  </div>
+
+  <!-- ── Tab: → Number ── -->
+  <div id="num-panel-parse" class="num-panel hidden">
+    <label for="num-parse-input" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Thai number word</label>
+    <input
+      id="num-parse-input"
+      type="text"
+      placeholder="หนึ่งร้อยยี่สิบสาม"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
+    />
+
+    <div class="mt-3 flex flex-col items-center justify-center min-h-[72px] rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-3 gap-1">
+      <span class="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500">Number</span>
+      <span id="num-parse-output" class="text-2xl font-mono font-bold text-slate-300 dark:text-slate-600">—</span>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <span class="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+      <span id="num-parse-examples"></span>
+    </div>
+  </div>
+
+  <!-- ── Tab: Thai Digits ── -->
+  <div id="num-panel-digits" class="num-panel hidden">
+    <label for="num-digits-input" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">Text with Thai digits (๐–๙)</label>
+    <input
+      id="num-digits-input"
+      type="text"
+      placeholder="ธนาคาร๑๐๐แห่ง"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
+    />
+
+    <div class="mt-3 grid grid-cols-[auto_1fr_auto_1fr] items-center gap-3">
+      <span class="text-[10px] uppercase tracking-widest text-slate-400 dark:text-slate-500">Input</span>
+      <div id="num-digits-before" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-base text-slate-400 dark:text-slate-500 italic min-h-[40px]">—</div>
+      <svg class="w-4 h-4 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+      </svg>
+      <div id="num-digits-after" class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-base text-slate-400 dark:text-slate-500 italic min-h-[40px]">—</div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2 mt-3">
+      <span class="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+      <span id="num-digits-examples"></span>
+    </div>
+  </div>
+
+  <!-- ── Tab: Baht Text ── -->
+  <div id="num-panel-baht" class="num-panel hidden">
+    <!-- Number → Baht text -->
+    <div class="mb-5">
+      <p class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Number → Thai Baht text</p>
+      <div class="flex items-end gap-3">
+        <div class="flex-1">
+          <label for="num-baht-baht" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Baht</label>
+          <input id="num-baht-baht" type="number" min="0" max="4294967295" placeholder="100"
+            class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"/>
+        </div>
+        <div class="w-24">
+          <label for="num-baht-satang" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Satang (0–99)</label>
+          <input id="num-baht-satang" type="number" min="0" max="99" placeholder="0"
+            class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"/>
+        </div>
+      </div>
+      <div id="num-baht-text-output" class="mt-2 min-h-[44px] flex items-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-2 text-base text-slate-400 dark:text-slate-500 italic">
+        —
+      </div>
+      <div class="flex flex-wrap items-center gap-2 mt-2">
+        <span class="text-xs text-slate-500 dark:text-slate-400">Try:</span>
+        {[[100,0],[21,50],[1000000,0]].map(([b,s]) => (
+          <button type="button" class="num-baht-example text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors font-mono"
+            data-baht={b} data-satang={s}>{b.toLocaleString()} / {s}</button>
+        ))}
+      </div>
+    </div>
+
+    <!-- Divider -->
+    <div class="border-t border-slate-200 dark:border-slate-700 my-4"></div>
+
+    <!-- Baht text → Number -->
+    <div>
+      <p class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">Thai Baht text → Number</p>
+      <input id="num-baht-parse-input" type="text" placeholder="หนึ่งร้อยบาทถ้วน"
+        class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"/>
+      <div id="num-baht-parse-output" class="mt-2 min-h-[44px] flex items-center gap-6 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-2 text-base text-slate-400 dark:text-slate-500 italic">
+        —
+      </div>
+    </div>
+  </div>
+</div>
+
+<script is:inline>
+(function () {
+  let wasmMod = null;
+
+  async function loadWasm() {
+    if (wasmMod) return wasmMod;
+    const mod = await import('/wasm/kham_wasm.js');
+    await mod.default();
+    wasmMod = mod;
+    return wasmMod;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab switching
+  // ---------------------------------------------------------------------------
+  function activateTab(id) {
+    document.querySelectorAll('.num-tab').forEach(btn => {
+      const active = btn.dataset.tab === id;
+      btn.setAttribute('aria-selected', active ? 'true' : 'false');
+      btn.className = `num-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+        active
+          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+      }`;
+    });
+    document.querySelectorAll('.num-panel').forEach(p => {
+      p.classList.toggle('hidden', p.id !== `num-panel-${id}`);
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab: → Thai Word
+  // ---------------------------------------------------------------------------
+  async function runWord() {
+    const raw = document.getElementById('num-word-input').value.trim();
+    const outEl = document.getElementById('num-word-output');
+    const rtEl  = document.getElementById('num-word-roundtrip');
+    if (raw === '') {
+      outEl.textContent = '—';
+      outEl.className = 'text-xl font-medium text-slate-300 dark:text-slate-600';
+      rtEl.classList.add('hidden');
+      return;
+    }
+    const n = parseInt(raw, 10);
+    if (isNaN(n) || n < 0) { outEl.textContent = '—'; rtEl.classList.add('hidden'); return; }
+    try {
+      const mod = await loadWasm();
+      const word = mod.number_to_thai_word(n);
+      outEl.textContent = word;
+      outEl.className = 'text-xl font-medium text-slate-800 dark:text-slate-100 not-italic';
+
+      // round-trip
+      const back = mod.thai_word_to_number(word);
+      if (back !== '') {
+        rtEl.textContent = `Round-trip: ${word} → ${Number(back).toLocaleString()} ${Number(back) === n ? '✓' : '≠ ' + n}`;
+        rtEl.className = `text-xs ${Number(back) === n ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'} not-hidden`;
+        rtEl.classList.remove('hidden');
+      } else {
+        rtEl.classList.add('hidden');
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab: → Number
+  // ---------------------------------------------------------------------------
+  async function runParse() {
+    const text  = document.getElementById('num-parse-input').value.trim();
+    const outEl = document.getElementById('num-parse-output');
+    if (!text) { outEl.textContent = '—'; outEl.className = 'text-2xl font-mono font-bold text-slate-300 dark:text-slate-600'; return; }
+    try {
+      const mod = await loadWasm();
+      const result = mod.thai_word_to_number(text);
+      if (result === '') {
+        outEl.textContent = 'not a number';
+        outEl.className = 'text-sm font-medium text-red-500 dark:text-red-400';
+      } else {
+        outEl.textContent = Number(result).toLocaleString();
+        outEl.className = 'text-2xl font-mono font-bold text-slate-800 dark:text-slate-100';
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab: Thai Digits
+  // ---------------------------------------------------------------------------
+  async function runDigits() {
+    const text    = document.getElementById('num-digits-input').value;
+    const beforeEl = document.getElementById('num-digits-before');
+    const afterEl  = document.getElementById('num-digits-after');
+    if (!text) {
+      beforeEl.innerHTML = '<span class="italic text-slate-400 dark:text-slate-500">—</span>';
+      afterEl.innerHTML  = '<span class="italic text-slate-400 dark:text-slate-500">—</span>';
+      return;
+    }
+    function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    try {
+      const mod = await loadWasm();
+      const converted = mod.thai_digits_to_ascii(text);
+      // Highlight Thai digits in before, highlight converted digits in after
+      const THAI_DIGIT = /[๐-๙]/g;
+      const ASCII_DIGIT_AT = [];
+      let m;
+      THAI_DIGIT.lastIndex = 0;
+      // build before with highlights
+      let beforeHtml = '';
+      let prev = 0;
+      const re = /[๐-๙]/g;
+      while ((m = re.exec(text)) !== null) {
+        beforeHtml += esc(text.slice(prev, m.index));
+        beforeHtml += `<span class="rounded px-0.5 bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-400">${esc(m[0])}</span>`;
+        prev = m.index + m[0].length;
+        ASCII_DIGIT_AT.push(m.index);
+      }
+      beforeHtml += esc(text.slice(prev));
+
+      // build after: mark positions that changed
+      let afterHtml = '';
+      prev = 0;
+      const re2 = /[๐-๙]/g;
+      let outIdx = 0;
+      const textChars = [...text];
+      const convChars = [...converted];
+      let ci = 0, oi = 0;
+      afterHtml = '';
+      for (let i = 0; i < textChars.length; i++) {
+        const tc = textChars[i].codePointAt(0);
+        if (tc >= 0x0E50 && tc <= 0x0E59) {
+          const ascii = String.fromCodePoint(tc - 0x0E50 + 48);
+          afterHtml += `<span class="rounded px-0.5 bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400">${esc(ascii)}</span>`;
+        } else {
+          afterHtml += esc(textChars[i]);
+        }
+      }
+
+      beforeEl.innerHTML = `<span class="text-slate-800 dark:text-slate-100 not-italic">${beforeHtml}</span>`;
+      afterEl.innerHTML  = `<span class="text-slate-800 dark:text-slate-100 not-italic">${afterHtml}</span>`;
+    } catch (e) { console.error(e); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab: Baht — number → text
+  // ---------------------------------------------------------------------------
+  async function runBahtText() {
+    const bahtRaw   = document.getElementById('num-baht-baht').value.trim();
+    const satangRaw = document.getElementById('num-baht-satang').value.trim();
+    const outEl = document.getElementById('num-baht-text-output');
+    if (bahtRaw === '') { outEl.innerHTML = '<span class="italic">—</span>'; return; }
+    const baht   = parseInt(bahtRaw, 10);
+    const satang = satangRaw === '' ? 0 : parseInt(satangRaw, 10);
+    if (isNaN(baht) || baht < 0 || isNaN(satang) || satang < 0 || satang > 99) {
+      outEl.innerHTML = '<span class="italic">—</span>'; return;
+    }
+    try {
+      const mod = await loadWasm();
+      const text = mod.number_to_baht_text(baht, satang);
+      outEl.innerHTML = `<span class="text-slate-800 dark:text-slate-100 not-italic">${text}</span>`;
+    } catch (e) { console.error(e); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tab: Baht — text → number
+  // ---------------------------------------------------------------------------
+  async function runBahtParse() {
+    const text  = document.getElementById('num-baht-parse-input').value.trim();
+    const outEl = document.getElementById('num-baht-parse-output');
+    if (!text) { outEl.innerHTML = '<span class="italic text-slate-400 dark:text-slate-500">—</span>'; return; }
+    try {
+      const mod    = await loadWasm();
+      const result = mod.parse_baht_text(text);
+      if (!result.valid) {
+        outEl.innerHTML = '<span class="text-sm text-red-500 dark:text-red-400">not a valid Baht string</span>';
+      } else {
+        outEl.innerHTML =
+          `<span class="text-slate-800 dark:text-slate-100 not-italic">` +
+          `<strong class="text-slate-500 dark:text-slate-400 font-medium text-xs mr-1">Baht</strong>${result.baht.toLocaleString()}` +
+          `<span class="mx-3 text-slate-300 dark:text-slate-600">·</span>` +
+          `<strong class="text-slate-500 dark:text-slate-400 font-medium text-xs mr-1">Satang</strong>${result.satang}` +
+          `</span>`;
+      }
+    } catch (e) { console.error(e); }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Boot
+  // ---------------------------------------------------------------------------
+  document.addEventListener('DOMContentLoaded', () => {
+    // Tab clicks
+    document.querySelectorAll('.num-tab').forEach(btn => {
+      btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+    });
+    activateTab('word');
+
+    // Inject parse examples (JS strings to preserve codepoints)
+    const parseExamples = [
+      { label: 'ยี่สิบ', raw: 'ยี่สิบ' },
+      { label: 'หนึ่งร้อยยี่สิบสาม', raw: 'หนึ่งร้อยยี่สิบสาม' },
+      { label: 'สองล้าน', raw: 'สองล้าน' },
+    ];
+    const parseContainer = document.getElementById('num-parse-examples');
+    if (parseContainer) {
+      parseExamples.forEach(e => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = e.label;
+        btn.className = 'text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors';
+        btn.addEventListener('click', () => {
+          document.getElementById('num-parse-input').value = e.raw;
+          runParse();
+        });
+        parseContainer.appendChild(btn);
+      });
+    }
+
+    // Inject digits examples
+    const digitsExamples = [
+      { label: '๑๒๓', raw: '๑๒๓' },
+      { label: 'ธนาคาร๑๐๐แห่ง', raw: 'ธนาคาร๑๐๐แห่ง' },
+      { label: 'ราคา๒๕๐บาท', raw: 'ราคา๒๕๐บาท' },
+    ];
+    const digitsContainer = document.getElementById('num-digits-examples');
+    if (digitsContainer) {
+      digitsExamples.forEach(e => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = e.label;
+        btn.className = 'text-xs px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors';
+        btn.addEventListener('click', () => {
+          document.getElementById('num-digits-input').value = e.raw;
+          runDigits();
+        });
+        digitsContainer.appendChild(btn);
+      });
+    }
+
+    // Inputs
+    document.getElementById('num-word-input')?.addEventListener('input', runWord);
+    document.getElementById('num-parse-input')?.addEventListener('input', runParse);
+    document.getElementById('num-digits-input')?.addEventListener('input', runDigits);
+    document.getElementById('num-baht-baht')?.addEventListener('input', runBahtText);
+    document.getElementById('num-baht-satang')?.addEventListener('input', runBahtText);
+    document.getElementById('num-baht-parse-input')?.addEventListener('input', runBahtParse);
+
+    // Word tab examples
+    document.querySelectorAll('.num-word-example').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('num-word-input').value = btn.dataset.n;
+        runWord();
+      });
+    });
+
+    // Baht tab examples
+    document.querySelectorAll('.num-baht-example').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.getElementById('num-baht-baht').value   = btn.dataset.baht;
+        document.getElementById('num-baht-satang').value = btn.dataset.satang;
+        runBahtText();
+      });
+    });
+
+    loadWasm().catch(() => {});
+  });
+})();
+</script>

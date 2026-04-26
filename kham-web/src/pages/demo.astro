@@ -3,6 +3,7 @@ import Layout from '../layouts/Layout.astro';
 import LiveDemo from '../components/LiveDemo.astro';
 import SoundexWidget from '../components/SoundexWidget.astro';
 import NormalizerWidget from '../components/NormalizerWidget.astro';
+import NumberWidget from '../components/NumberWidget.astro';
 ---
 
 <Layout
@@ -30,8 +31,13 @@ import NormalizerWidget from '../components/NormalizerWidget.astro';
     </div>
 
     <!-- Normalizer widget -->
-    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
       <NormalizerWidget />
+    </div>
+
+    <!-- Number conversion widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+      <NumberWidget />
     </div>
 
     <!-- Info cards -->
