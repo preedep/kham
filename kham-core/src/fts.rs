@@ -79,12 +79,38 @@ pub struct FtsTokenizerBuilder {
 
 impl FtsTokenizerBuilder {
     /// Use a custom stopword set instead of the built-in list.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::stopwords::StopwordSet;
+    ///
+    /// let stops = StopwordSet::from_text("กิน\nข้าว\n");
+    /// let fts = FtsTokenizer::builder().stopwords(stops).build();
+    /// let tokens = fts.segment_for_fts("กินข้าว");
+    /// assert!(tokens.iter().all(|t| t.is_stop || t.text != "กิน"));
+    /// ```
     pub fn stopwords(mut self, s: StopwordSet) -> Self {
         self.stopwords = Some(s);
         self
     }
 
     /// Attach a synonym map for expansion.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::synonym::SynonymMap;
+    ///
+    /// // TSV: canonical TAB synonym1 TAB synonym2 …
+    /// let syns = SynonymMap::from_tsv("รถ\tรถยนต์\tยานพาหนะ\n");
+    /// let fts = FtsTokenizer::builder().synonyms(syns).build();
+    /// let tokens = fts.segment_for_fts("รถ");
+    /// let t = tokens.iter().find(|t| t.text == "รถ").unwrap();
+    /// assert!(t.synonyms.contains(&String::from("รถยนต์")));
+    /// ```
     pub fn synonyms(mut self, m: SynonymMap) -> Self {
         self.synonyms = Some(m);
         self
@@ -93,18 +119,62 @@ impl FtsTokenizerBuilder {
     /// Override the n-gram size used for [`TokenKind::Unknown`] tokens.
     ///
     /// Default: 3 (trigrams). Set to 0 to disable n-gram generation.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::stopwords::StopwordSet;
+    ///
+    /// // Disable n-grams entirely — useful when index size must be small
+    /// let fts = FtsTokenizer::builder()
+    ///     .ngram_size(0)
+    ///     .stopwords(StopwordSet::from_text(""))
+    ///     .build();
+    /// let tokens = fts.segment_for_fts("กขคง"); // unknown word → no trigrams
+    /// assert!(tokens.iter().all(|t| t.trigrams.is_empty()));
+    /// ```
     pub fn ngram_size(mut self, n: usize) -> Self {
         self.ngram_size = Some(n);
         self
     }
 
     /// Use a custom POS tagger instead of the built-in table.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::pos::{PosTag, PosTagger};
+    ///
+    /// // Custom TSV: word TAB POS_TAG
+    /// let tagger = PosTagger::from_tsv("กิน\tVERB\n");
+    /// let fts = FtsTokenizer::builder().pos_tagger(tagger).build();
+    /// // Segment กิน alone so it is not merged into a compound
+    /// let tokens = fts.segment_for_fts("กิน");
+    /// let t = tokens.iter().find(|t| t.text == "กิน").unwrap();
+    /// assert_eq!(t.pos, Some(PosTag::Verb));
+    /// ```
     pub fn pos_tagger(mut self, t: PosTagger) -> Self {
         self.pos_tagger = Some(t);
         self
     }
 
     /// Use a custom NE gazetteer instead of the built-in table.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::ne::NeTagger;
+    /// use kham_core::TokenKind;
+    ///
+    /// // Domain-specific NE list: word TAB NE_TAG
+    /// let ne = NeTagger::from_tsv("เซเรน่า\tPERSON\n");
+    /// let fts = FtsTokenizer::builder().ne_tagger(ne).build();
+    /// let tokens = fts.segment_for_fts("เซเรน่า");
+    /// assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Named(_))));
+    /// ```
     pub fn ne_tagger(mut self, t: NeTagger) -> Self {
         self.ne_tagger = Some(t);
         self
@@ -117,6 +187,21 @@ impl FtsTokenizerBuilder {
     /// (e.g. `kin`) to match Thai-script documents (e.g. `กิน`) in PostgreSQL FTS.
     ///
     /// Disabled by default — call this method to opt in.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::romanizer::RomanizationMap;
+    ///
+    /// // TSV: Thai word TAB RTGS romanization
+    /// let rom = RomanizationMap::from_tsv("กิน\tkin\n");
+    /// let fts = FtsTokenizer::builder().romanization(rom).build();
+    /// let tokens = fts.segment_for_fts("กิน");
+    /// let t = tokens.iter().find(|t| t.text == "กิน").unwrap();
+    /// // Latin synonym "kin" enables queries like `WHERE doc @@ 'kin'`
+    /// assert!(t.synonyms.contains(&String::from("kin")));
+    /// ```
     pub fn romanization(mut self, m: RomanizationMap) -> Self {
         self.romanization = Some(m);
         self
@@ -130,6 +215,23 @@ impl FtsTokenizerBuilder {
     /// expansions (`กรกฎาคม`) so they are indexed and searchable by full form.
     ///
     /// Disabled by default — call this method to opt in.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::abbrev::AbbrevMap;
+    /// use kham_core::stopwords::StopwordSet;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .abbrevs(AbbrevMap::builtin())
+    ///     .stopwords(StopwordSet::from_text(""))
+    ///     .build();
+    /// // ก.ค. expands to กรกฎาคม before segmentation — dots disappear
+    /// let tokens = fts.segment_for_fts("ก.ค.");
+    /// let texts: Vec<&str> = tokens.iter().map(|t| t.text.as_str()).collect();
+    /// assert!(!texts.contains(&"."), "dots should be consumed by expansion");
+    /// ```
     pub fn abbrevs(mut self, m: AbbrevMap) -> Self {
         self.abbrev_map = Some(m);
         self
@@ -147,6 +249,25 @@ impl FtsTokenizerBuilder {
     ///
     /// This lets queries using either script match documents written in the
     /// other. Set to `false` to opt out.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::TokenKind;
+    ///
+    /// // Default (true): ๑๒๓ gets ASCII synonym "123"
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.segment_for_fts("๑๒๓");
+    /// let num = tokens.iter().find(|t| t.kind == TokenKind::Number).unwrap();
+    /// assert!(num.synonyms.contains(&String::from("123")));
+    ///
+    /// // Opt out: no conversion performed
+    /// let fts_off = FtsTokenizer::builder().number_normalize(false).build();
+    /// let tokens_off = fts_off.segment_for_fts("๑๒๓");
+    /// let num_off = tokens_off.iter().find(|t| t.kind == TokenKind::Number).unwrap();
+    /// assert!(!num_off.synonyms.contains(&String::from("123")));
+    /// ```
     pub fn number_normalize(mut self, v: bool) -> Self {
         self.number_normalize = Some(v);
         self
@@ -164,12 +285,45 @@ impl FtsTokenizerBuilder {
     /// collision-prone at word level — prefer lk82 or udom83 for general FTS use.
     ///
     /// Disabled by default — call this method to opt in.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::soundex::{lk82, SoundexAlgorithm};
+    /// use kham_core::stopwords::StopwordSet;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .soundex(SoundexAlgorithm::Lk82)
+    ///     .stopwords(StopwordSet::from_text(""))
+    ///     .build();
+    /// // กาน / ขาน / คาน all map to the same lk82 code — stored once per token
+    /// for word in &["กาน", "ขาน", "คาน"] {
+    ///     let tokens = fts.segment_for_fts(word);
+    ///     let t = tokens.first().unwrap();
+    ///     assert!(t.synonyms.contains(&lk82(word)), "{word} missing lk82 synonym");
+    /// }
+    /// ```
     pub fn soundex(mut self, algo: SoundexAlgorithm) -> Self {
         self.soundex = Some(algo);
         self
     }
 
     /// Consume the builder and return a configured [`FtsTokenizer`].
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::soundex::SoundexAlgorithm;
+    /// use kham_core::stopwords::StopwordSet;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .soundex(SoundexAlgorithm::Lk82)
+    ///     .stopwords(StopwordSet::from_text(""))
+    ///     .build();
+    /// assert!(!fts.segment_for_fts("กินข้าว").is_empty());
+    /// ```
     pub fn build(self) -> FtsTokenizer {
         FtsTokenizer {
             tokenizer: Tokenizer::new(),
@@ -215,11 +369,37 @@ pub struct FtsTokenizer {
 
 impl FtsTokenizer {
     /// Create an [`FtsTokenizer`] with built-in stopwords and no synonyms.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let lexemes = fts.lexemes("กินข้าวกับปลา");
+    /// // Built-in stopword กับ is excluded; content words are present
+    /// assert!(!lexemes.contains(&String::from("กับ")));
+    /// assert!(lexemes.iter().any(|l| l == "กิน" || l == "ปลา"));
+    /// ```
     pub fn new() -> Self {
         FtsTokenizerBuilder::default().build()
     }
 
     /// Return a [`FtsTokenizerBuilder`] for custom configuration.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::soundex::SoundexAlgorithm;
+    /// use kham_core::synonym::SynonymMap;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .synonyms(SynonymMap::from_tsv("รถ\tรถยนต์\n"))
+    ///     .soundex(SoundexAlgorithm::Lk82)
+    ///     .build();
+    /// assert!(!fts.segment_for_fts("รถ").is_empty());
+    /// ```
     pub fn builder() -> FtsTokenizerBuilder {
         FtsTokenizerBuilder::default()
     }
@@ -234,6 +414,48 @@ impl FtsTokenizer {
     /// (stopwords excluded).
     ///
     /// [`index_tokens`]: FtsTokenizer::index_tokens
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.segment_for_fts("กินข้าวกับปลา");
+    /// // Positions are 0-based and sequential across non-whitespace tokens
+    /// for (i, t) in tokens.iter().enumerate() {
+    ///     assert_eq!(t.position, i);
+    /// }
+    /// // กับ is a common conjunction — marked as a stopword
+    /// let kap = tokens.iter().find(|t| t.text == "กับ").unwrap();
+    /// assert!(kap.is_stop);
+    /// ```
+    ///
+    /// Named entities are tagged automatically — `kind` becomes `TokenKind::Named`:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::TokenKind;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.segment_for_fts("ไปกรุงเทพ");
+    /// assert!(tokens.iter().any(|t| matches!(t.kind, TokenKind::Named(_))));
+    /// ```
+    ///
+    /// Enable phonetic synonyms with [`FtsTokenizerBuilder::soundex`]:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::soundex::SoundexAlgorithm;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .soundex(SoundexAlgorithm::Lk82)
+    ///     .build();
+    /// let tokens = fts.segment_for_fts("กิน");
+    /// let t = tokens.iter().find(|t| t.text == "กิน").unwrap();
+    /// // synonyms now contains the lk82 code, enabling fuzzy phonetic matching
+    /// assert!(!t.synonyms.is_empty());
+    /// ```
     pub fn segment_for_fts(&self, text: &str) -> Vec<FtsToken> {
         let normalized = self.tokenizer.normalize(text);
         // Expand abbreviations (e.g. ก.ค. → กรกฎาคม) before segmentation so
@@ -331,6 +553,20 @@ impl FtsTokenizer {
     ///
     /// Filters out stopwords and whitespace. Each [`FtsToken`] still carries
     /// its original `position` so phrase-distance scoring remains correct.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let tokens = fts.index_tokens("กินข้าวกับปลา");
+    /// // No stopwords in the index
+    /// assert!(tokens.iter().all(|t| !t.is_stop));
+    /// // Positions are preserved from the full sequence for phrase scoring
+    /// let positions: Vec<usize> = tokens.iter().map(|t| t.position).collect();
+    /// assert!(positions.windows(2).all(|w| w[0] < w[1]));
+    /// ```
     pub fn index_tokens(&self, text: &str) -> Vec<FtsToken> {
         self.segment_for_fts(text)
             .into_iter()
@@ -343,6 +579,29 @@ impl FtsTokenizer {
     /// Returns one string per non-stop token, plus synonym expansions and
     /// trigrams for unknown tokens. Duplicates are not removed (the caller or
     /// PostgreSQL handles deduplication).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let lexemes = fts.lexemes("กินข้าวกับปลา");
+    /// // Content words are present; stopword กับ is absent
+    /// assert!(lexemes.iter().any(|l| l == "กิน" || l == "ปลา"));
+    /// assert!(!lexemes.contains(&String::from("กับ")));
+    /// ```
+    ///
+    /// With Thai digit normalization (enabled by default), both scripts match:
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let lexemes = fts.lexemes("ธนาคาร๑๐๐แห่ง");
+    /// // ๑๐๐ (Thai digits) → synonym "100" (ASCII) — both appear in lexemes
+    /// assert!(lexemes.contains(&String::from("100")));
+    /// ```
     pub fn lexemes(&self, text: &str) -> Vec<String> {
         let tokens = self.index_tokens(text);
         let mut out: Vec<String> = Vec::with_capacity(tokens.len() * 2);

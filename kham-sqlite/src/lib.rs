@@ -6,10 +6,22 @@
 //! - Named entity recognition (places, persons, organisations)
 //! - Synonym expansion via `FTS5_TOKEN_COLOCATED` (configurable TSV map)
 //! - RTGS romanization added as colocated synonyms (กิน → "kin")
+//! - Thai phonetic soundex codes as colocated synonyms for fuzzy matching
 //!
 //! ```sql
 //! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
+//! -- Default tokenizer (lk82 soundex, stopwords forwarded, trigrams for unknown)
 //! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
+//! -- Suppress stopwords from the index
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');
+//! -- Bigrams instead of trigrams for unknown tokens
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 2');
+//! -- Disable n-grams entirely
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 0');
+//! -- All options combined
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83 stopwords on ngram_size 4');
+//! -- Disable soundex
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');
 //! INSERT INTO docs VALUES ('กินข้าวกับปลา');
 //! SELECT * FROM docs WHERE docs MATCH 'ปลา';
 //! SELECT snippet(docs, 0, '<b>', '</b>', '...', 5) FROM docs WHERE docs MATCH 'ปลา';
@@ -63,6 +75,7 @@ use std::panic::catch_unwind;
 use kham_core::fts::FtsTokenizer;
 use kham_core::normalizer;
 use kham_core::romanizer::RomanizationMap;
+use kham_core::soundex::SoundexAlgorithm;
 
 // ---------------------------------------------------------------------------
 // SQLite / FTS5 constants
@@ -143,6 +156,135 @@ struct KhamFts5Api {
 struct KhamInstance {
     vtable: KhamFts5Tokenizer,
     fts: FtsTokenizer,
+    /// When `true`, tokens marked `is_stop` are not forwarded to SQLite.
+    suppress_stopwords: bool,
+}
+
+// ---------------------------------------------------------------------------
+// xCreate argument parsing
+// ---------------------------------------------------------------------------
+
+/// Parse soundex algorithm from the `xCreate` argument list.
+///
+/// FTS5 passes `tokenize='kham soundex lk82'` as positional space-separated
+/// arguments: `az_arg[0]="kham"`, `az_arg[1]="soundex"`, `az_arg[2]="lk82"`.
+/// This function scans for the keyword `"soundex"` and reads the next argument
+/// as the algorithm name.
+///
+/// Supported algorithm values: `"lk82"` (default), `"udom83"`, `"metasound"`, `"none"`.
+/// Unknown values fall back to lk82.
+fn parse_soundex_arg(az_arg: *const *const c_char, n_arg: c_int) -> Option<SoundexAlgorithm> {
+    let n = n_arg as usize;
+    // FTS5 strips the tokenizer name ("kham") before calling xCreate, so az_arg[0]
+    // is the first user-supplied argument (e.g. "soundex").
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "soundex" {
+            // Next argument is the algorithm name.
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return Some(SoundexAlgorithm::Lk82);
+            }
+            let val = match unsafe { std::ffi::CStr::from_ptr(val_ptr) }.to_str() {
+                Ok(s) => s,
+                Err(_) => return Some(SoundexAlgorithm::Lk82),
+            };
+            return match val {
+                "lk82" => Some(SoundexAlgorithm::Lk82),
+                "udom83" => Some(SoundexAlgorithm::Udom83),
+                "metasound" => Some(SoundexAlgorithm::MetaSound),
+                "none" => None,
+                _ => Some(SoundexAlgorithm::Lk82),
+            };
+        }
+    }
+    Some(SoundexAlgorithm::Lk82) // default when no soundex argument
+}
+
+/// Return `true` when `az_arg` contains the pair `"stopwords" "on"`.
+///
+/// Default: `false` — stopwords are forwarded (backward-compatible).
+/// Usage: `tokenize='kham stopwords on'`.
+fn parse_stopwords_arg(az_arg: *const *const c_char, n_arg: c_int) -> bool {
+    let n = n_arg as usize;
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "stopwords" {
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return false;
+            }
+            return matches!(
+                unsafe { std::ffi::CStr::from_ptr(val_ptr) }.to_str(),
+                Ok("on")
+            );
+        }
+    }
+    false
+}
+
+/// Parse n-gram size from the `xCreate` argument list.
+///
+/// Scans for the keyword `"ngram_size"` and parses the next argument as a
+/// decimal `usize`. Falls back to `3` (trigrams) on missing or invalid value.
+/// Set to `0` to disable n-gram generation for unknown tokens entirely.
+///
+/// Usage: `tokenize='kham ngram_size 2'` (bigrams).
+fn parse_ngram_size_arg(az_arg: *const *const c_char, n_arg: c_int) -> usize {
+    let n = n_arg as usize;
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "ngram_size" {
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return 3;
+            }
+            return match unsafe { std::ffi::CStr::from_ptr(val_ptr) }.to_str() {
+                Ok(v) => v.parse::<usize>().unwrap_or(3),
+                Err(_) => 3,
+            };
+        }
+    }
+    3 // default: trigrams
 }
 
 // ---------------------------------------------------------------------------
@@ -150,14 +292,35 @@ struct KhamInstance {
 // ---------------------------------------------------------------------------
 
 /// Allocate a new per-table tokenizer instance, building the `FtsTokenizer` once.
+///
+/// Accepted argument pairs (all optional, order-independent):
+/// - `soundex <lk82|udom83|metasound|none>` — phonetic algorithm (default: lk82)
+/// - `stopwords <on|off>` — suppress stopword tokens from the index (default: off)
+/// - `ngram_size <N>` — n-gram size for unknown tokens (default: 3; 0 = disabled)
+///
+/// Examples:
+/// - `tokenize='kham'`
+/// - `tokenize='kham soundex udom83'`
+/// - `tokenize='kham stopwords on'`
+/// - `tokenize='kham ngram_size 2'`
+/// - `tokenize='kham soundex lk82 stopwords on ngram_size 4'`
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
-    _az_arg: *const *const c_char,
-    _n_arg: c_int,
+    az_arg: *const *const c_char,
+    n_arg: c_int,
     pp_out: *mut *mut KhamFts5Tokenizer,
 ) -> c_int {
     if pp_out.is_null() {
         return SQLITE_ERROR;
+    }
+    let soundex_algo = parse_soundex_arg(az_arg, n_arg);
+    let suppress_stopwords = parse_stopwords_arg(az_arg, n_arg);
+    let ngram_size = parse_ngram_size_arg(az_arg, n_arg);
+    let mut builder = FtsTokenizer::builder()
+        .romanization(RomanizationMap::builtin())
+        .ngram_size(ngram_size);
+    if let Some(algo) = soundex_algo {
+        builder = builder.soundex(algo);
     }
     let instance = Box::new(KhamInstance {
         vtable: KhamFts5Tokenizer {
@@ -165,10 +328,9 @@ unsafe extern "C" fn kham_fts5_create(
             x_delete: Some(kham_fts5_delete),
             x_tokenize: Some(kham_fts5_tokenize),
         },
-        // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS.
-        fts: FtsTokenizer::builder()
-            .romanization(RomanizationMap::builtin())
-            .build(),
+        // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS + soundex.
+        fts: builder.build(),
+        suppress_stopwords,
     });
     // SAFETY: vtable is the first field of KhamInstance (#[repr(C)]),
     // so *mut KhamInstance and *mut KhamFts5Tokenizer alias the same address.
@@ -253,6 +415,11 @@ unsafe extern "C" fn kham_fts5_tokenize(
                     (pos, pos)
                 }
             };
+
+            // Skip stopwords when suppression is enabled.
+            if instance.suppress_stopwords && ft.is_stop {
+                continue;
+            }
 
             // Emit primary token.
             // SAFETY: tok_bytes points into ft.text which is alive for this loop body.

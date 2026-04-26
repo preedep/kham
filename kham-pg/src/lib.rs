@@ -23,8 +23,11 @@
 
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
+use std::sync::OnceLock;
 
 use kham_core::fts::FtsTokenizer;
+use kham_core::romanizer::RomanizationMap;
+use kham_core::soundex::SoundexAlgorithm;
 use kham_core::TokenKind;
 
 // ---------------------------------------------------------------------------
@@ -137,6 +140,101 @@ pub unsafe extern "C" fn kham_end_impl(state: *mut c_void) {
 }
 
 // ---------------------------------------------------------------------------
+// Dictionary impl — kham_fts_dict
+//
+// A custom PG text-search dictionary that expands each Thai / Named token
+// into three lexemes stored at the same tsvector position:
+//   1. The normalised word itself
+//   2. Its lk82 Thai Soundex code  (phonetic fuzzy search)
+//   3. Its RTGS romanization       (Latin-script search, if in the map)
+//
+// This mirrors the FTS5_TOKEN_COLOCATED approach used in kham-sqlite.
+// ---------------------------------------------------------------------------
+
+/// Up to 6 lexeme slots, each holding a null-terminated UTF-8 string (≤ 127 bytes).
+/// Filled by [`kham_dict_lexize_impl`] and consumed by `kham_dict_lexize_shim` in C.
+#[repr(C)]
+pub struct KhamDictOut {
+    pub count: c_int,
+    pub words: [[u8; 128]; 6],
+}
+
+/// Lazy-initialised `FtsTokenizer` shared across all `kham_fts_dict` calls
+/// within one backend process.  Each PG backend gets its own copy (PG is
+/// multi-process, not multi-thread), so a process-local `OnceLock` is safe.
+static DICT_FTS: OnceLock<FtsTokenizer> = OnceLock::new();
+
+fn dict_fts() -> &'static FtsTokenizer {
+    DICT_FTS.get_or_init(|| {
+        FtsTokenizer::builder()
+            .soundex(SoundexAlgorithm::Lk82)
+            .romanization(RomanizationMap::builtin())
+            .build()
+    })
+}
+
+fn write_slot(slot: &mut [u8; 128], src: &[u8]) {
+    let n = src.len().min(127);
+    slot[..n].copy_from_slice(&src[..n]);
+    slot[n] = 0;
+}
+
+/// Expand `token` into lexemes: `[word, soundex_code?, rtgs?]`.
+///
+/// Writes results into `out` and sets `out.count`.  Returns `out.count`.
+/// Returns `0` on error or if the token should be treated as a stopword.
+///
+/// # Safety
+///
+/// `token` must point to `token_len` valid UTF-8 bytes.
+/// `out` must be a valid non-null pointer to a zeroed [`KhamDictOut`].
+#[no_mangle]
+pub unsafe extern "C" fn kham_dict_lexize_impl(
+    token: *const c_char,
+    token_len: c_int,
+    out: *mut KhamDictOut,
+) -> c_int {
+    if token.is_null() || token_len <= 0 || out.is_null() {
+        return 0;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(token as *const u8, token_len as usize) };
+    let word = match std::str::from_utf8(bytes) {
+        Ok(s) if !s.is_empty() => s,
+        _ => return 0,
+    };
+
+    let out_ref = unsafe { &mut *out };
+
+    // Slot 0: the word itself (always returned — never a stopword).
+    write_slot(&mut out_ref.words[0], word.as_bytes());
+    out_ref.count = 1;
+
+    // Slots 1-5: soundex + RTGS synonyms.  Any panic is caught so that at
+    // minimum the bare word is still indexed.
+    let word_owned = word.to_owned();
+    let synonyms: Vec<String> = catch_unwind(std::panic::AssertUnwindSafe(|| {
+        dict_fts()
+            .segment_for_fts(&word_owned)
+            .into_iter()
+            .next()
+            .map(|ft| ft.synonyms)
+            .unwrap_or_default()
+    }))
+    .unwrap_or_default();
+
+    let mut count: usize = 1;
+    for syn in &synonyms {
+        if count >= 6 {
+            break;
+        }
+        write_slot(&mut out_ref.words[count], syn.as_bytes());
+        count += 1;
+    }
+    out_ref.count = count as c_int;
+    count as c_int
+}
+
+// ---------------------------------------------------------------------------
 // PostgreSQL fmgr exported symbols
 //
 // These #[no_mangle] functions are guaranteed to appear in the dynamic symbol
@@ -155,6 +253,8 @@ extern "C" {
     fn kham_gettoken_shim(fcinfo: Fcinfo) -> Datum;
     fn kham_end_shim(fcinfo: Fcinfo) -> Datum;
     fn kham_lextypes_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_headline_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_dict_lexize_shim(fcinfo: Fcinfo) -> Datum;
 }
 
 #[repr(C)]
@@ -190,6 +290,11 @@ pub unsafe extern "C" fn kham_lextypes(fcinfo: Fcinfo) -> Datum {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn kham_headline(fcinfo: Fcinfo) -> Datum {
+    kham_headline_shim(fcinfo)
+}
+
+#[no_mangle]
 pub extern "C" fn pg_finfo_kham_start() -> *const PgFinfoRecord {
     &FINFO_V1
 }
@@ -203,5 +308,19 @@ pub extern "C" fn pg_finfo_kham_end() -> *const PgFinfoRecord {
 }
 #[no_mangle]
 pub extern "C" fn pg_finfo_kham_lextypes() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_headline() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn kham_dict_lexize(fcinfo: Fcinfo) -> Datum {
+    kham_dict_lexize_shim(fcinfo)
+}
+
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_dict_lexize() -> *const PgFinfoRecord {
     &FINFO_V1
 }

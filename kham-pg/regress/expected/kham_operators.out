@@ -133,8 +133,8 @@ SELECT alias, lexemes
 FROM ts_debug('kham', 'กินข้าว')
 WHERE alias IS NOT NULL
 ORDER BY alias;
- alias | lexemes 
--------+---------
- thai  | {กินข้าว}
+ alias |   lexemes    
+-------+--------------
+ thai  | {กินข้าว,1619}
 (1 row)
 

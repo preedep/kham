@@ -43,13 +43,19 @@ CREATE FUNCTION kham_lextypes(internal)
     AS 'MODULE_PATHNAME', 'kham_lextypes'
     LANGUAGE c STRICT;
 
+CREATE FUNCTION kham_headline(internal, internal, tsquery)
+    RETURNS internal
+    AS 'MODULE_PATHNAME', 'kham_headline'
+    LANGUAGE c STRICT;
+
 -- ── Parser ───────────────────────────────────────────────────────────────────
 
 CREATE TEXT SEARCH PARSER kham (
     START    = kham_start,
     GETTOKEN = kham_gettoken,
     END      = kham_end,
-    LEXTYPES = kham_lextypes
+    LEXTYPES = kham_lextypes,
+    HEADLINE = kham_headline
 );
 
 -- ── Dictionary ───────────────────────────────────────────────────────────────

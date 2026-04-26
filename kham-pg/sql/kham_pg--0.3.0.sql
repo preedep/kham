@@ -1,4 +1,4 @@
--- kham_pg--0.2.0.sql
+-- kham_pg--0.3.0.sql
 --
 -- Creates the kham text search parser, a pass-through dictionary, and a
 -- ready-to-use text search configuration for Thai documents.
