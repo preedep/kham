@@ -115,6 +115,7 @@ with zero schema change.
 - [ ] **kham-pg token type 7 for Named** — change `Named(_) => 1` → `Named(_) => 7` in `lib.rs`; add `named` lextype in `shim.c`; requires Docker pg_regress update
 - [x] **kham-sqlite soundex** — lk82/udom83/MetaSound codes emitted as `FTS5_TOKEN_COLOCATED` tokens; default lk82; override via `tokenize='kham soundex=udom83'`; disable with `soundex=none`
 - [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
+- [x] **kham-sqlite ngram_size** — `ngram_size N` xCreate argument; controls char n-gram size for Unknown tokens; default 3; 0 disables n-grams
 - [ ] **Mobile support (iOS / Android)** — static registration via `kham_sqlite_register(db)` C symbol + `staticlib` crate type; bundled SQLite amalgamation with `SQLITE_ENABLE_FTS5`; Rust targets `aarch64-apple-ios` / `aarch64-linux-android`; prerequisite: finish kham-sqlite v3
 - [ ] **Spelling correction** — edit-distance based; requires significant ML or DP work
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely

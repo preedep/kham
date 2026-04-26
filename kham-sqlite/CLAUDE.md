@@ -108,12 +108,14 @@ Soundex defaults to **lk82** and can be overridden via the `soundex <algo>` `xCr
 Stopword suppression is off by default and enabled with `stopwords on`.
 
 ```sql
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');                          -- default: lk82, stopwords forwarded
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');                                        -- default: lk82, stopwords forwarded, trigrams
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83');
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex metasound');
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');             -- disable soundex
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');             -- suppress stopwords
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex lk82 stopwords on'); -- both
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');                           -- disable soundex
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');                           -- suppress stopwords
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 2');                           -- bigrams for unknown tokens
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 0');                           -- disable n-grams
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex lk82 stopwords on ngram_size 4'); -- all options
 ```
 
 Custom synonym maps are not yet exposed via `xCreate` arguments.
@@ -217,7 +219,7 @@ sqlite3 ':memory:' \
 
 - Accept `synonyms=<path>` argument in `xCreate` to load a custom synonym TSV at table-creation time
 - [x] **Stopword suppression** — `stopwords on` argument in `xCreate`; stopword tokens skipped in `xTokenize`
-- Expose `ngram_size=N` for custom n-gram configuration on Unknown tokens
+- [x] **N-gram size** — `ngram_size N` argument in `xCreate`; controls char n-gram size for Unknown tokens (default 3; 0 = disabled)
 
 ## unsafe policy
 
