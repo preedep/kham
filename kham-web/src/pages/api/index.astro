@@ -18,7 +18,7 @@ const modules = [
 
 <Layout
   title="API Reference — kham"
-  description="kham v0.5.0 API reference for Rust, Python, and WASM — Tokenizer, FtsTokenizer, soundex, number, sentence, romanizer, normalizer."
+  description="kham v0.5.0 API reference for Rust, Python, WASM, and C — Tokenizer, FtsTokenizer, soundex, number, sentence, romanizer, normalizer."
   lang="en"
 >
   <div class="max-w-6xl mx-auto px-6 py-16">
@@ -31,12 +31,12 @@ const modules = [
       </div>
       <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mb-3">
         Public API of <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">kham-core</code> —
-        available for <strong>Rust</strong>, <strong>Python</strong> (PyO3), and <strong>WASM</strong> (JavaScript / TypeScript).
+        available for <strong>Rust</strong>, <strong>Python</strong> (PyO3), <strong>WASM</strong> (JavaScript / TypeScript), and <strong>C</strong> FFI.
       </p>
       <div class="flex flex-wrap gap-2 text-xs">
         <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-          docs.rs/kham-core ���
+          docs.rs/kham-core ↗
         </a>
         <a href="https://pypi.org/project/kham" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
@@ -45,6 +45,10 @@ const modules = [
         <a href="https://www.npmjs.com/package/kham-wasm" target="_blank" rel="noopener noreferrer"
            class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
           npm: kham-wasm ↗
+        </a>
+        <a href="https://github.com/preedep/kham/tree/main/kham-capi/include/kham.h" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          kham.h (C FFI) ↗
         </a>
       </div>
     </div>
@@ -156,6 +160,26 @@ for (const t of tokens) {
 const clean = normalize("ข้้าว");   // "ข้าว"
 const toks  = segment(clean);`,
             },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// Simple — array of token strings (legacy API)
+KhamTokens *toks = kham_segment("กินข้าวกับปลา");
+for (size_t i = 0; i < toks->len; i++)
+    printf("%s\\n", toks->words[i]);
+kham_tokens_free(toks);
+
+// Rich — KhamToken with byte/char spans and kind
+KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
+for (size_t i = 0; i < list->len; i++) {
+    KhamToken t = list->tokens[i];
+    printf("%s  chars=%zu..%zu  %s\\n",
+           t.text, t.char_start, t.char_end, t.kind);
+}
+kham_token_list_free(list);`,
+            },
           ]}
         />
         <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
@@ -236,6 +260,28 @@ for (const t of tokens) {
   console.log(t.text, t.kind, t.char_start, t.char_end);
 }`,
             },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// KhamToken fields:
+//   text       — char* (null-terminated UTF-8)
+//   byte_start / byte_end  — size_t byte offsets
+//   char_start / char_end  — size_t Unicode scalar-value offsets
+//   kind       — char*: "Thai" | "Latin" | "Number" | "Punctuation"
+//                       "Emoji" | "Whitespace" | "Unknown"
+//                       "Person" | "Place" | "Org"  (FTS pipeline only)
+
+KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
+for (size_t i = 0; i < list->len; i++) {
+    KhamToken *t = &list->tokens[i];
+    printf("%-10s  bytes=%zu..%zu  chars=%zu..%zu  kind=%s\\n",
+           t->text, t->byte_start, t->byte_end,
+           t->char_start, t->char_end, t->kind);
+}
+kham_token_list_free(list);`,
+            },
           ]}
         />
       </section>
@@ -307,6 +353,29 @@ normalize("กินข้าว");  // → "กินข้าว"
 
 // Typical usage: normalize before segmenting
 const words = segment(normalize(rawInput));`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// kham_normalize returns a heap-allocated string — free with kham_string_free
+
+char *out = kham_normalize("ข้้าว");   // "ข้าว"  (dedup tone mark)
+printf("%s\\n", out);
+kham_string_free(out);
+
+// Sara am composition: nikhahit + sara aa → sara am
+char *out2 = kham_normalize("\\xe0\\xb8\\x81\\xe0\\xb9\\x8d\\xe0\\xb8\\xb2"); // กํา
+printf("%s\\n", out2);   // กำ
+kham_string_free(out2);
+
+// Typical pattern: normalize then segment
+char *norm = kham_normalize(raw_input);
+KhamTokens *toks = kham_segment(norm);
+kham_string_free(norm);
+// ... use toks ...
+kham_tokens_free(toks);`,
             },
           ]}
         />
@@ -390,6 +459,33 @@ for (const t of tokens) {
 //           "Auxiliary" | "Determiner" | "Preposition"  (null if OOV)
 // NE tags:  "Person" | "Place" | "Org"  (null if not in gazetteer)`,
             },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// KhamFtsToken fields:
+//   text, position, kind, is_stop, roman (char*, never NULL)
+//   pos (char* or NULL if OOV), ne (char* or NULL)
+//   synonyms / synonyms_len, trigrams / trigrams_len
+
+KhamFtsTokenList *list = kham_fts_segment("นายกรัฐมนตรีกินข้าว");
+for (size_t i = 0; i < list->len; i++) {
+    KhamFtsToken *t = &list->tokens[i];
+    printf("%-10s  pos=%-14s  ne=%-8s  stop=%d  roman=%s\\n",
+           t->text,
+           t->pos  ? t->pos  : "(none)",
+           t->ne   ? t->ne   : "(none)",
+           t->is_stop, t->roman);
+}
+kham_fts_token_list_free(list);
+
+// Flat lexeme array (for PostgreSQL tsvector / SQLite FTS5)
+size_t len;
+char **lex = kham_fts_lexemes("กินข้าวกับปลา", &len);
+for (size_t i = 0; i < len; i++) printf("%s\\n", lex[i]);
+kham_fts_lexemes_free(lex, len);`,
+            },
           ]}
         />
         <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
@@ -409,7 +505,7 @@ for (const t of tokens) {
         </div>
         <p class="text-slate-600 dark:text-slate-400 mb-4">
           Dictionary-lookup POS tagger using a 13-category tagset derived from the ORCHID corpus.
-          In Python and WASM, POS tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code> — direct tagger construction is Rust-only.
+          In Python, WASM, and C, POS tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code> / <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">kham_fts_segment()</code> — direct tagger construction is Rust-only.
         </p>
 
         <div class="mb-5 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 text-sm">
@@ -495,6 +591,27 @@ for (const t of tokens) {
 // กับ      → Preposition
 // ปลา      → Noun`,
             },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// POS tagging is available through kham_fts_segment()
+// t->pos is NULL for OOV / non-Thai tokens
+
+KhamFtsTokenList *list = kham_fts_segment("นักเรียนกินข้าวกับปลา");
+for (size_t i = 0; i < list->len; i++) {
+    KhamFtsToken *t = &list->tokens[i];
+    if (t->pos)
+        printf("%-10s → %s\\n", t->text, t->pos);
+}
+// นักเรียน → Noun
+// กิน      → Verb
+// ข้าว     → Noun
+// กับ      → Preposition
+// ปลา      → Noun
+kham_fts_token_list_free(list);`,
+            },
           ]}
         />
       </section>
@@ -508,7 +625,7 @@ for (const t of tokens) {
         </div>
         <p class="text-slate-600 dark:text-slate-400 mb-4">
           Gazetteer-based NER with three categories: <strong>Person</strong>, <strong>Place</strong>, <strong>Org</strong>.
-          In Python and WASM, NE tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code>.
+          In Python, WASM, and C, NE tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code> / <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">kham_fts_segment()</code>.
         </p>
         <CodeBlock
           tabs={[
@@ -564,6 +681,24 @@ for (const t of tokens) {
 }
 // ไทยออยล์  → Org
 // กรุงเทพ   → Place`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// NE tagging is available through kham_fts_segment()
+// t->ne is NULL if not in the NE gazetteer
+
+KhamFtsTokenList *list = kham_fts_segment("บริษัทไทยออยล์ก่อตั้งในกรุงเทพ");
+for (size_t i = 0; i < list->len; i++) {
+    KhamFtsToken *t = &list->tokens[i];
+    if (t->ne)
+        printf("%-12s → %s\\n", t->text, t->ne);
+}
+// ไทยออยล์  → Org
+// กรุงเทพ   → Place
+kham_fts_token_list_free(list);`,
             },
           ]}
         />
@@ -632,6 +767,27 @@ for (const t of pairs) {
 // ปลา   → pla
 
 // roman is also available on every FtsToken from segment_fts()`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// kham_romanize returns KhamRomanTokenList
+// Each KhamRomanToken has: text (char*), roman (char*)
+
+KhamRomanTokenList *list = kham_romanize("กินข้าวกับปลา");
+for (size_t i = 0; i < list->len; i++) {
+    KhamRomanToken *t = &list->tokens[i];
+    printf("%-6s → %s\\n", t->text, t->roman);
+}
+// กิน   → kin
+// ข้าว  → khao
+// กับ   → kap
+// ปลา   → pla
+kham_roman_token_list_free(list);
+
+// roman is also on every KhamFtsToken from kham_fts_segment()`,
             },
           ]}
         />
@@ -719,15 +875,48 @@ thai_word_to_number("หนึ่งร้อยยี่สิบสาม");  
 thai_word_to_number("กินข้าว");              // ""  (not a number)
 
 // Number → Thai word (u32 max ~4.29 billion)
-number_to_thai_word(42);          // "สี่สิบสอง"
-number_to_thai_word(1_000_000);   // "หนึ่งล้าน"
+number_to_thai_word(42n);          // "สี่สิบสอง"
+number_to_thai_word(1_000_000n);   // "หนึ่งล้าน"
 
 // Baht text
-number_to_baht_text(1234, 50);
+number_to_baht_text(1234n, 50);
 // "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"
 
 const r = parse_baht_text("หนึ่งร้อยบาทถ้วน");
-if (r.valid) console.log(r.baht, r.satang);  // 100  0`,
+if (r.valid) console.log(r.baht, r.satang);  // 100n  0`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// Thai digits → ASCII (free with kham_string_free)
+char *s = kham_thai_digits_to_ascii("ราคา ๑๒๓ บาท");
+printf("%s\\n", s);   // "ราคา 123 บาท"
+kham_string_free(s);
+
+// Thai word → number
+uint64_t n;
+if (kham_thai_word_to_number("หนึ่งร้อยยี่สิบสาม", &n))
+    printf("%llu\\n", (unsigned long long)n);  // 123
+
+// Number → Thai word (free with kham_string_free)
+char *word = kham_number_to_thai_word(1000000);
+printf("%s\\n", word);   // "หนึ่งล้าน"
+kham_string_free(word);
+
+// Baht text (free with kham_string_free)
+char *baht = kham_number_to_baht_text(1234, 50);
+printf("%s\\n", baht);
+kham_string_free(baht);
+
+// Parse baht (free with kham_baht_amount_free)
+KhamBahtAmount *amt = kham_parse_baht_text("หนึ่งร้อยบาทถ้วน");
+if (amt) {
+    printf("%llu baht %u satang\\n",
+           (unsigned long long)amt->baht, amt->satang);
+    kham_baht_amount_free(amt);
+}`,
             },
           ]}
         />
@@ -796,6 +985,26 @@ const chars = [...text];
 for (const s of sents) {
   console.log(chars.slice(s.char_start, s.char_end).join(''));
 }`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// KhamSentence fields: text (char*), char_start, char_end (size_t)
+
+const char *text = "คุณชอบอาหารไทยไหม? ผมชอบต้มยำกุ้ง!\\nอาหารไทยรสเผ็ด";
+KhamSentenceList *list = kham_split_sentences(text);
+
+for (size_t i = 0; i < list->len; i++) {
+    KhamSentence *s = &list->sentences[i];
+    printf("S%zu: %s  (chars %zu..%zu)\\n",
+           i, s->text, s->char_start, s->char_end);
+}
+// S0: คุณชอบอาหารไทยไหม?  (chars 0..19)
+// S1:  ผมชอบต้มยำกุ้ง!   (chars 19..36)
+// S2: <newline>อาหารไทยรสเผ็ด  (chars 36..50)
+kham_sentence_list_free(list);`,
             },
           ]}
         />
@@ -877,11 +1086,39 @@ thai_english_soundex("Somchai");        // same code as "สมชาย"
 sounds_like_cross_lang("สมชาย", "Somchai");   // true
 sounds_like_cross_lang("Robert",  "Rupert");   // true`,
             },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// kham_soundex — algo: "lk82" (default/NULL), "udom83", "metasound"
+// All string results freed with kham_string_free
+
+char *code = kham_soundex("กาน", NULL);       // "1600"  (lk82)
+kham_string_free(code);
+code = kham_soundex("กาน", "udom83");          // "1900"
+kham_string_free(code);
+code = kham_soundex("กาน", "metasound");       // "112"
+kham_string_free(code);
+
+// Similarity check (no allocation)
+bool alike = kham_sounds_like("กาน", "ขาน", NULL);     // true  (lk82)
+bool split = kham_sounds_like("ลาน", "ราน", "udom83"); // false (ล/ร split)
+
+// Thai–English cross-language
+char *eng = kham_thai_english_soundex("Somchai");
+char *tha = kham_thai_english_soundex("สมชาย");
+printf("match=%d\\n", strcmp(eng, tha) == 0);  // 1
+kham_string_free(eng);
+kham_string_free(tha);
+
+bool cross = kham_sounds_like_cross_lang("สมชาย", "Somchai");  // true`,
+            },
           ]}
         />
       </section>
 
-    </div><!-- /space-y-20 -->
+    </div><!-- /space-y-24 -->
 
     <!-- Footer nav -->
     <div class="mt-16 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
