@@ -13,7 +13,7 @@ const samples = [
 
 const sentenceSamples = [
   'กินข้าวแล้ว ดื่มน้ำด้วย\nนักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ เขารู้สึกตื่นเต้นมาก!',
-  'ประเทศไทยมีเมืองหลวงคือกรุงเทพมหานคร และมีประชากรมากกว่า 70 ล้านคน บริษัทหลายแห่งลงทุนในประเทศไทย',
+  'ประเทศไทยมีเมืองหลวงคือกรุงเทพมหานคร มีประชากรมากกว่า 70 ล้านคน! บริษัทหลายแห่งลงทุนในประเทศไทย?',
 ];
 ---
 
@@ -147,6 +147,13 @@ const sentenceSamples = [
 
     {!compact && (
       <div id="demo-stats" class="flex flex-wrap gap-3 mb-4 text-xs text-slate-500 dark:text-slate-400"></div>
+    )}
+
+    <!-- Sentence mode hint (only visible in sentences mode) -->
+    {!compact && (
+      <p id="demo-sent-hint" class="hidden text-xs text-slate-400 dark:text-slate-500 mb-4">
+        Splits on: newline &nbsp;·&nbsp; <code class="font-mono">! ? .</code> &nbsp;·&nbsp; Thai markers <code class="font-mono">ฯ ๚ ๛</code> &nbsp;·&nbsp; Plain Thai prose without punctuation stays as one sentence.
+      </p>
     )}
 
     <!-- Token table (hidden in sentences mode and compact mode) -->
@@ -388,9 +395,11 @@ const sentenceSamples = [
         }).join('')
       : '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No sentences detected.</p>';
 
-    // Hide token table and kind filters in sentences mode
+    // Hide token table and kind filters; show hint in sentences mode
     if (tableWrap) tableWrap.classList.add('hidden');
     if (filterRow) filterRow.classList.add('hidden');
+    const sentHint = document.getElementById('demo-sent-hint');
+    if (sentHint) sentHint.classList.remove('hidden');
   }
 
   // ── render stats ──────────────────────────────────────────────────────────
@@ -435,13 +444,15 @@ const sentenceSamples = [
       }`;
     });
 
-    // Show/hide roman toggle and filter row based on mode
+    // Show/hide elements based on mode
     const romanBtn  = document.getElementById('demo-roman-toggle');
     const filterRow = document.getElementById('demo-filter-row');
     const tableWrap = document.getElementById('demo-table-wrap');
+    const sentHint  = document.getElementById('demo-sent-hint');
     if (romanBtn)  romanBtn.classList.toggle('hidden', mode !== 'fts');
     if (filterRow) filterRow.classList.toggle('hidden', mode === 'sentences');
     if (tableWrap) tableWrap.classList.toggle('hidden', mode === 'sentences');
+    if (sentHint)  sentHint.classList.toggle('hidden', mode !== 'sentences');
 
     // Swap sample buttons
     document.querySelectorAll('.demo-sample').forEach(btn => {
