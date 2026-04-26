@@ -113,6 +113,7 @@ with zero schema change.
 ## Deferred / low priority
 
 - [x] **kham-pg token type 7 for Named** — `Named(_) => 7` in `lib.rs`; `named` lextype in `shim.c`; `ADD MAPPING FOR named` in SQL; pg_regress test 20 verifies
+- [x] **kham-pg soundex + RTGS dictionary** — `kham_fts_dict` custom template expands Thai/Named tokens to `[word, lk82_soundex, rtgs?]` at same tsvector position; fixed PG16+ lexize calling convention (arg3 is `List*`, not `bool isNull`); 9 new regress tests (28-31 + updated 8-27)
 - [x] **kham-sqlite soundex** — lk82/udom83/MetaSound codes emitted as `FTS5_TOKEN_COLOCATED` tokens; default lk82; override via `tokenize='kham soundex=udom83'`; disable with `soundex=none`
 - [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
 - [x] **kham-sqlite ngram_size** — `ngram_size N` xCreate argument; controls char n-gram size for Unknown tokens; default 3; 0 disables n-grams

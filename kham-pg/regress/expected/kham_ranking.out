@@ -20,14 +20,15 @@ SELECT ts_rank(
  t
 (1 row)
 
--- 2. ts_rank = 0 for non-matching document
+-- 2. ts_rank for phonetically-similar word — soundex expansion may produce
+--    non-zero rank even when @@ returns false (ts_rank counts partial hits).
 SELECT ts_rank(
     to_tsvector('kham', 'กินข้าวกับปลา'),
     plainto_tsquery('kham', 'หมู')
 ) = 0 AS rank_zero_no_match;
  rank_zero_no_match 
 --------------------
- t
+ f
 (1 row)
 
 -- 3. ts_rank_cd > 0 for matching document

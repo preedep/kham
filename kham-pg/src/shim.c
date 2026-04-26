@@ -42,6 +42,19 @@ extern void *kham_start_impl(const char *text, int len);
 extern int   kham_gettoken_impl(void *state, const char **token, int *tokenlen);
 extern void  kham_end_impl(void *state);
 
+/*
+ * KhamDictOut — output buffer filled by kham_dict_lexize_impl (Rust).
+ * count: number of valid lexeme slots (0 = stopword / error).
+ * words: up to 6 null-terminated UTF-8 strings, each at most 127 bytes.
+ */
+typedef struct
+{
+    int  count;
+    char words[6][128];
+} KhamDictOut;
+
+extern int kham_dict_lexize_impl(const char *token, int token_len, KhamDictOut *out);
+
 /* ----------------------------------------------------------------
  * startfunc — allocate parser state
  * Called from Rust kham_start() trampoline.
@@ -204,6 +217,59 @@ kham_headline_shim(PG_FUNCTION_ARGS)
     }
 
     PG_RETURN_POINTER(prs);
+}
+
+/* ----------------------------------------------------------------
+ * kham_dict_lexize — custom dictionary: word + soundex + RTGS lexemes
+ *
+ * Signature (internal, internal, internal, internal) → internal
+ * Args:
+ *   arg0 = dict state (NULL — no INIT function)
+ *   arg1 = token text (char *)
+ *   arg2 = token length (int32)
+ *   arg3 = List* of subsequent tokens for multi-word recognition (PG16+)
+ *          NOTE: In PG 13 and earlier this was a bool "isNull" flag.
+ *          Since PG 16 it is a List* pointer (always non-NULL for normal
+ *          tokens).  We do not use multi-word recognition, so arg3 is
+ *          ignored entirely.
+ *
+ * Returns a palloc'd TSLexeme[] containing the normalised word plus
+ * any soundex / RTGS synonyms computed by Rust.  The array is
+ * NULL-terminated (last entry has lexeme=NULL).
+ * Returns NULL to mark the token as a stopword (not indexed).
+ * ---------------------------------------------------------------- */
+Datum
+kham_dict_lexize_shim(PG_FUNCTION_ARGS)
+{
+    /* arg0 = dict state (NULL — we use no INIT function)
+     * arg1 = token text (char *)
+     * arg2 = token length (int32)
+     * arg3 = List* of subsequent tokens for multi-word recognition (PG16+, ignored) */
+    const char  *token  = (const char *) PG_GETARG_POINTER(1);
+    int          len    = PG_GETARG_INT32(2);
+    KhamDictOut  out;
+    TSLexeme    *res;
+    int          i;
+
+    /* In PG 16+, arg3 is a List* of subsequent tokens for multi-word
+     * recognition (not a bool isNull flag as in older PG).  We do not
+     * use multi-word recognition, so we ignore arg3 entirely.
+     * End-of-input finalization: token pointer is NULL → return NULL. */
+    if (token == NULL || len <= 0)
+        PG_RETURN_POINTER(NULL);
+
+    memset(&out, 0, sizeof(out));
+    kham_dict_lexize_impl(token, len, &out);
+
+    if (out.count <= 0)
+        PG_RETURN_POINTER(NULL);   /* treat as stopword */
+
+    res = (TSLexeme *) palloc0(sizeof(TSLexeme) * (out.count + 1));
+    for (i = 0; i < out.count; i++)
+        res[i].lexeme = pstrdup(out.words[i]);
+    res[out.count].lexeme = NULL;  /* NULL-terminator required by PG */
+
+    PG_RETURN_POINTER(res);
 }
 
 /* ----------------------------------------------------------------

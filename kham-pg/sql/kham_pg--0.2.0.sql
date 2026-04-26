@@ -18,10 +18,12 @@
 -- ── C function registrations ─────────────────────────────────────────────────
 -- PostgreSQL resolves these to symbols in MODULE_PATHNAME (= $libdir/kham_pg).
 -- Signatures match what ts_parse.c passes:
---   startfunc  (internal, int4)               → internal
---   gettoken   (internal, internal, internal) → int4
---   endfunc    (internal)                     → void
---   lextypes   (internal)                     → internal
+--   startfunc  (internal, int4)                        → internal
+--   gettoken   (internal, internal, internal)          → int4
+--   endfunc    (internal)                              → void
+--   lextypes   (internal)                              → internal
+--   headline   (internal, internal, tsquery)           → internal
+--   dict_lexize (internal, internal, internal, internal) → internal
 
 CREATE FUNCTION kham_start(internal, int4)
     RETURNS internal
@@ -48,6 +50,11 @@ CREATE FUNCTION kham_headline(internal, internal, tsquery)
     AS 'MODULE_PATHNAME', 'kham_headline'
     LANGUAGE c STRICT;
 
+CREATE FUNCTION kham_dict_lexize(internal, internal, internal, internal)
+    RETURNS internal
+    AS 'MODULE_PATHNAME', 'kham_dict_lexize'
+    LANGUAGE c;  -- NOT STRICT: dict state (arg0) is NULL when no INIT is provided
+
 -- ── Parser ───────────────────────────────────────────────────────────────────
 
 CREATE TEXT SEARCH PARSER kham (
@@ -56,6 +63,19 @@ CREATE TEXT SEARCH PARSER kham (
     END      = kham_end,
     LEXTYPES = kham_lextypes,
     HEADLINE = kham_headline
+);
+
+-- ── Dictionary template — soundex + RTGS expansion ─────────────────────────
+-- kham_fts_template: custom dictionary that expands Thai / Named tokens into
+--   [word, lk82_soundex_code, rtgs_romanization]
+-- at the same tsvector position, enabling phonetic and Latin-script search.
+
+CREATE TEXT SEARCH TEMPLATE kham_fts_template (
+    LEXIZE = kham_dict_lexize
+);
+
+CREATE TEXT SEARCH DICTIONARY kham_fts_dict (
+    TEMPLATE = kham_fts_template
 );
 
 -- ── Dictionary ───────────────────────────────────────────────────────────────
@@ -76,9 +96,15 @@ CREATE TEXT SEARCH CONFIGURATION kham (
 -- Punctuation and emoji are omitted intentionally — no MAPPING means PG
 -- discards those token types during indexing.
 
+-- Thai and Named tokens go through kham_fts_dict which expands each token
+-- to [word, lk82_soundex_code, rtgs_romanization] at the same position.
 ALTER TEXT SEARCH CONFIGURATION kham
-    ADD MAPPING FOR thai    WITH kham_dict;
+    ADD MAPPING FOR thai    WITH kham_fts_dict;
 
+ALTER TEXT SEARCH CONFIGURATION kham
+    ADD MAPPING FOR named   WITH kham_fts_dict;
+
+-- Latin, Number, Unknown: simple lowercase pass-through.
 ALTER TEXT SEARCH CONFIGURATION kham
     ADD MAPPING FOR latin   WITH kham_dict;
 
@@ -87,6 +113,3 @@ ALTER TEXT SEARCH CONFIGURATION kham
 
 ALTER TEXT SEARCH CONFIGURATION kham
     ADD MAPPING FOR unknown WITH kham_dict;
-
-ALTER TEXT SEARCH CONFIGURATION kham
-    ADD MAPPING FOR named   WITH kham_dict;

@@ -153,3 +153,32 @@ SELECT ts_headline('kham', 'เดินทางไปจีน', to_tsquery('k
 
 SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'หมู'),
                    'StartSel=<<, StopSel=>>') = 'กินข้าวกับปลา' AS unchanged;
+
+-- ── 28. kham_fts_dict — Thai word expands to word + soundex + RTGS lexemes ───
+-- Show all lexemes for a single Thai word so we can see the soundex code
+-- and RTGS romanization stored at the same tsvector position.
+
+SELECT to_tsvector('kham', 'ปลา')::text;
+
+-- ── 29. Soundex search — find Thai word by its lk82 phonetic code ─────────────
+-- The soundex code for 'ปลา' should be stored as a lexeme in the tsvector.
+
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@
+       to_tsquery('kham', (
+           SELECT lexeme
+           FROM unnest(to_tsvector('kham', 'ปลา'))
+           WHERE lexeme ~ '^[0-9]'
+           LIMIT 1
+       )) AS found_by_soundex;
+
+-- ── 30. RTGS search — find Thai word by its romanized form ───────────────────
+-- If 'ปลา' has an RTGS entry (e.g. 'pla'), search should find the document.
+-- If no RTGS entry exists for this word the query returns no rows (expected).
+
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@
+       plainto_tsquery('kham', 'pla') AS found_by_rtgs;
+
+-- ── 31. kham_fts_dict — tsvector has multiple lexemes per Thai token ──────────
+
+SELECT array_length(array_agg(lexeme), 1) >= 2 AS has_synonyms
+FROM unnest(to_tsvector('kham', 'ปลา'));
