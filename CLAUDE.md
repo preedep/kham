@@ -14,6 +14,7 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 | `kham-pg/` | PostgreSQL text-search parser extension (`cdylib`). → [kham-pg/CLAUDE.md](kham-pg/CLAUDE.md) |
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
 | `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
+| `kham-web/` | Astro website for kham.org — landing page, live WASM demo, docs, API reference. → [doc/web-roadmap.md](doc/web-roadmap.md) |
 
 ## Commands
 
@@ -56,6 +57,10 @@ cargo build -p kham-sqlite --release
 #   CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
 #   INSERT INTO docs VALUES ('กินข้าวกับปลา');
 #   SELECT * FROM docs WHERE docs MATCH 'ปลา';
+
+# kham-web (requires Node.js 20+)
+cd kham-web && npm install && npm run dev   # dev server at http://localhost:4321
+cd kham-web && npm run build               # production build → kham-web/dist/
 ```
 
 ## Code Style
@@ -67,6 +72,7 @@ cargo build -p kham-sqlite --release
 - Zero-copy where possible — return `&str` slices into input text
 - Follow the `rust-engineer` skill for general Rust conventions
 - Follow the `rust-wasm-build` skill for WASM builds
+- Follow the `kham-web` skill for the Astro website
 
 **Always run `cargo fmt --all` before pushing.** Common CI failures: long signatures not wrapped at 100 chars, struct literals with 3+ fields on one line, `assert_eq!` with message not on its own line.
 

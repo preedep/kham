@@ -1,0 +1,102 @@
+# kham-web Roadmap
+
+Website for **kham.org** — built with Astro + Tailwind + kham-wasm. Lives at `kham-web/` in the monorepo.
+
+---
+
+## Phase 1 — Foundation (v0.1)
+
+Goal: scaffolded project, CI pipeline, and a deployable landing page with badges.
+
+- [ ] Scaffold `kham-web/` with Astro + Tailwind (`npm create astro`)
+- [ ] Configure `astro.config.mjs` — `output: 'static'`, base URL `kham.org`
+- [ ] `NavBar.astro` + `Footer.astro` components
+- [ ] `BadgeRow.astro` — crates.io version, docs.rs, CI status, license, MSRV, downloads
+- [ ] Landing page (`/`) — hero headline, one-paragraph pitch, badge row, CTA buttons
+- [ ] GitHub Actions workflow `.github/workflows/web.yml` — build + deploy to GitHub Pages
+- [ ] Domain setup — `kham.org` → GitHub Pages / Cloudflare Pages
+
+---
+
+## Phase 2 — Live Demo (v0.2)
+
+Goal: interactive Thai segmentation playground powered by kham-wasm in the browser.
+
+- [ ] Build kham-wasm and wire into Astro via relative `../kham-wasm/pkg/` path
+- [ ] `LiveDemo.astro` component — Thai text input → tokenized output table
+- [ ] Token table columns: `text`, `kind`, `POS`, `NE`, `romanization`, byte span
+- [ ] Toggle options: FTS mode, soundex algorithm (lk82 / udom83 / MetaSound)
+- [ ] `/demo` full-page playground with sample texts
+- [ ] Lazy-load WASM (dynamic import) — page not blocked
+- [ ] Embed demo teaser on landing page (`/`)
+
+---
+
+## Phase 3 — Getting Started & Integrations (v0.3)
+
+Goal: installation guides for every target so new users can be productive in minutes.
+
+- [ ] `/getting-started` — quickstart sections per target:
+  - Rust (Cargo.toml snippet + minimal example)
+  - Python (`pip install kham` + `segment()` example)
+  - WASM / npm (browser + Node.js)
+  - CLI (`cargo install kham-cli` + usage)
+  - PostgreSQL FTS5 (extension install + SQL example)
+  - SQLite FTS5 (`.load` + FTS5 virtual table example)
+- [ ] `CodeBlock.astro` — multi-language tabbed code snippets with copy button
+- [ ] `/integrations/postgresql` — full PG setup guide + ts_vector example
+- [ ] `/integrations/sqlite` — full SQLite FTS5 setup guide
+- [ ] `/integrations/python` — PyO3 binding guide + token fields
+- [ ] `/integrations/wasm` — browser + Node.js guide
+
+---
+
+## Phase 4 — API Reference & Modules (v0.4)
+
+Goal: developer-facing API docs for kham-core public API.
+
+- [ ] `/api` — overview of public API surface
+- [ ] Document each module with Thai + English examples:
+  - `Segmenter` / `Token` / `TokenKind`
+  - `FtsTokenizer` + pipeline options
+  - `PosTagger` / `PosTag` (13 categories)
+  - `NeTagger` / `NamedEntityKind` (Person / Place / Org)
+  - `RomanizationMap` (RTGS)
+  - `number_normalize` / `parse_thai_date` / `split_sentences`
+  - `soundex` (lk82 / udom83 / MetaSound)
+- [ ] Link each module to docs.rs page
+
+---
+
+## Phase 5 — Benchmarks & Changelog (v0.5)
+
+Goal: transparency on performance and release history.
+
+- [ ] `/benchmarks` — criterion throughput numbers vs nlpO3 / PyThaiNLP
+- [ ] `/benchmarks` — accuracy F1 table against CC0 gold corpus
+- [ ] `/changelog` — per-version release notes (pulled from git tags / CHANGELOG.md)
+- [ ] CHANGELOG.md at repo root (keep in sync with releases)
+
+---
+
+## Phase 6 — Polish & SEO (v0.6)
+
+Goal: production-ready site, discoverable by search engines and Thai NLP community.
+
+- [ ] `/license` — full MIT + Apache-2.0 text, corpus attribution table (TNC, CC-BY, CC-BY-SA)
+- [ ] Open Graph / Twitter card meta tags on all pages
+- [ ] `sitemap.xml` + `robots.txt` (Astro sitemap integration)
+- [ ] Thai + English page titles and descriptions
+- [ ] Dark mode support (Tailwind `dark:` classes)
+- [ ] Accessibility audit (keyboard nav, aria labels on demo)
+- [ ] Lighthouse score ≥ 90 on all pages
+
+---
+
+## Deferred / Future
+
+- Search (Pagefind or Algolia DocSearch)
+- i18n — Thai-language version of docs
+- Versioned docs (v0.4 / v0.5 side by side)
+- Blog / announcements section
+- Embed GitHub star count widget
