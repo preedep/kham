@@ -45,7 +45,10 @@ use kham_core::{
     },
     romanizer::RomanizationMap,
     sentence::split_sentences as core_split,
-    soundex::{soundex as core_soundex, SoundexAlgorithm},
+    soundex::{
+        sounds_like as core_sounds_like, sounds_like_cross_lang as core_sounds_like_cross,
+        soundex as core_soundex, thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
+    },
     TokenKind, Tokenizer,
 };
 use wasm_bindgen::prelude::*;
@@ -393,6 +396,39 @@ pub fn soundex_word(word: &str, algo: &str) -> String {
         _ => SoundexAlgorithm::Lk82,
     };
     core_soundex(word, algorithm)
+}
+
+/// Return `true` if `a` and `b` produce the same soundex code under `algo`.
+///
+/// `algo` must be `"lk82"` (default), `"udom83"`, or `"metasound"`.
+#[wasm_bindgen]
+pub fn sounds_like(a: &str, b: &str, algo: &str) -> bool {
+    let algorithm = match algo {
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        _ => SoundexAlgorithm::Lk82,
+    };
+    core_sounds_like(a, b, algorithm)
+}
+
+/// Encode a Thai or English word using the Thai–English cross-language soundex
+/// (Suwanvisat & Prasitjutrakul 1998).
+///
+/// Accepts both Thai script and ASCII; the same table is applied, so
+/// `thai_english_soundex("Robert")` and `thai_english_soundex("โรเบิร์ต")`
+/// share a common prefix.
+#[wasm_bindgen]
+pub fn thai_english_soundex(word: &str) -> String {
+    core_thai_english_soundex(word)
+}
+
+/// Return `true` if `a` and `b` sound alike under the Thai–English
+/// cross-language soundex (Suwanvisat & Prasitjutrakul 1998).
+///
+/// Accepts any mix of Thai and ASCII input.
+#[wasm_bindgen]
+pub fn sounds_like_cross_lang(a: &str, b: &str) -> bool {
+    core_sounds_like_cross(a, b)
 }
 
 /// Split text into sentences and return an array of [`Sentence`] objects.
