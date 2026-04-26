@@ -7,7 +7,8 @@
 //!
 //! Then from JavaScript / TypeScript:
 //! ```js
-//! import init, { segment, segment_tokens, segment_fts } from "./pkg/kham_wasm.js";
+//! import init, { segment, segment_tokens, segment_fts,
+//!                romanize, split_sentences } from "./pkg/kham_wasm.js";
 //! await init();
 //!
 //! // Simple: array of token strings
@@ -19,18 +20,26 @@
 //! for (const t of tokens) {
 //!     console.log(t.text, t.char_start, t.char_end, t.kind);
 //! }
-//! // ธนาคาร 0 6 Thai
-//! // 100    6 9 Number
-//! // แห่ง   9 13 Thai
 //!
-//! // FTS: rich NLP metadata per token
+//! // FTS: rich NLP metadata per token (pos, ne, is_stop, roman, synonyms)
 //! const ftsToks = segment_fts("นายกรัฐมนตรีกินข้าว");
 //! for (const t of ftsToks) {
-//!     console.log(t.text, t.kind, t.pos, t.ne, t.is_stop);
+//!     console.log(t.text, t.pos, t.ne, t.roman, t.is_stop);
 //! }
+//!
+//! // Romanization only
+//! const roman = romanize("กินข้าว");
+//! // [{text:"กิน", roman:"kin"}, {text:"ข้าว", roman:"khao"}]
+//!
+//! // Sentence splitting
+//! const sents = split_sentences("กินข้าว ดื่มน้ำ\nนอนหลับ");
+//! for (const s of sents) { console.log(s.text, s.char_start, s.char_end); }
 //! ```
 
-use kham_core::{fts::FtsTokenizer, TokenKind, Tokenizer};
+use kham_core::{
+    fts::FtsTokenizer, romanizer::RomanizationMap, sentence::split_sentences as core_split,
+    TokenKind, Tokenizer,
+};
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -105,8 +114,6 @@ impl Token {
 
     /// Token kind: `"Thai"`, `"Latin"`, `"Number"`, `"Punctuation"`,
     /// `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
-    /// Named entity tokens (reachable via the FTS API) use `"Person"`,
-    /// `"Place"`, or `"Org"` instead of `"Thai"`.
     #[wasm_bindgen(getter)]
     pub fn kind(&self) -> String {
         self.kind.to_owned()
@@ -119,25 +126,28 @@ impl Token {
 
 /// A token produced by the FTS pipeline with full NLP metadata.
 ///
-/// Fields:
 /// - `text` — token string (normalized)
 /// - `position` — ordinal index in the non-whitespace token sequence (0-based)
-/// - `kind` — same values as [`Token::kind`]
-/// - `is_stop` — `true` if this token is in the stopword list
-/// - `synonyms` — synonym expansions and number / soundex variants (may be empty)
-/// - `trigrams` — character trigrams for Unknown tokens; empty for all other kinds
+/// - `kind` — script/category string; Named entity tokens use `"Person"` /
+///   `"Place"` / `"Org"` instead of `"Thai"`
+/// - `is_stop` — `true` if the token is in the built-in stopword list
+/// - `roman` — RTGS romanization of the token text; equals `text` for
+///   non-Thai tokens (Latin, Number, etc.) and unknown Thai words
 /// - `pos` — ORCHID-derived POS tag string, or `null` if OOV / non-Thai
 ///   (`"Noun"` | `"Verb"` | `"Adj"` | `"Adv"` | `"Particle"` | `"ProperNoun"`
 ///   | `"Pronoun"` | `"Numeral"` | `"Classifier"` | `"Conjunction"`
 ///   | `"Auxiliary"` | `"Determiner"` | `"Preposition"`)
-/// - `ne` — named entity category, or `null` if not recognised
+/// - `ne` — named entity category string, or `null`
 ///   (`"Person"` | `"Place"` | `"Org"`)
+/// - `synonyms` — synonym / number-normalisation expansions (may be empty)
+/// - `trigrams` — character trigrams for `Unknown` tokens; empty otherwise
 #[wasm_bindgen]
 pub struct FtsToken {
     text: String,
     position: usize,
     kind: &'static str,
     is_stop: bool,
+    roman: String,
     synonyms: Vec<String>,
     trigrams: Vec<String>,
     pos: Option<&'static str>,
@@ -158,7 +168,7 @@ impl FtsToken {
         self.position
     }
 
-    /// Token kind string — same values as [`Token::kind`].
+    /// Token kind string.
     #[wasm_bindgen(getter)]
     pub fn kind(&self) -> String {
         self.kind.to_owned()
@@ -170,8 +180,14 @@ impl FtsToken {
         self.is_stop
     }
 
-    /// Synonym expansions (empty array if none). Includes number normalizations
-    /// and soundex codes when those pipeline stages are active.
+    /// RTGS romanization of the token. Equals the original text for non-Thai
+    /// or out-of-vocabulary tokens.
+    #[wasm_bindgen(getter)]
+    pub fn roman(&self) -> String {
+        self.roman.clone()
+    }
+
+    /// Synonym expansions (empty array if none).
     #[wasm_bindgen(getter)]
     pub fn synonyms(&self) -> Vec<JsValue> {
         self.synonyms.iter().map(|s| JsValue::from_str(s)).collect()
@@ -197,21 +213,71 @@ impl FtsToken {
 }
 
 // ---------------------------------------------------------------------------
+// RomanToken
+// ---------------------------------------------------------------------------
+
+/// A token paired with its RTGS romanization, returned by [`romanize`].
+#[wasm_bindgen]
+pub struct RomanToken {
+    text: String,
+    roman: String,
+}
+
+#[wasm_bindgen]
+impl RomanToken {
+    /// The original token text.
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// RTGS romanization. Equals `text` for non-Thai or out-of-vocabulary tokens.
+    #[wasm_bindgen(getter)]
+    pub fn roman(&self) -> String {
+        self.roman.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sentence
+// ---------------------------------------------------------------------------
+
+/// A sentence span returned by [`split_sentences`].
+#[wasm_bindgen]
+pub struct Sentence {
+    text: String,
+    char_start: usize,
+    char_end: usize,
+}
+
+#[wasm_bindgen]
+impl Sentence {
+    /// The sentence text (zero-copy slice of the input, including terminator).
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// Start Unicode scalar-value (char) offset in the source string.
+    #[wasm_bindgen(getter)]
+    pub fn char_start(&self) -> usize {
+        self.char_start
+    }
+
+    /// End Unicode scalar-value (char) offset in the source string.
+    #[wasm_bindgen(getter)]
+    pub fn char_end(&self) -> usize {
+        self.char_end
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public functions
 // ---------------------------------------------------------------------------
 
 /// Segment Thai text and return an array of token strings.
 ///
-/// Mixed-script input (Thai + Latin + numbers) is handled correctly.
 /// Whitespace tokens are excluded from the output.
-///
-/// # Arguments
-///
-/// * `text` — Input string (valid UTF-8; JavaScript strings are always UTF-8 safe).
-///
-/// # Returns
-///
-/// A JavaScript `Array` of `string` token values.
 #[wasm_bindgen]
 pub fn segment(text: &str) -> Vec<JsValue> {
     Tokenizer::new()
@@ -222,19 +288,9 @@ pub fn segment(text: &str) -> Vec<JsValue> {
 }
 
 /// Segment Thai text and return an array of [`Token`] objects with full span
-/// information.
+/// information (`text`, `byte_start`/`byte_end`, `char_start`/`char_end`, `kind`).
 ///
-/// Each token carries `text`, `byte_start`/`byte_end` (UTF-8 byte offsets),
-/// `char_start`/`char_end` (Unicode scalar-value offsets), and `kind`.
 /// Whitespace tokens are excluded from the output.
-///
-/// # Arguments
-///
-/// * `text` — Input string (valid UTF-8).
-///
-/// # Returns
-///
-/// A JavaScript `Array` of [`Token`] objects.
 #[wasm_bindgen]
 pub fn segment_tokens(text: &str) -> Vec<Token> {
     Tokenizer::new()
@@ -255,30 +311,65 @@ pub fn segment_tokens(text: &str) -> Vec<Token> {
 /// [`FtsToken`] objects with NLP metadata.
 ///
 /// The built-in pipeline includes: text normalisation, word segmentation,
-/// named-entity recognition, stopword tagging, POS tagging, and synonym
-/// expansion (number normalisation). Whitespace tokens are excluded.
-///
-/// # Arguments
-///
-/// * `text` — Input string (valid UTF-8).
-///
-/// # Returns
-///
-/// A JavaScript `Array` of [`FtsToken`] objects.
+/// named-entity recognition, stopword tagging, POS tagging, synonym expansion
+/// (number normalisation), and RTGS romanization. Whitespace tokens are
+/// excluded.
 #[wasm_bindgen]
 pub fn segment_fts(text: &str) -> Vec<FtsToken> {
+    let roman_map = RomanizationMap::builtin();
     FtsTokenizer::new()
         .segment_for_fts(text)
         .into_iter()
-        .map(|t| FtsToken {
-            text: t.text,
-            position: t.position,
-            kind: kind_str(t.kind),
-            is_stop: t.is_stop,
-            synonyms: t.synonyms,
-            trigrams: t.trigrams,
-            pos: t.pos.map(|p| p.as_str()),
-            ne: t.ne.map(|n| n.as_str()),
+        .map(|t| {
+            let roman = roman_map.romanize_or_raw(&t.text).to_owned();
+            FtsToken {
+                roman,
+                text: t.text,
+                position: t.position,
+                kind: kind_str(t.kind),
+                is_stop: t.is_stop,
+                synonyms: t.synonyms,
+                trigrams: t.trigrams,
+                pos: t.pos.map(|p| p.as_str()),
+                ne: t.ne.map(|n| n.as_str()),
+            }
+        })
+        .collect()
+}
+
+/// Segment Thai text and return each token paired with its RTGS romanization.
+///
+/// For non-Thai tokens (Latin, Number, Punctuation) and unknown Thai words,
+/// `roman` equals the original `text`. Whitespace tokens are excluded.
+#[wasm_bindgen]
+pub fn romanize(text: &str) -> Vec<RomanToken> {
+    let map = RomanizationMap::builtin();
+    Tokenizer::new()
+        .segment(text)
+        .into_iter()
+        .map(|t| RomanToken {
+            roman: map.romanize_or_raw(t.text).to_owned(),
+            text: t.text.to_owned(),
+        })
+        .collect()
+}
+
+/// Split text into sentences and return an array of [`Sentence`] objects.
+///
+/// Each sentence carries `text`, `char_start`, and `char_end`
+/// (Unicode scalar-value offsets into the original string).
+///
+/// Sentence boundaries are detected on Thai sentence-final markers
+/// (ฯ, ๛, ๚), newlines, and common Western punctuation (`.` `!` `?`),
+/// with decimal/abbreviation protection to avoid false splits.
+#[wasm_bindgen]
+pub fn split_sentences(text: &str) -> Vec<Sentence> {
+    core_split(text)
+        .into_iter()
+        .map(|s| Sentence {
+            text: s.text.to_owned(),
+            char_start: s.char_span.start,
+            char_end: s.char_span.end,
         })
         .collect()
 }

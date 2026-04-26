@@ -10,6 +10,11 @@ const samples = [
   'บริษัทไทยออยล์จำกัดมหาชน',
   'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ',
 ];
+
+const sentenceSamples = [
+  'กินข้าวแล้ว ดื่มน้ำด้วย\nนักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ เขารู้สึกตื่นเต้นมาก!',
+  'ประเทศไทยมีเมืองหลวงคือกรุงเทพมหานคร และมีประชากรมากกว่า 70 ล้านคน บริษัทหลายแห่งลงทุนในประเทศไทย',
+];
 ---
 
 <div class="live-demo-root font-sans" data-compact={compact.toString()}>
@@ -22,33 +27,46 @@ const samples = [
       id="demo-input"
       rows={compact ? 2 : 3}
       placeholder="พิมพ์ข้อความภาษาไทย…"
-      aria-label="Thai text input for segmentation"
+      aria-label="Thai text input"
       class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-slate-400"
     >{samples[0]}</textarea>
   </div>
 
   <!-- Samples -->
-  <div class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Sample texts">
+  <div id="demo-samples-row" class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Sample texts">
     <span class="text-xs text-slate-500 self-center">Samples:</span>
     {samples.map((s) => (
       <button
         type="button"
         class="demo-sample text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[180px]"
         data-text={s}
+        data-mode="seg"
         title={s}
         aria-label={`Use sample: ${s}`}
       >
         {s.length > 14 ? s.slice(0, 14) + '…' : s}
       </button>
     ))}
+    {!compact && sentenceSamples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample hidden text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[200px]"
+        data-text={s}
+        data-mode="sentences"
+        title={s}
+        aria-label={`Use sentence sample`}
+      >
+        {s.length > 18 ? s.slice(0, 18) + '…' : s}
+      </button>
+    ))}
   </div>
 
   <!-- Controls row -->
-  <div class="flex flex-wrap items-center gap-3 mb-6">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
     <button
       id="demo-run"
       type="button"
-      aria-label="Segment Thai text"
+      aria-label="Run analysis"
       aria-busy="false"
       class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
     >
@@ -60,14 +78,11 @@ const samples = [
     </button>
 
     {!compact && (
-      <!-- Mode toggle: Segment / FTS -->
+      <!-- 3-way mode toggle: Segment | FTS | Sentences -->
       <div class="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-0.5" role="group" aria-label="Analysis mode">
-        <button id="demo-mode-seg" type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="seg" aria-pressed="true">
-          Segment
-        </button>
-        <button id="demo-mode-fts" type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="fts" aria-pressed="false">
-          FTS
-        </button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="seg"       aria-pressed="true">Segment</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="fts"       aria-pressed="false">FTS</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="sentences" aria-pressed="false">Sentences</button>
       </div>
     )}
 
@@ -75,12 +90,12 @@ const samples = [
   </div>
 
   <!-- Results -->
-  <div id="demo-results" class="hidden" aria-live="polite" aria-label="Segmentation results">
+  <div id="demo-results" class="hidden" aria-live="polite" aria-label="Analysis results">
 
     {!compact && (
-      <!-- Toolbar: count + time | filter | format + copy -->
+      <!-- Toolbar -->
       <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-        <!-- Left: token count + execution time -->
+        <!-- Left: count + time -->
         <div class="flex items-center gap-3">
           <p id="demo-count" class="text-xs font-medium text-slate-600 dark:text-slate-400" aria-live="polite"></p>
           <span id="demo-time" class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 hidden" aria-live="polite">
@@ -91,36 +106,33 @@ const samples = [
           </span>
         </div>
 
-        <!-- Right: kind filter + format + copy -->
+        <!-- Right: filter + roman toggle + format + copy -->
         <div class="flex flex-wrap items-center gap-2">
+          <!-- Kind filter (hidden in sentences mode) -->
           <div id="demo-filter-row" class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by token kind">
             {['All','Thai','Latin','Number','Punctuation','Emoji'].map(k => (
-              <button
-                type="button"
-                class="demo-filter text-xs px-2.5 py-1 rounded-full border transition-colors"
-                data-kind={k}
-              >
-                {k}
-              </button>
+              <button type="button" class="demo-filter text-xs px-2.5 py-1 rounded-full border transition-colors" data-kind={k}>{k}</button>
             ))}
           </div>
-          <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
-          <select
-            id="demo-format"
-            aria-label="Output format"
-            class="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+
+          <!-- Roman toggle — only shown in FTS mode -->
+          <button
+            id="demo-roman-toggle"
+            type="button"
+            aria-pressed="false"
+            class="hidden text-xs px-2.5 py-1 rounded-full border transition-colors border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600"
           >
+            Roman
+          </button>
+
+          <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
+          <select id="demo-format" aria-label="Output format" class="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="pipe">Pipe  กิน|ข้าว</option>
             <option value="json">JSON  ["กิน","ข้าว"]</option>
             <option value="lines">Lines  one per line</option>
             <option value="space">Space  กิน ข้าว</option>
           </select>
-          <button
-            id="demo-copy"
-            type="button"
-            aria-label="Copy output"
-            class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-          >
+          <button id="demo-copy" type="button" aria-label="Copy output" class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
             </svg>
@@ -130,17 +142,16 @@ const samples = [
       </div>
     )}
 
-    <!-- Token pills -->
-    <div id="demo-pills" class="flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Token pills"></div>
+    <!-- Token pills / sentence cards -->
+    <div id="demo-pills" class="flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Results"></div>
 
     {!compact && (
-      <!-- Token kind stats -->
       <div id="demo-stats" class="flex flex-wrap gap-3 mb-4 text-xs text-slate-500 dark:text-slate-400"></div>
     )}
 
-    <!-- Table (hidden in compact mode) -->
+    <!-- Token table (hidden in sentences mode and compact mode) -->
     {!compact && (
-      <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <div id="demo-table-wrap" class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm text-left" aria-label="Token details">
           <thead id="demo-thead" class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700"></thead>
           <tbody id="demo-tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
@@ -148,7 +159,7 @@ const samples = [
       </div>
     )}
 
-    <!-- compact mode count/time -->
+    <!-- compact count/time -->
     {compact && (
       <div class="flex items-center gap-3 mt-3">
         <p id="demo-count" class="text-xs text-slate-400" aria-live="polite"></p>
@@ -160,27 +171,26 @@ const samples = [
 
 <script is:inline>
 (function () {
+  // ── colour maps ───────────────────────────────────────────────────────────
   const KIND_COLORS = {
-    Thai:        { pill: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',        dot: 'bg-blue-400' },
-    Latin:       { pill: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',   dot: 'bg-green-400' },
-    Number:      { pill: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300', dot: 'bg-yellow-400' },
-    Punctuation: { pill: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',       dot: 'bg-slate-400' },
-    Emoji:       { pill: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300', dot: 'bg-purple-400' },
-    Whitespace:  { pill: 'bg-slate-100 text-slate-500',                                             dot: 'bg-slate-300' },
-    Unknown:     { pill: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',            dot: 'bg-red-400' },
+    Thai:        { pill: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',          dot: 'bg-blue-400' },
+    Latin:       { pill: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',      dot: 'bg-green-400' },
+    Number:      { pill: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',  dot: 'bg-yellow-400' },
+    Punctuation: { pill: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300',         dot: 'bg-slate-400' },
+    Emoji:       { pill: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',  dot: 'bg-purple-400' },
+    Whitespace:  { pill: 'bg-slate-100 text-slate-500',                                               dot: 'bg-slate-300' },
+    Unknown:     { pill: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',              dot: 'bg-red-400' },
   };
-
   const NE_COLORS = {
     Person: { pill: 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300', badge: 'bg-purple-200 text-purple-700 dark:bg-purple-800/60 dark:text-purple-300', dot: 'bg-purple-400' },
-    Place:  { pill: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',         badge: 'bg-teal-200 text-teal-700 dark:bg-teal-800/60 dark:text-teal-300',       dot: 'bg-teal-400' },
-    Org:    { pill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',     badge: 'bg-amber-200 text-amber-700 dark:bg-amber-800/60 dark:text-amber-300',   dot: 'bg-amber-400' },
+    Place:  { pill: 'bg-teal-100 text-teal-800 dark:bg-teal-900/40 dark:text-teal-300',         badge: 'bg-teal-200 text-teal-700 dark:bg-teal-800/60 dark:text-teal-300',         dot: 'bg-teal-400' },
+    Org:    { pill: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',     badge: 'bg-amber-200 text-amber-700 dark:bg-amber-800/60 dark:text-amber-300',     dot: 'bg-amber-400' },
   };
-
   const POS_COLORS = {
-    Noun:        'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
-    Verb:        'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
-    Adj:         'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
-    Adv:         'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
+    Noun: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+    Verb: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+    Adj:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+    Adv:  'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
     ProperNoun:  'bg-blue-100 text-blue-900 dark:bg-blue-900/50 dark:text-blue-200',
     Pronoun:     'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
     Numeral:     'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300',
@@ -191,12 +201,29 @@ const samples = [
     Determiner:  'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
     Preposition: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400',
   };
+  const SENT_COLORS = [
+    'bg-blue-50 border-blue-200 dark:bg-blue-950/30 dark:border-blue-800',
+    'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800',
+    'bg-teal-50 border-teal-200 dark:bg-teal-950/30 dark:border-teal-800',
+    'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800',
+    'bg-rose-50 border-rose-200 dark:bg-rose-950/30 dark:border-rose-800',
+  ];
+  const SENT_NUM_COLORS = [
+    'bg-blue-600',
+    'bg-violet-600',
+    'bg-teal-600',
+    'bg-amber-500',
+    'bg-rose-500',
+  ];
 
-  let wasmMod = null;
-  let lastTokens = [];
+  // ── state ─────────────────────────────────────────────────────────────────
+  let wasmMod      = null;
+  let lastTokens   = [];
   let activeFilter = 'All';
-  let ftsMode = false;
+  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences'
+  let showRoman    = false;
 
+  // ── wasm ──────────────────────────────────────────────────────────────────
   async function loadWasm() {
     if (wasmMod) return wasmMod;
     const mod = await import('/wasm/kham_wasm.js');
@@ -205,30 +232,33 @@ const samples = [
     return wasmMod;
   }
 
+  // ── badge helpers ─────────────────────────────────────────────────────────
   function kindBadge(kind) {
     const c = KIND_COLORS[kind];
     const cls = c ? c.pill : 'bg-slate-100 text-slate-700';
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${kind}</span>`;
   }
-
   function posBadge(pos) {
     if (!pos) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
     const cls = POS_COLORS[pos] || 'bg-slate-100 text-slate-600';
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${pos}</span>`;
   }
-
   function neBadge(ne) {
     if (!ne) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
     const c = NE_COLORS[ne];
     const cls = c ? c.badge : 'bg-slate-100 text-slate-600';
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${ne}</span>`;
   }
+  function romanCell(roman, text) {
+    if (!roman || roman === text) return '<span class="text-slate-300 dark:text-slate-600">—</span>';
+    return `<span class="font-mono text-xs text-indigo-600 dark:text-indigo-400">${roman}</span>`;
+  }
 
+  // ── filter / format ───────────────────────────────────────────────────────
   function visibleTokens() {
     if (activeFilter === 'All') return lastTokens;
     return lastTokens.filter(t => t.kind === activeFilter);
   }
-
   function formatOutput(tokens) {
     const fmt = document.getElementById('demo-format');
     const format = fmt ? fmt.value : 'pipe';
@@ -239,11 +269,16 @@ const samples = [
     return words.join('|');
   }
 
-  function buildTableHeader(isFts) {
-    if (isFts) {
+  // ── table builders ────────────────────────────────────────────────────────
+  function buildTableHeader() {
+    if (mode === 'fts') {
+      const romanCol = showRoman
+        ? '<th scope="col" class="px-4 py-3 font-semibold text-indigo-500 dark:text-indigo-400">Roman</th>'
+        : '';
       return `<tr>
         <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
         <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
+        ${romanCol}
         <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
         <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">POS</th>
         <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">NE</th>
@@ -260,25 +295,28 @@ const samples = [
     </tr>`;
   }
 
-  function buildTableRow(t, i, isFts) {
+  function buildTableRow(t, i) {
     const base = 'hover:bg-slate-50 dark:hover:bg-slate-800/40';
-    const stopCls = (isFts && t.is_stop) ? 'opacity-50' : '';
-    if (isFts) {
+    if (mode === 'fts') {
+      const stopCls = t.is_stop ? 'opacity-50' : '';
       const syns = Array.isArray(t.synonyms) ? t.synonyms : [];
-      const synText = syns.length
+      const synHtml = syns.length
         ? syns.map(s => `<span class="inline-block bg-slate-100 dark:bg-slate-700 rounded px-1 font-mono text-xs">${s}</span>`).join(' ')
         : '<span class="text-slate-300 dark:text-slate-600">—</span>';
+      const romanCol = showRoman
+        ? `<td class="px-4 py-2.5">${romanCell(t.roman, t.text)}</td>`
+        : '';
       return `<tr class="${base} ${stopCls}">
         <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
         <td class="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">${t.text}</td>
+        ${romanCol}
         <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
         <td class="px-4 py-2.5">${posBadge(t.pos)}</td>
         <td class="px-4 py-2.5">${neBadge(t.ne)}</td>
         <td class="px-4 py-2.5 text-center">${t.is_stop
           ? '<span class="text-xs text-slate-400 dark:text-slate-500">stop</span>'
-          : '<span class="text-slate-300 dark:text-slate-600">—</span>'
-        }</td>
-        <td class="px-4 py-2.5">${synText}</td>
+          : '<span class="text-slate-300 dark:text-slate-600">—</span>'}</td>
+        <td class="px-4 py-2.5">${synHtml}</td>
       </tr>`;
     }
     return `<tr class="${base}">
@@ -290,26 +328,27 @@ const samples = [
     </tr>`;
   }
 
+  // ── render token pills + table ────────────────────────────────────────────
   function renderPillsAndTable(tokens) {
-    const pills  = document.getElementById('demo-pills');
-    const thead  = document.getElementById('demo-thead');
-    const tbody  = document.getElementById('demo-tbody');
+    const pills = document.getElementById('demo-pills');
+    const thead = document.getElementById('demo-thead');
+    const tbody = document.getElementById('demo-tbody');
 
-    if (ftsMode) {
+    // Reset pills to inline-flex for token mode
+    pills.className = 'flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+
+    if (mode === 'fts') {
       pills.innerHTML = tokens.map(t => {
         const stopCls = t.is_stop ? 'opacity-40 line-through' : '';
-        let pillCls;
-        if (t.ne && NE_COLORS[t.ne]) {
-          pillCls = NE_COLORS[t.ne].pill;
-        } else {
-          const c = KIND_COLORS[t.kind];
-          pillCls = c ? c.pill : 'bg-slate-100 text-slate-700';
-        }
-        const posSub = (t.pos && !t.is_stop)
-          ? `<span class="block text-center text-[10px] leading-tight mt-0.5 opacity-70">${t.pos}</span>`
-          : '';
+        const pillCls = (t.ne && NE_COLORS[t.ne])
+          ? NE_COLORS[t.ne].pill
+          : (KIND_COLORS[t.kind] ? KIND_COLORS[t.kind].pill : 'bg-slate-100 text-slate-700');
+        const sub = [];
+        if (t.pos && !t.is_stop) sub.push(`<span class="text-[10px] leading-tight opacity-60">${t.pos}</span>`);
+        if (showRoman && t.roman && t.roman !== t.text) sub.push(`<span class="text-[10px] leading-tight font-mono text-indigo-500 dark:text-indigo-400 opacity-80">${t.roman}</span>`);
+        const subHtml = sub.length ? `<span class="flex flex-col items-center gap-0">${sub.join('')}</span>` : '';
         return `<span class="inline-flex flex-col items-center px-3 py-1 rounded-lg text-sm font-medium ${pillCls} ${stopCls}" role="listitem">
-          <span>${t.text}</span>${posSub}
+          <span>${t.text}</span>${subHtml}
         </span>`;
       }).join('');
     } else {
@@ -320,19 +359,48 @@ const samples = [
       }).join('');
     }
 
-    if (thead) thead.innerHTML = buildTableHeader(ftsMode);
-    if (tbody) {
-      tbody.innerHTML = tokens.map((t, i) => buildTableRow(t, i, ftsMode)).join('');
-    }
+    if (thead) thead.innerHTML = buildTableHeader();
+    if (tbody) tbody.innerHTML = tokens.map((t, i) => buildTableRow(t, i)).join('');
   }
 
+  // ── render sentence cards ─────────────────────────────────────────────────
+  function renderSentenceCards(sentences) {
+    const pills     = document.getElementById('demo-pills');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    const filterRow = document.getElementById('demo-filter-row');
+
+    // Switch pills to vertical card list
+    pills.className = 'flex flex-col gap-3 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'list');
+    pills.setAttribute('aria-label', 'Sentences');
+
+    pills.innerHTML = sentences.length
+      ? sentences.map((s, i) => {
+          const color    = SENT_COLORS[i % SENT_COLORS.length];
+          const numColor = SENT_NUM_COLORS[i % SENT_NUM_COLORS.length];
+          return `<div class="flex items-start gap-3 p-3 rounded-lg border ${color}" role="listitem">
+            <span class="flex-shrink-0 w-6 h-6 rounded-full ${numColor} text-white text-xs font-bold flex items-center justify-center mt-0.5">${i + 1}</span>
+            <div class="flex-1 min-w-0">
+              <p class="text-sm text-slate-900 dark:text-slate-100 leading-relaxed">${s.text}</p>
+              <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">chars ${s.char_start}–${s.char_end}</span>
+            </div>
+          </div>`;
+        }).join('')
+      : '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No sentences detected.</p>';
+
+    // Hide token table and kind filters in sentences mode
+    if (tableWrap) tableWrap.classList.add('hidden');
+    if (filterRow) filterRow.classList.add('hidden');
+  }
+
+  // ── render stats ──────────────────────────────────────────────────────────
   function renderStats(tokens) {
     const stats = document.getElementById('demo-stats');
     if (!stats) return;
     const counts = {};
     tokens.forEach(t => { counts[t.kind] = (counts[t.kind] || 0) + 1; });
 
-    if (ftsMode) {
+    if (mode === 'fts') {
       const stopCount = tokens.filter(t => t.is_stop).length;
       const neCount   = tokens.filter(t => t.ne).length;
       const posCount  = tokens.filter(t => t.pos).length;
@@ -341,29 +409,53 @@ const samples = [
         neCount   ? `<span>Named entities: <strong>${neCount}</strong></span>` : null,
         posCount  ? `<span>POS-tagged: <strong>${posCount}</strong></span>` : null,
       ].filter(Boolean).join('');
-
-      stats.innerHTML = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([kind, n]) => {
-          const c = NE_COLORS[kind] || KIND_COLORS[kind];
-          const dot = c ? c.dot : 'bg-slate-400';
-          return `<span class="inline-flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full ${dot}"></span>
-            <span>${kind}: <strong>${n}</strong></span>
-          </span>`;
-        }).join('') + (extra ? `<span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span>${extra}` : '');
+      stats.innerHTML = Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([kind, n]) => {
+        const c = NE_COLORS[kind] || KIND_COLORS[kind];
+        const dot = c ? c.dot : 'bg-slate-400';
+        return `<span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full ${dot}"></span><span>${kind}: <strong>${n}</strong></span></span>`;
+      }).join('') + (extra ? `<span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span>${extra}` : '');
     } else {
-      stats.innerHTML = Object.entries(counts)
-        .sort((a, b) => b[1] - a[1])
-        .map(([kind, n]) => {
-          const c = KIND_COLORS[kind];
-          const dot = c ? c.dot : 'bg-slate-400';
-          return `<span class="inline-flex items-center gap-1">
-            <span class="inline-block w-2 h-2 rounded-full ${dot}"></span>
-            <span>${kind}: <strong>${n}</strong></span>
-          </span>`;
-        }).join('');
+      stats.innerHTML = Object.entries(counts).sort((a,b) => b[1]-a[1]).map(([kind, n]) => {
+        const c = KIND_COLORS[kind];
+        const dot = c ? c.dot : 'bg-slate-400';
+        return `<span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full ${dot}"></span><span>${kind}: <strong>${n}</strong></span></span>`;
+      }).join('');
     }
+  }
+
+  // ── UI state sync ─────────────────────────────────────────────────────────
+  function updateModeButtons() {
+    document.querySelectorAll('.demo-mode-tab').forEach(btn => {
+      const active = btn.dataset.mode === mode;
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      btn.className = `demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
+        active
+          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+      }`;
+    });
+
+    // Show/hide roman toggle and filter row based on mode
+    const romanBtn  = document.getElementById('demo-roman-toggle');
+    const filterRow = document.getElementById('demo-filter-row');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    if (romanBtn)  romanBtn.classList.toggle('hidden', mode !== 'fts');
+    if (filterRow) filterRow.classList.toggle('hidden', mode === 'sentences');
+    if (tableWrap) tableWrap.classList.toggle('hidden', mode === 'sentences');
+
+    // Swap sample buttons
+    document.querySelectorAll('.demo-sample').forEach(btn => {
+      const btnMode = btn.dataset.mode || 'seg';
+      if (mode === 'sentences') {
+        btn.classList.toggle('hidden', btnMode !== 'sentences');
+      } else {
+        btn.classList.toggle('hidden', btnMode === 'sentences');
+      }
+    });
+
+    // Update run button label
+    const label = document.getElementById('demo-btn-label');
+    if (label) label.textContent = mode === 'sentences' ? 'Split' : 'Segment';
   }
 
   function updateFilterButtons() {
@@ -377,110 +469,147 @@ const samples = [
     });
   }
 
-  function updateModeButtons() {
-    document.querySelectorAll('.demo-mode-tab').forEach(btn => {
-      const active = (btn.dataset.mode === 'fts') === ftsMode;
-      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
-      btn.className = `demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors ${
-        active
-          ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-          : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-      }`;
-    });
+  function updateRomanToggle() {
+    const btn = document.getElementById('demo-roman-toggle');
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', showRoman ? 'true' : 'false');
+    btn.className = `text-xs px-2.5 py-1 rounded-full border transition-colors ${
+      showRoman
+        ? 'bg-indigo-600 border-indigo-600 text-white'
+        : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-indigo-400 hover:text-indigo-600'
+    }`;
+    if (mode !== 'fts') btn.classList.add('hidden');
+    else btn.classList.remove('hidden');
   }
 
-  function renderResults(tokens, elapsed) {
-    lastTokens = tokens;
-    const count   = document.getElementById('demo-count');
-    const results = document.getElementById('demo-results');
-
-    renderPillsAndTable(visibleTokens());
-    renderStats(tokens);
-    updateFilterButtons();
-
-    if (count) count.textContent = `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`;
-    if (elapsed !== undefined) {
-      const timeStr = elapsed < 1
-        ? `${(elapsed * 1000).toFixed(0)} µs`
-        : `${elapsed.toFixed(2)} ms`;
-      const timeBadge = document.getElementById('demo-time');
-      const timeVal   = document.getElementById('demo-time-val');
-      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
-      else if (timeBadge) timeBadge.textContent = timeStr;
-    }
-    results.classList.remove('hidden');
-  }
-
+  // ── loading state ─────────────────────────────────────────────────────────
   function setLoading(loading) {
-    const btn    = document.getElementById('demo-run');
+    const btn     = document.getElementById('demo-run');
     const spinner = document.getElementById('demo-spinner');
-    const label  = document.getElementById('demo-btn-label');
-    const status = document.getElementById('demo-status');
+    const label   = document.getElementById('demo-btn-label');
+    const status  = document.getElementById('demo-status');
     btn.disabled = loading;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
     spinner.classList.toggle('hidden', !loading);
-    label.textContent = loading ? 'Loading…' : 'Segment';
-    status.classList.toggle('hidden', !loading);
-    status.textContent = loading ? 'Initialising WebAssembly…' : '';
+    label.textContent = loading ? 'Loading…' : (mode === 'sentences' ? 'Split' : 'Segment');
+    if (status) { status.classList.toggle('hidden', !loading); status.textContent = loading ? 'Initialising WebAssembly…' : ''; }
   }
 
-  async function runSegment() {
-    const input = document.getElementById('demo-input');
-    const text = input.value.trim();
+  // ── run handlers ──────────────────────────────────────────────────────────
+  async function runTokens() {
+    const text = document.getElementById('demo-input').value.trim();
     if (!text) return;
-
     setLoading(true);
     try {
       const mod = await loadWasm();
       const t0 = performance.now();
-      const tokens = ftsMode ? mod.segment_fts(text) : mod.segment_tokens(text);
+      const tokens = mode === 'fts' ? mod.segment_fts(text) : mod.segment_tokens(text);
       const elapsed = performance.now() - t0;
-      renderResults(tokens, elapsed);
+      lastTokens = tokens;
+
+      const tableWrap = document.getElementById('demo-table-wrap');
+      const filterRow = document.getElementById('demo-filter-row');
+      if (tableWrap) tableWrap.classList.remove('hidden');
+      if (filterRow) filterRow.classList.remove('hidden');
+
+      renderPillsAndTable(visibleTokens());
+      renderStats(tokens);
+      updateFilterButtons();
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`;
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
     } catch (err) {
       console.error('kham-wasm error:', err);
       const status = document.getElementById('demo-status');
-      status.classList.remove('hidden');
-      status.textContent = 'Error loading WebAssembly. Check console.';
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
     } finally {
       setLoading(false);
     }
   }
 
+  async function runSentences() {
+    const text = document.getElementById('demo-input').value.trim();
+    if (!text) return;
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const t0 = performance.now();
+      const sentences = mod.split_sentences(text);
+      const elapsed = performance.now() - t0;
+
+      renderSentenceCards(sentences);
+
+      const stats = document.getElementById('demo-stats');
+      if (stats) {
+        const totalChars = sentences.reduce((s, t) => s + t.text.length, 0);
+        stats.innerHTML = `<span>Total chars: <strong>${totalChars}</strong></span>`;
+      }
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = `${sentences.length} sentence${sentences.length !== 1 ? 's' : ''}`;
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function run() {
+    if (mode === 'sentences') runSentences();
+    else runTokens();
+  }
+
+  // ── event wiring ──────────────────────────────────────────────────────────
   document.addEventListener('DOMContentLoaded', () => {
     updateModeButtons();
+    updateFilterButtons();
+    updateRomanToggle();
 
-    // Segment button
-    const run = document.getElementById('demo-run');
-    if (run) run.addEventListener('click', runSegment);
+    document.getElementById('demo-run')?.addEventListener('click', run);
 
-    // Sample buttons
     document.querySelectorAll('.demo-sample').forEach(btn => {
       btn.addEventListener('click', () => {
         document.getElementById('demo-input').value = btn.dataset.text;
       });
     });
 
-    // Ctrl/Cmd+Enter to segment
-    const input = document.getElementById('demo-input');
-    if (input) {
-      input.addEventListener('keydown', e => {
-        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-          e.preventDefault();
-          runSegment();
-        }
-      });
-    }
+    document.getElementById('demo-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); }
+    });
 
-    // Mode toggle buttons
     document.querySelectorAll('.demo-mode-tab').forEach(btn => {
       btn.addEventListener('click', () => {
-        ftsMode = btn.dataset.mode === 'fts';
+        mode = btn.dataset.mode;
         updateModeButtons();
-        if (lastTokens.length > 0) runSegment();
+        updateRomanToggle();
+        if (lastTokens.length > 0 || mode === 'sentences') run();
       });
     });
 
-    // Kind filter buttons
+    document.getElementById('demo-roman-toggle')?.addEventListener('click', () => {
+      showRoman = !showRoman;
+      updateRomanToggle();
+      if (lastTokens.length) renderPillsAndTable(visibleTokens());
+    });
+
     document.querySelectorAll('.demo-filter').forEach(btn => {
       btn.addEventListener('click', () => {
         activeFilter = btn.dataset.kind;
@@ -489,26 +618,19 @@ const samples = [
       });
     });
 
-    // Format change — re-render pills (copy will use new format)
-    const fmt = document.getElementById('demo-format');
-    if (fmt) fmt.addEventListener('change', () => {
+    document.getElementById('demo-format')?.addEventListener('change', () => {
       if (lastTokens.length) renderPillsAndTable(visibleTokens());
     });
 
-    // Copy button
-    const copyBtn = document.getElementById('demo-copy');
+    const copyBtn   = document.getElementById('demo-copy');
     const copyLabel = document.getElementById('demo-copy-label');
-    if (copyBtn) {
-      copyBtn.addEventListener('click', () => {
-        const text = formatOutput(visibleTokens());
-        navigator.clipboard.writeText(text).then(() => {
-          copyLabel.textContent = 'Copied!';
-          setTimeout(() => { copyLabel.textContent = 'Copy'; }, 1500);
-        });
+    copyBtn?.addEventListener('click', () => {
+      navigator.clipboard.writeText(formatOutput(visibleTokens())).then(() => {
+        copyLabel.textContent = 'Copied!';
+        setTimeout(() => { copyLabel.textContent = 'Copy'; }, 1500);
       });
-    }
+    });
 
-    // Preload WASM in background
     loadWasm().catch(() => {});
   });
 })();
