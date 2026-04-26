@@ -1,7 +1,6 @@
 [package]
 name = "kham-python"
 description = "Python bindings for the kham Thai word segmenter (PyO3)"
-publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

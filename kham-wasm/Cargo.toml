@@ -1,7 +1,6 @@
 [package]
 name = "kham-wasm"
 description = "WebAssembly bindings for the kham Thai word segmenter"
-publish = false
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
