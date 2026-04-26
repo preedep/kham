@@ -37,7 +37,10 @@
 //! ```
 
 use kham_core::{
-    fts::FtsTokenizer, romanizer::RomanizationMap, sentence::split_sentences as core_split,
+    fts::FtsTokenizer,
+    romanizer::RomanizationMap,
+    sentence::split_sentences as core_split,
+    soundex::{soundex as core_soundex, SoundexAlgorithm},
     TokenKind, Tokenizer,
 };
 use wasm_bindgen::prelude::*;
@@ -352,6 +355,25 @@ pub fn romanize(text: &str) -> Vec<RomanToken> {
             text: t.text.to_owned(),
         })
         .collect()
+}
+
+/// Encode a single Thai word using the selected phonetic algorithm.
+///
+/// `algo` must be one of `"lk82"` (default), `"udom83"`, or `"metasound"`.
+/// Unknown values fall back to `"lk82"`.
+///
+/// - `lk82` / `udom83` — always returns a 4-character ASCII code.
+/// - `metasound` — returns 3 characters per syllable (variable length).
+///
+/// Returns `"0000"` / `"000"` if the word contains no Thai consonants.
+#[wasm_bindgen]
+pub fn soundex_word(word: &str, algo: &str) -> String {
+    let algorithm = match algo {
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        _ => SoundexAlgorithm::Lk82,
+    };
+    core_soundex(word, algorithm)
 }
 
 /// Split text into sentences and return an array of [`Sentence`] objects.
