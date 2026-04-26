@@ -10,16 +10,6 @@ const samples = [
   'บริษัทไทยออยล์จำกัดมหาชน',
   'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ',
 ];
-
-const kindColors: Record<string, string> = {
-  Thai: 'bg-blue-100 text-blue-800',
-  Latin: 'bg-green-100 text-green-800',
-  Number: 'bg-yellow-100 text-yellow-800',
-  Punctuation: 'bg-slate-100 text-slate-700',
-  Emoji: 'bg-purple-100 text-purple-800',
-  Whitespace: 'bg-slate-100 text-slate-500',
-  Unknown: 'bg-red-100 text-red-700',
-};
 ---
 
 <div class="live-demo-root font-sans" data-compact={compact.toString()}>
@@ -73,8 +63,67 @@ const kindColors: Record<string, string> = {
 
   <!-- Results -->
   <div id="demo-results" class="hidden" aria-live="polite" aria-label="Segmentation results">
+
+    {!compact && (
+      <!-- Toolbar: count + time | filter | format + copy -->
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <!-- Left: token count + execution time -->
+        <div class="flex items-center gap-3">
+          <p id="demo-count" class="text-xs font-medium text-slate-600 dark:text-slate-400" aria-live="polite"></p>
+          <span id="demo-time" class="inline-flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-mono bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 rounded-full px-2 py-0.5 hidden" aria-live="polite">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span id="demo-time-val"></span>
+          </span>
+        </div>
+
+        <!-- Right: kind filter + format + copy -->
+        <div class="flex flex-wrap items-center gap-2">
+          <div id="demo-filter-row" class="flex flex-wrap gap-1.5" role="group" aria-label="Filter by token kind">
+            {['All','Thai','Latin','Number','Punctuation','Emoji'].map(k => (
+              <button
+                type="button"
+                class="demo-filter text-xs px-2.5 py-1 rounded-full border transition-colors"
+                data-kind={k}
+              >
+                {k}
+              </button>
+            ))}
+          </div>
+          <div class="w-px h-5 bg-slate-200 dark:bg-slate-700 hidden sm:block"></div>
+          <select
+            id="demo-format"
+            aria-label="Output format"
+            class="text-xs rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="pipe">Pipe  กิน|ข้าว</option>
+            <option value="json">JSON  ["กิน","ข้าว"]</option>
+            <option value="lines">Lines  one per line</option>
+            <option value="space">Space  กิน ข้าว</option>
+          </select>
+          <button
+            id="demo-copy"
+            type="button"
+            aria-label="Copy output"
+            class="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+            </svg>
+            <span id="demo-copy-label">Copy</span>
+          </button>
+        </div>
+      </div>
+    )}
+
     <!-- Token pills -->
-    <div id="demo-pills" class="flex flex-wrap gap-2 mb-5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Token pills"></div>
+    <div id="demo-pills" class="flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Token pills"></div>
+
+    {!compact && (
+      <!-- Token kind stats -->
+      <div id="demo-stats" class="flex flex-wrap gap-3 mb-4 text-xs text-slate-500 dark:text-slate-400"></div>
+    )}
 
     <!-- Table (hidden in compact mode) -->
     {!compact && (
@@ -94,7 +143,13 @@ const kindColors: Record<string, string> = {
       </div>
     )}
 
-    <p id="demo-count" class="text-xs text-slate-400 mt-3" aria-live="polite"></p>
+    <!-- compact mode count/time -->
+    {compact && (
+      <div class="flex items-center gap-3 mt-3">
+        <p id="demo-count" class="text-xs text-slate-400" aria-live="polite"></p>
+        <p id="demo-time" class="text-xs text-slate-400" aria-live="polite"></p>
+      </div>
+    )}
   </div>
 </div>
 
@@ -111,6 +166,8 @@ const kindColors: Record<string, string> = {
   };
 
   let wasmMod = null;
+  let lastTokens = [];
+  let activeFilter = 'All';
 
   async function loadWasm() {
     if (wasmMod) return wasmMod;
@@ -125,39 +182,99 @@ const kindColors: Record<string, string> = {
     return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${kind}</span>`;
   }
 
-  function renderResults(tokens) {
+  function visibleTokens() {
+    if (activeFilter === 'All') return lastTokens;
+    return lastTokens.filter(t => t.kind === activeFilter);
+  }
+
+  function formatOutput(tokens) {
+    const fmt = document.getElementById('demo-format');
+    const format = fmt ? fmt.value : 'pipe';
+    const words = tokens.filter(t => t.kind !== 'Whitespace').map(t => t.text);
+    if (format === 'json')  return JSON.stringify(words);
+    if (format === 'lines') return words.join('\n');
+    if (format === 'space') return words.join(' ');
+    return words.join('|');
+  }
+
+  function renderPillsAndTable(tokens) {
     const pills = document.getElementById('demo-pills');
     const tbody = document.getElementById('demo-tbody');
-    const count = document.getElementById('demo-count');
-    const results = document.getElementById('demo-results');
 
-    // Pills
     pills.innerHTML = tokens.map(t => {
       const cls = KIND_COLORS[t.kind] || 'bg-slate-100 text-slate-700';
-      return `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${cls}">${t.text}</span>`;
+      return `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${cls}" role="listitem">${t.text}</span>`;
     }).join('');
 
-    // Table rows (tbody may be absent in compact mode)
     if (tbody) {
       tbody.innerHTML = tokens.map((t, i) => `
-        <tr class="hover:bg-slate-50">
+        <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/40">
           <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
-          <td class="px-4 py-2.5 font-medium text-slate-900">${t.text}</td>
+          <td class="px-4 py-2.5 font-medium text-slate-900 dark:text-slate-100">${t.text}</td>
           <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
           <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.char_start}–${t.char_end}</td>
           <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.byte_start}–${t.byte_end}</td>
         </tr>
       `).join('');
     }
+  }
+
+  function renderStats(tokens) {
+    const stats = document.getElementById('demo-stats');
+    if (!stats) return;
+    const counts = {};
+    tokens.forEach(t => { counts[t.kind] = (counts[t.kind] || 0) + 1; });
+    stats.innerHTML = Object.entries(counts)
+      .sort((a, b) => b[1] - a[1])
+      .map(([kind, n]) => {
+        const cls = KIND_COLORS[kind] || 'bg-slate-100 text-slate-700';
+        return `<span class="inline-flex items-center gap-1">
+          <span class="inline-block w-2 h-2 rounded-full ${cls.split(' ')[0]}"></span>
+          <span>${kind}: <strong>${n}</strong></span>
+        </span>`;
+      }).join('');
+  }
+
+  function updateFilterButtons() {
+    document.querySelectorAll('.demo-filter').forEach(btn => {
+      const active = btn.dataset.kind === activeFilter;
+      btn.className = `demo-filter text-xs px-2.5 py-1 rounded-full border transition-colors ${
+        active
+          ? 'bg-blue-600 border-blue-600 text-white'
+          : 'border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600'
+      }`;
+    });
+  }
+
+  function renderResults(tokens, elapsed) {
+    lastTokens = tokens;
+    const count = document.getElementById('demo-count');
+    const time  = document.getElementById('demo-time');
+    const results = document.getElementById('demo-results');
+
+    renderPillsAndTable(visibleTokens());
+    renderStats(tokens);
+    updateFilterButtons();
 
     if (count) count.textContent = `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`;
+    if (elapsed !== undefined) {
+      const timeStr = elapsed < 1
+        ? `${(elapsed * 1000).toFixed(0)} µs`
+        : `${elapsed.toFixed(2)} ms`;
+      // non-compact: badge with clock icon
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      // compact: plain text
+      else if (time) time.textContent = timeStr;
+    }
     results.classList.remove('hidden');
   }
 
   function setLoading(loading) {
-    const btn = document.getElementById('demo-run');
+    const btn    = document.getElementById('demo-run');
     const spinner = document.getElementById('demo-spinner');
-    const label = document.getElementById('demo-btn-label');
+    const label  = document.getElementById('demo-btn-label');
     const status = document.getElementById('demo-status');
     btn.disabled = loading;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
@@ -175,8 +292,10 @@ const kindColors: Record<string, string> = {
     setLoading(true);
     try {
       const mod = await loadWasm();
+      const t0 = performance.now();
       const tokens = mod.segment_tokens(text);
-      renderResults(tokens);
+      const elapsed = performance.now() - t0;
+      renderResults(tokens, elapsed);
     } catch (err) {
       console.error('kham-wasm error:', err);
       const status = document.getElementById('demo-status');
@@ -187,19 +306,19 @@ const kindColors: Record<string, string> = {
     }
   }
 
-  // Wire up after DOM ready
   document.addEventListener('DOMContentLoaded', () => {
+    // Segment button
     const run = document.getElementById('demo-run');
     if (run) run.addEventListener('click', runSegment);
 
+    // Sample buttons
     document.querySelectorAll('.demo-sample').forEach(btn => {
       btn.addEventListener('click', () => {
-        const input = document.getElementById('demo-input');
-        input.value = btn.dataset.text;
+        document.getElementById('demo-input').value = btn.dataset.text;
       });
     });
 
-    // Also run on Enter inside textarea (Ctrl/Cmd+Enter)
+    // Ctrl/Cmd+Enter to segment
     const input = document.getElementById('demo-input');
     if (input) {
       input.addEventListener('keydown', e => {
@@ -210,7 +329,35 @@ const kindColors: Record<string, string> = {
       });
     }
 
-    // Preload WASM in background so first click is instant
+    // Kind filter buttons
+    document.querySelectorAll('.demo-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeFilter = btn.dataset.kind;
+        updateFilterButtons();
+        if (lastTokens.length) renderPillsAndTable(visibleTokens());
+      });
+    });
+
+    // Format change — re-render pills (copy will use new format)
+    const fmt = document.getElementById('demo-format');
+    if (fmt) fmt.addEventListener('change', () => {
+      if (lastTokens.length) renderPillsAndTable(visibleTokens());
+    });
+
+    // Copy button
+    const copyBtn = document.getElementById('demo-copy');
+    const copyLabel = document.getElementById('demo-copy-label');
+    if (copyBtn) {
+      copyBtn.addEventListener('click', () => {
+        const text = formatOutput(visibleTokens());
+        navigator.clipboard.writeText(text).then(() => {
+          copyLabel.textContent = 'Copied!';
+          setTimeout(() => { copyLabel.textContent = 'Copy'; }, 1500);
+        });
+      });
+    }
+
+    // Preload WASM in background
     loadWasm().catch(() => {});
   });
 })();
