@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import BadgeRow from '../components/BadgeRow.astro';
+import LiveDemo from '../components/LiveDemo.astro';
 
 const features = [
   {
@@ -159,6 +160,26 @@ let tokens = seg.segment("กินข้าวกับปลา");
             <pre class="p-6 text-sm font-mono text-slate-300 overflow-x-auto leading-relaxed"><code>{codeSnippet}</code></pre>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Demo teaser -->
+  <section class="py-24 bg-white border-t border-slate-100">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl font-bold text-slate-900 mb-3">Try it right now</h2>
+        <p class="text-slate-500 max-w-lg mx-auto">
+          Powered by WebAssembly — runs entirely in your browser, no server needed.
+        </p>
+      </div>
+      <div class="bg-slate-50 rounded-2xl border border-slate-200 p-6 md:p-8">
+        <LiveDemo compact={true} />
+      </div>
+      <div class="text-center mt-6">
+        <a href="/demo" class="text-blue-600 font-medium hover:text-blue-800 transition-colors">
+          Open full playground →
+        </a>
       </div>
     </div>
   </section>

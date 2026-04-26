@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "setup:wasm": "mkdir -p public/wasm && cp ../kham-wasm/pkg/kham_wasm.js ../kham-wasm/pkg/kham_wasm_bg.wasm public/wasm/",
+    "predev": "npm run setup:wasm",
+    "prebuild": "npm run setup:wasm",
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",

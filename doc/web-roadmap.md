@@ -22,13 +22,13 @@ Goal: scaffolded project, CI pipeline, and a deployable landing page with badges
 
 Goal: interactive Thai segmentation playground powered by kham-wasm in the browser.
 
-- [ ] Build kham-wasm and wire into Astro via relative `../kham-wasm/pkg/` path
-- [ ] `LiveDemo.astro` component — Thai text input → tokenized output table
-- [ ] Token table columns: `text`, `kind`, `POS`, `NE`, `romanization`, byte span
-- [ ] Toggle options: FTS mode, soundex algorithm (lk82 / udom83 / MetaSound)
-- [ ] `/demo` full-page playground with sample texts
-- [ ] Lazy-load WASM (dynamic import) — page not blocked
-- [ ] Embed demo teaser on landing page (`/`)
+- [x] Build kham-wasm and wire into Astro via `public/wasm/` (copied by `setup:wasm` script)
+- [x] `LiveDemo.astro` component — Thai text input → tokenized output table
+- [x] Token table columns: `text`, `kind`, `char span`, `byte span` (POS/NE/romanization deferred to v0.3 — not yet in WASM API)
+- [ ] Toggle options: FTS mode, soundex algorithm (lk82 / udom83 / MetaSound) — deferred to v0.3
+- [x] `/demo` full-page playground with sample texts
+- [x] Lazy-load WASM (dynamic import via `is:inline` script) — page not blocked
+- [x] Embed demo teaser on landing page (`/`)
 
 ---
 
