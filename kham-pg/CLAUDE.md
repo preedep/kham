@@ -20,8 +20,32 @@ PostgreSQL fmgr  ──▶  src/shim.c (C)  ──▶  kham_*_impl() (Rust, src/
 | `kham_gettoken` | `(internal, internal, internal) → int4`   | state + char** + int* output |
 | `kham_end`      | `(internal) → void`                       | frees state |
 | `kham_lextypes` | `(internal) → internal`                   | returns palloc'd `LexDescr[]` |
+| `kham_headline` | `(internal, internal, tsquery) → internal` | fills startsel/stopsel/fragdelim; marks selected words |
 
 **Critical:** `kham_start` receives a raw `char*` + `int4` — NOT a varlena `text*`. Use `PG_GETARG_POINTER(0)` + `PG_GETARG_INT32(1)`, never `PG_GETARG_TEXT_PP`.
+
+## Dictionary — kham_fts_dict
+
+Thai and Named tokens go through a custom dictionary that expands each token to up to 6 lexemes at the **same tsvector position**:
+1. The normalised word itself
+2. Its lk82 Thai Soundex code (enables phonetic-fuzzy search)
+3. Its RTGS romanization (if in the built-in map; enables Latin-script search)
+
+Latin, Number, and Unknown tokens use `kham_dict` (simple lowercase pass-through).
+
+### PG16+ lexize calling convention — CRITICAL
+
+In PG 13 and earlier, the lexize callback's 4th argument was `BoolGetDatum(false/true)` (an isNull flag). **Since PG 16 it is a `List*` pointer** of subsequent tokens for multi-word recognition — always non-NULL for real token calls. Any code reading `PG_GETARG_BOOL(3)` interprets this pointer as "true" and returns NULL (stopword) for every token.
+
+Fix: ignore arg3 entirely. Use `token == NULL || len <= 0` to detect the end-of-input finalization call instead:
+
+```c
+/* arg3 = List* of subsequent tokens (PG16+); NOT a bool isNull flag */
+const char *token = (const char *) PG_GETARG_POINTER(1);
+int         len   = PG_GETARG_INT32(2);
+if (token == NULL || len <= 0)
+    PG_RETURN_POINTER(NULL);  /* end-of-input finalization */
+```
 
 ## Token type integers
 

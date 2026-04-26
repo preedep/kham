@@ -139,20 +139,31 @@ SELECT * FROM ts_parse('kham', 'ทักษิณเดินทางไปก
 -- 7  ทักษิณ     ← Named: Person
 -- 7  กรุงเทพ    ← Named: Place (merged from กรุง+เทพ by multi-token NE)
 
--- Build tsvector
+-- Build tsvector — Thai/Named tokens expand to [word, lk82_soundex, rtgs?]
+-- at the same position (kham_fts_dict); Latin/Number use simple lowercase.
 SELECT to_tsvector('kham', 'กินข้าวกับปลา');
--- 'กิน':1 'กับ':3 'ข้าว':2 'ปลา':4
+-- '1400':2 '1619':1 '4800':3 'kap':2 'pla':3 'กับ':2 'กินข้าว':1 'ปลา':3
 
--- Search
+-- Exact-word search
 SELECT title FROM articles
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ข้าว ปลา');
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
+
+-- Phonetic / soundex search (lk82 — near-homophones share a code)
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ to_tsquery('kham', '4800');  -- code for ปลา
+
+-- RTGS romanization search
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'pla');
+
+-- Highlighted snippet
+SELECT ts_headline('kham', body, plainto_tsquery('kham', 'ปลา'))
+FROM articles;
 
 -- GIN index
 CREATE INDEX articles_fts_idx ON articles
     USING GIN (to_tsvector('kham', body));
 ```
-
-> **Note:** `ts_headline` is not supported — the kham parser has no HEADLINE callback.
 
 ### SQLite
 

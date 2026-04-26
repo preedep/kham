@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+**kham-pg — `kham_fts_dict` custom dictionary**
+- New custom text-search dictionary template (`kham_fts_dict`) that expands each Thai/Named token to up to 6 lexemes at the same tsvector position: the normalised word, its lk82 Thai Soundex code, and its RTGS romanization (if present in the built-in map)
+- Latin, Number, and Unknown tokens continue through the simple `kham_dict` (lowercase pass-through)
+- Enables phonetic-fuzzy search (`to_tsvector @@ plainto_tsquery('หม้อ')` matches documents containing any word with the same soundex code) and Latin-script romanization search without schema changes
+
+**kham-pg — `ts_headline` support**
+- `kham_headline` callback registered as HEADLINE function in `CREATE TEXT SEARCH PARSER kham`
+- Fills `prs->startsel / stopsel / fragdelim` from caller options (defaults: `<b>`, `</b>`, ` ... `)
+- Marks all non-skip tokens `in=1` (full-document mode); marks tokens matching TSQuery operands `selected=1` with prefix-query support
+- 5 regress tests covering StartSel/StopSel override, exact/prefix match, no-match, and complex Thai documents
+
+**kham-pg — Named entity token type**
+- `TokenKind::Named(_) → 7` (`named`) registered in `kham_lextypes`; SQL configuration maps `named` through `kham_fts_dict`
+
+### Fixed
+
+**kham-pg — PG 16+ lexize calling convention**
+- `kham_dict_lexize_shim` previously read arg3 as `bool isNull` via `PG_GETARG_BOOL(3)`. Since PG 16, arg3 is a `List*` pointer of subsequent tokens for multi-word recognition (always non-NULL during real token calls); reading it as a bool produced `true` and every token was silently discarded as a stopword, producing empty tsvectors for all Thai text.
+- Fix: arg3 is ignored entirely. End-of-input detection now uses `token == NULL || len <= 0`.
+
+---
+
 ## [0.4.0] - 2026-04-25
 
 ### Added
