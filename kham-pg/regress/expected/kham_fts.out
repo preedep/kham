@@ -196,3 +196,43 @@ FROM ts_token_type('kham');
              7
 (1 row)
 
+-- ── 23. ts_headline — matched word is wrapped in default <b> tags ─────────────
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'ปลา'));
+    ts_headline    
+-------------------
+ กินข้าวกับ<b>ปลา</b>
+(1 row)
+
+-- ── 24. ts_headline — custom start/stop tags ─────────────────────────────────
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'ปลา'),
+                   'StartSel=<<, StopSel=>>');
+  ts_headline   
+----------------
+ กินข้าวกับ<<ปลา>>
+(1 row)
+
+-- ── 25. ts_headline — Latin token match ──────────────────────────────────────
+SELECT ts_headline('kham', 'โปรแกรม Python สำหรับ AI',
+                   to_tsquery('kham', 'python'),
+                   'StartSel=<<, StopSel=>>');
+       ts_headline        
+--------------------------
+ โปรแกรม<<Python>>สำหรับAI
+(1 row)
+
+-- ── 26. ts_headline — named entity highlighted ────────────────────────────────
+SELECT ts_headline('kham', 'เดินทางไปจีน', to_tsquery('kham', 'จีน'),
+                   'StartSel=<<, StopSel=>>');
+  ts_headline   
+----------------
+ เดินทางไป<<จีน>>
+(1 row)
+
+-- ── 27. ts_headline — no match returns plain document ────────────────────────
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'หมู'),
+                   'StartSel=<<, StopSel=>>') = 'กินข้าวกับปลา' AS unchanged;
+ unchanged 
+-----------
+ t
+(1 row)
+

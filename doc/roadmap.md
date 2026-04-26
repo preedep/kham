@@ -18,7 +18,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 ## Active priorities
 
 - [ ] **PGXN upload** — upload `kham_pg-0.3.0.zip` once pgxn.org account is active
-- [ ] **`ts_headline` support** — HEADLINE callback in `kham-pg/src/shim.c` + `lib.rs`
+- [x] **`ts_headline` support** — HEADLINE callback in `kham-pg/src/shim.c` + `lib.rs`; fills startsel/stopsel/fragdelim; marks matching QI_VAL operands; 5 regress tests
 
 ---
 

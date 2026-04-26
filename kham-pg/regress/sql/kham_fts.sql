@@ -128,3 +128,28 @@ SELECT to_tsvector('kham', 'ไปจีน') @@ to_tsquery('kham', 'จีน')
 
 SELECT count(*) AS lextype_count
 FROM ts_token_type('kham');
+
+-- ── 23. ts_headline — matched word is wrapped in default <b> tags ─────────────
+
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'ปลา'));
+
+-- ── 24. ts_headline — custom start/stop tags ─────────────────────────────────
+
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'ปลา'),
+                   'StartSel=<<, StopSel=>>');
+
+-- ── 25. ts_headline — Latin token match ──────────────────────────────────────
+
+SELECT ts_headline('kham', 'โปรแกรม Python สำหรับ AI',
+                   to_tsquery('kham', 'python'),
+                   'StartSel=<<, StopSel=>>');
+
+-- ── 26. ts_headline — named entity highlighted ────────────────────────────────
+
+SELECT ts_headline('kham', 'เดินทางไปจีน', to_tsquery('kham', 'จีน'),
+                   'StartSel=<<, StopSel=>>');
+
+-- ── 27. ts_headline — no match returns plain document ────────────────────────
+
+SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery('kham', 'หมู'),
+                   'StartSel=<<, StopSel=>>') = 'กินข้าวกับปลา' AS unchanged;

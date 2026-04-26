@@ -9,7 +9,11 @@
 
 #include "postgres.h"
 #include "fmgr.h"
+#include "nodes/pg_list.h"
+#include "nodes/parsenodes.h"
+#include "nodes/value.h"
 #include "tsearch/ts_public.h"
+#include "tsearch/ts_type.h"
 #include "utils/palloc.h"
 
 /* ----------------------------------------------------------------
@@ -77,6 +81,129 @@ kham_end_shim(PG_FUNCTION_ARGS)
     void *state = PG_GETARG_POINTER(0);
     kham_end_impl(state);
     PG_RETURN_VOID();
+}
+
+/* ----------------------------------------------------------------
+ * headline — mark words that match the tsquery for ts_headline()
+ *
+ * Args: HeadlineParsedText*(internal), opts List*(internal), TSQuery
+ *
+ * In PG17 the prsheadline callback must:
+ *   1. Fill prs->startsel / stopsel / fragdelim (palloc'd).
+ *   2. Mark prs->words[i].in = 1 for tokens to include in output.
+ *   3. Mark prs->words[i].selected = 1 for tokens to highlight.
+ *
+ * We include all non-skip tokens (in=1, whole-document mode) and
+ * highlight tokens that exactly or prefix-match a QI_VAL operand.
+ * StartSel / StopSel / FragmentDelimiter can be overridden via opts.
+ * ---------------------------------------------------------------- */
+Datum
+kham_headline_shim(PG_FUNCTION_ARGS)
+{
+    HeadlineParsedText *prs     = (HeadlineParsedText *) PG_GETARG_POINTER(0);
+    List               *prsopts = (List *) PG_GETARG_POINTER(1);
+    TSQuery             query   = PG_GETARG_TSQUERY(2);
+    ListCell           *l;
+    int                 i, qi;
+
+    /* default highlight markers */
+    const char *startsel   = "<b>";
+    const char *stopsel    = "</b>";
+    const char *fragdelim  = " ... ";
+    int16       startsellen;
+    int16       stopsellen;
+    int16       fragdelimlen;
+
+    /* parse caller-supplied options (StartSel, StopSel, FragmentDelimiter) */
+    foreach(l, prsopts)
+    {
+        DefElem *defel = (DefElem *) lfirst(l);
+        if (pg_strcasecmp(defel->defname, "startsel") == 0)
+            startsel = strVal(defel->arg);
+        else if (pg_strcasecmp(defel->defname, "stopsel") == 0)
+            stopsel = strVal(defel->arg);
+        else if (pg_strcasecmp(defel->defname, "fragmentdelimiter") == 0)
+            fragdelim = strVal(defel->arg);
+        /* other options (MaxWords, MinWords, MaxFragments…) are accepted
+         * silently — we always output the full document */
+    }
+
+    startsellen  = (int16) strlen(startsel);
+    stopsellen   = (int16) strlen(stopsel);
+    fragdelimlen = (int16) strlen(fragdelim);
+
+    /* copy selector strings into palloc'd memory (required by PG) */
+    prs->startsel = palloc(startsellen + 1);
+    memcpy(prs->startsel, startsel, startsellen + 1);
+    prs->startsellen = startsellen;
+
+    prs->stopsel = palloc(stopsellen + 1);
+    memcpy(prs->stopsel, stopsel, stopsellen + 1);
+    prs->stopsellen = stopsellen;
+
+    prs->fragdelim = palloc(fragdelimlen + 1);
+    memcpy(prs->fragdelim, fragdelim, fragdelimlen + 1);
+    prs->fragdelimlen = fragdelimlen;
+
+    if (prs->words == NULL || prs->curwords == 0)
+        PG_RETURN_POINTER(prs);
+
+    if (query->size > 0)
+    {
+        QueryItem  *items    = GETQUERY(query);
+        const char *operands = GETOPERAND(query);
+
+        for (i = 0; i < prs->curwords; i++)
+        {
+            HeadlineWordEntry *entry = &prs->words[i];
+            if (entry->skip || entry->repeated)
+                continue;
+
+            entry->in = 1;  /* include every token in the output */
+
+            for (qi = 0; qi < query->size; qi++)
+            {
+                QueryOperand *op;
+                const char   *val;
+
+                if (items[qi].type != QI_VAL)
+                    continue;
+
+                op  = &items[qi].qoperand;
+                val = operands + op->distance;
+
+                if (op->prefix)
+                {
+                    if ((int) op->length <= (int) entry->len &&
+                        strncasecmp(entry->word, val, op->length) == 0)
+                    {
+                        entry->selected = 1;
+                        break;
+                    }
+                }
+                else
+                {
+                    if ((int) op->length == (int) entry->len &&
+                        strncasecmp(entry->word, val, op->length) == 0)
+                    {
+                        entry->selected = 1;
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        /* no query operands — mark all words as in but not selected */
+        for (i = 0; i < prs->curwords; i++)
+        {
+            if (!prs->words[i].skip && !prs->words[i].repeated)
+                prs->words[i].in = 1;
+        }
+    }
+
+    PG_RETURN_POINTER(prs);
 }
 
 /* ----------------------------------------------------------------

@@ -155,6 +155,7 @@ extern "C" {
     fn kham_gettoken_shim(fcinfo: Fcinfo) -> Datum;
     fn kham_end_shim(fcinfo: Fcinfo) -> Datum;
     fn kham_lextypes_shim(fcinfo: Fcinfo) -> Datum;
+    fn kham_headline_shim(fcinfo: Fcinfo) -> Datum;
 }
 
 #[repr(C)]
@@ -190,6 +191,11 @@ pub unsafe extern "C" fn kham_lextypes(fcinfo: Fcinfo) -> Datum {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn kham_headline(fcinfo: Fcinfo) -> Datum {
+    kham_headline_shim(fcinfo)
+}
+
+#[no_mangle]
 pub extern "C" fn pg_finfo_kham_start() -> *const PgFinfoRecord {
     &FINFO_V1
 }
@@ -203,5 +209,9 @@ pub extern "C" fn pg_finfo_kham_end() -> *const PgFinfoRecord {
 }
 #[no_mangle]
 pub extern "C" fn pg_finfo_kham_lextypes() -> *const PgFinfoRecord {
+    &FINFO_V1
+}
+#[no_mangle]
+pub extern "C" fn pg_finfo_kham_headline() -> *const PgFinfoRecord {
     &FINFO_V1
 }
