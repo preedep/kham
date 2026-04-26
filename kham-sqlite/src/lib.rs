@@ -10,10 +10,12 @@
 //!
 //! ```sql
 //! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
-//! -- Default tokenizer (lk82 soundex enabled)
+//! -- Default tokenizer (lk82 soundex, stopwords forwarded)
 //! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');
-//! -- Explicit soundex algorithm (positional: 'kham soundex <algo>')
-//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83');
+//! -- Suppress stopwords from the index
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');
+//! -- Both soundex algorithm override and stopword suppression
+//! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83 stopwords on');
 //! -- Disable soundex
 //! CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');
 //! INSERT INTO docs VALUES ('กินข้าวกับปลา');
@@ -150,6 +152,8 @@ struct KhamFts5Api {
 struct KhamInstance {
     vtable: KhamFts5Tokenizer,
     fts: FtsTokenizer,
+    /// When `true`, tokens marked `is_stop` are not forwarded to SQLite.
+    suppress_stopwords: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -206,14 +210,56 @@ fn parse_soundex_arg(az_arg: *const *const c_char, n_arg: c_int) -> Option<Sound
     Some(SoundexAlgorithm::Lk82) // default when no soundex argument
 }
 
+/// Return `true` when `az_arg` contains the pair `"stopwords" "on"`.
+///
+/// Default: `false` — stopwords are forwarded (backward-compatible).
+/// Usage: `tokenize='kham stopwords on'`.
+fn parse_stopwords_arg(az_arg: *const *const c_char, n_arg: c_int) -> bool {
+    let n = n_arg as usize;
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "stopwords" {
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return false;
+            }
+            return matches!(
+                unsafe { std::ffi::CStr::from_ptr(val_ptr) }.to_str(),
+                Ok("on")
+            );
+        }
+    }
+    false
+}
+
 // ---------------------------------------------------------------------------
 // FTS5 tokenizer callbacks
 // ---------------------------------------------------------------------------
 
 /// Allocate a new per-table tokenizer instance, building the `FtsTokenizer` once.
 ///
-/// Accepts an optional `soundex <algo>` argument pair (lk82 | udom83 | metasound | none).
-/// Example: `tokenize='kham soundex udom83'`. When absent, lk82 is used by default.
+/// Accepted argument pairs (all optional, order-independent):
+/// - `soundex <lk82|udom83|metasound|none>` — phonetic algorithm (default: lk82)
+/// - `stopwords <on|off>` — suppress stopword tokens from the index (default: off)
+///
+/// Examples:
+/// - `tokenize='kham'`
+/// - `tokenize='kham soundex udom83'`
+/// - `tokenize='kham stopwords on'`
+/// - `tokenize='kham soundex lk82 stopwords on'`
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
     az_arg: *const *const c_char,
@@ -224,6 +270,7 @@ unsafe extern "C" fn kham_fts5_create(
         return SQLITE_ERROR;
     }
     let soundex_algo = parse_soundex_arg(az_arg, n_arg);
+    let suppress_stopwords = parse_stopwords_arg(az_arg, n_arg);
     let mut builder = FtsTokenizer::builder().romanization(RomanizationMap::builtin());
     if let Some(algo) = soundex_algo {
         builder = builder.soundex(algo);
@@ -236,6 +283,7 @@ unsafe extern "C" fn kham_fts5_create(
         },
         // Full NLP pipeline built once per FTS5 table: segmenter + NE + synonyms + RTGS + soundex.
         fts: builder.build(),
+        suppress_stopwords,
     });
     // SAFETY: vtable is the first field of KhamInstance (#[repr(C)]),
     // so *mut KhamInstance and *mut KhamFts5Tokenizer alias the same address.
@@ -320,6 +368,11 @@ unsafe extern "C" fn kham_fts5_tokenize(
                     (pos, pos)
                 }
             };
+
+            // Skip stopwords when suppression is enabled.
+            if instance.suppress_stopwords && ft.is_stop {
+                continue;
+            }
 
             // Emit primary token.
             // SAFETY: tok_bytes points into ft.text which is alive for this loop body.

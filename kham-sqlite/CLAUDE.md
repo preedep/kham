@@ -104,13 +104,16 @@ SELECT * FROM docs WHERE docs MATCH '1600';  -- matches กาน/ขาน/ค�
 ```
 
 RTGS romanization is enabled by default (`RomanizationMap::builtin()`).
-Soundex defaults to **lk82** and can be overridden via the `soundex <algo>` `xCreate` argument:
+Soundex defaults to **lk82** and can be overridden via the `soundex <algo>` `xCreate` argument.
+Stopword suppression is off by default and enabled with `stopwords on`.
 
 ```sql
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');               -- default: lk82
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');                          -- default: lk82, stopwords forwarded
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex udom83');
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex metasound');
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');  -- disable soundex
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');             -- disable soundex
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');             -- suppress stopwords
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex lk82 stopwords on'); -- both
 ```
 
 Custom synonym maps are not yet exposed via `xCreate` arguments.
@@ -213,7 +216,7 @@ sqlite3 ':memory:' \
 ## v3 Roadmap
 
 - Accept `synonyms=<path>` argument in `xCreate` to load a custom synonym TSV at table-creation time
-- Optional stopword suppression via `stopwords=on` argument in `xCreate`
+- [x] **Stopword suppression** — `stopwords on` argument in `xCreate`; stopword tokens skipped in `xTokenize`
 - Expose `ngram_size=N` for custom n-gram configuration on Unknown tokens
 
 ## unsafe policy

@@ -114,5 +114,6 @@ with zero schema change.
 
 - [ ] **kham-pg token type 7 for Named** — change `Named(_) => 1` → `Named(_) => 7` in `lib.rs`; add `named` lextype in `shim.c`; requires Docker pg_regress update
 - [x] **kham-sqlite soundex** — lk82/udom83/MetaSound codes emitted as `FTS5_TOKEN_COLOCATED` tokens; default lk82; override via `tokenize='kham soundex=udom83'`; disable with `soundex=none`
+- [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
 - [ ] **Spelling correction** — edit-distance based; requires significant ML or DP work
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely
