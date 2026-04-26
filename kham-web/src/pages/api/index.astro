@@ -3,21 +3,22 @@ import Layout from '../../layouts/Layout.astro';
 import CodeBlock from '../../components/CodeBlock.astro';
 
 const modules = [
-  { id: 'tokenizer',     label: 'Tokenizer',         path: 'kham_core::Tokenizer',          desc: 'Core Thai word segmenter — maximal matching over a built-in DAWG dictionary.' },
-  { id: 'token',         label: 'Token / TokenKind',  path: 'kham_core::Token',               desc: 'Zero-copy token slice with byte spans, char spans, and script category.' },
-  { id: 'fts',           label: 'FtsTokenizer',       path: 'kham_core::fts::FtsTokenizer',   desc: 'Full-text search pipeline: stopwords, synonyms, POS, NE, soundex in one call.' },
-  { id: 'pos',           label: 'PosTagger',          path: 'kham_core::pos::PosTagger',       desc: '13-category POS tagger derived from the ORCHID tagset.' },
-  { id: 'ne',            label: 'NeTagger',           path: 'kham_core::ne::NeTagger',         desc: 'Named entity recognition: Person, Place, Org via built-in gazetteer.' },
-  { id: 'romanizer',     label: 'RomanizationMap',    path: 'kham_core::romanizer',            desc: 'RTGS romanization lookup — Thai word → Latin transliteration.' },
-  { id: 'number',        label: 'number',             path: 'kham_core::number',               desc: 'Thai numeral utilities: parse Thai digit strings, word-to-number, baht text.' },
-  { id: 'sentence',      label: 'sentence',           path: 'kham_core::sentence',             desc: 'Sentence boundary detection — split a paragraph into sentence spans.' },
-  { id: 'soundex',       label: 'soundex',            path: 'kham_core::soundex',              desc: 'Phonetic codes: lk82, udom83, MetaSound, and cross-language Thai–English.' },
+  { id: 'tokenizer',  label: 'Tokenizer',        path: 'kham_core::Tokenizer',                   desc: 'Core Thai word segmenter — maximal matching over a built-in DAWG dictionary.' },
+  { id: 'token',      label: 'Token / TokenKind', path: 'kham_core::Token',                        desc: 'Zero-copy token slice with byte spans, char spans, and script category.' },
+  { id: 'normalizer', label: 'normalizer',        path: 'kham_core::normalizer',                   desc: 'Thai text normalization: deduplicate tone marks, compose sara am (อำ).' },
+  { id: 'fts',        label: 'FtsTokenizer',      path: 'kham_core::fts::FtsTokenizer',            desc: 'Full-text search pipeline: stopwords, synonyms, POS, NE, soundex in one call.' },
+  { id: 'pos',        label: 'PosTagger',         path: 'kham_core::pos::PosTagger',               desc: '13-category POS tagger derived from the ORCHID tagset.' },
+  { id: 'ne',         label: 'NeTagger',          path: 'kham_core::ne::NeTagger',                 desc: 'Named entity recognition: Person, Place, Org via built-in gazetteer.' },
+  { id: 'romanizer',  label: 'RomanizationMap',   path: 'kham_core::romanizer',                    desc: 'RTGS romanization lookup — Thai word → Latin transliteration.' },
+  { id: 'number',     label: 'number',            path: 'kham_core::number',                       desc: 'Thai numeral utilities: parse Thai digit strings, word-to-number, baht text.' },
+  { id: 'sentence',   label: 'sentence',          path: 'kham_core::sentence',                     desc: 'Sentence boundary detection — split a paragraph into sentence spans.' },
+  { id: 'soundex',    label: 'soundex',           path: 'kham_core::soundex',                      desc: 'Phonetic codes: lk82, udom83, MetaSound, and cross-language Thai–English.' },
 ];
 ---
 
 <Layout
   title="API Reference — kham"
-  description="kham-core v0.5.0 public API reference — Tokenizer, Token, FtsTokenizer, PosTagger, NeTagger, RomanizationMap, number, sentence, soundex."
+  description="kham v0.5.0 API reference for Rust, Python, and WASM — Tokenizer, FtsTokenizer, soundex, number, sentence, romanizer, normalizer."
   lang="en"
 >
   <div class="max-w-5xl mx-auto px-6 py-16">
@@ -25,37 +26,49 @@ const modules = [
     <!-- Header -->
     <div class="mb-10">
       <div class="flex items-center gap-3 mb-2">
-        <h1 class="text-4xl font-bold text-slate-900">API Reference</h1>
-        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full">v0.5.0</span>
+        <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100">API Reference</h1>
+        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.5.0</span>
       </div>
-      <p class="text-lg text-slate-600 max-w-2xl">
-        Public API of <code class="text-sm bg-slate-100 px-1.5 py-0.5 rounded">kham-core</code> — the pure Rust, <code class="text-sm bg-slate-100 px-1.5 py-0.5 rounded">no_std</code> core library.
-        Full rustdoc is available on <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">docs.rs/kham-core</a>.
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mb-3">
+        Public API of <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">kham-core</code> —
+        available for <strong>Rust</strong>, <strong>Python</strong> (PyO3), and <strong>WASM</strong> (JavaScript / TypeScript).
       </p>
+      <div class="flex flex-wrap gap-2 text-xs">
+        <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          docs.rs/kham-core ���
+        </a>
+        <a href="https://pypi.org/project/kham" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          PyPI: kham ↗
+        </a>
+        <a href="https://www.npmjs.com/package/kham-wasm" target="_blank" rel="noopener noreferrer"
+           class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+          npm: kham-wasm ↗
+        </a>
+      </div>
     </div>
 
     <!-- Module table -->
-    <div class="mb-16 overflow-x-auto rounded-xl border border-slate-200">
+    <div class="mb-16 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
       <table class="w-full text-sm text-left">
-        <thead class="bg-slate-50 border-b border-slate-200">
+        <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
           <tr>
-            <th class="px-5 py-3 font-semibold text-slate-600">Module / Type</th>
-            <th class="px-5 py-3 font-semibold text-slate-600 hidden md:table-cell">Path</th>
-            <th class="px-5 py-3 font-semibold text-slate-600">Description</th>
+            <th class="px-5 py-3 font-semibold text-slate-600 dark:text-slate-400">Module / Type</th>
+            <th class="px-5 py-3 font-semibold text-slate-600 dark:text-slate-400 hidden md:table-cell">Rust path</th>
+            <th class="px-5 py-3 font-semibold text-slate-600 dark:text-slate-400">Description</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {modules.map(m => (
-            <tr class="hover:bg-slate-50 transition-colors">
+            <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30 transition-colors">
               <td class="px-5 py-3 font-medium">
-                <a href={`#${m.id}`} class="text-blue-600 hover:text-blue-800 hover:underline font-mono text-sm">
-                  {m.label}
-                </a>
+                <a href={`#${m.id}`} class="text-blue-600 dark:text-blue-400 hover:underline font-mono text-sm">{m.label}</a>
               </td>
               <td class="px-5 py-3 hidden md:table-cell">
-                <code class="text-xs text-slate-500">{m.path}</code>
+                <code class="text-xs text-slate-500 dark:text-slate-400">{m.path}</code>
               </td>
-              <td class="px-5 py-3 text-slate-600">{m.desc}</td>
+              <td class="px-5 py-3 text-slate-600 dark:text-slate-400">{m.desc}</td>
             </tr>
           ))}
         </tbody>
@@ -65,242 +78,363 @@ const modules = [
     <!-- Sections -->
     <div class="space-y-20">
 
-      <!-- Tokenizer -->
+      <!-- ── Tokenizer ── -->
       <section id="tokenizer" class="scroll-mt-24">
         <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">Tokenizer</h2>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">Tokenizer</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/struct.Tokenizer.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 mb-1">
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
           High-level tokenizer backed by a compressed DAWG dictionary and TNC frequency table.
-          Uses the newmm (maximal matching) algorithm with TCC boundaries as candidate split points.
-          All token text fields are <strong>zero-copy</strong> slices of the input string.
+          Uses the newmm (maximal matching) algorithm with TCC boundaries.
+          Rust tokens are <strong>zero-copy</strong> slices of the input string.
         </p>
         <CodeBlock
           tabs={[
             {
-              label: 'Basic usage',
+              label: 'Rust',
               lang: 'rust',
               code: `use kham_core::Tokenizer;
 
 let tok = Tokenizer::new();
-let tokens = tok.segment("กินข้าวกับปลา");
 
+// Simple — list of token strings
+let words: Vec<&str> = tok.segment("กินข้าวกับปลา")
+    .into_iter().map(|t| t.text).collect();
+// ["กิน", "ข้าว", "กับ", "ปลา"]
+
+// Rich — Token structs with span info
+let tokens = tok.segment("ธนาคาร100แห่ง");
 for t in &tokens {
-    println!("{} ({:?})", t.text, t.kind);
+    println!("{:8} chars={}..{} kind={:?}", t.text,
+        t.char_span.start, t.char_span.end, t.kind);
 }
-// กิน  (Thai)
-// ข้าว (Thai)
-// กับ  (Thai)
-// ปลา  (Thai)`,
-            },
-            {
-              label: 'Custom dictionary',
-              lang: 'rust',
-              code: `use kham_core::Tokenizer;
 
-// Merge extra words (one per line) with the built-in dictionary
-let tok = Tokenizer::builder()
+// Custom dictionary — merge extra words with built-in
+let tok2 = Tokenizer::builder()
     .dict_words("ปัญญาประดิษฐ์\\nแมชชีนเลิร์นนิง\\n")
-    .build();
-
-let tokens = tok.segment("ปัญญาประดิษฐ์คือ");
-assert!(tokens.iter().any(|t| t.text == "ปัญญาประดิษฐ์"));`,
+    .build();`,
             },
             {
-              label: 'Normalize first',
-              lang: 'rust',
-              code: `use kham_core::Tokenizer;
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
 
-// segment() is zero-copy — normalize into a String first
-// if input may have stacked tone marks or สระลอย in wrong order
-let tok = Tokenizer::new();
-let normalized = tok.normalize("กเินข้าว"); // fix character ordering
-let tokens = tok.segment(&normalized);       // tokens borrow \`normalized\`
-assert!(!tokens.is_empty());`,
+# Simple — list of strings
+words = kham.segment("กินข้าวกับปลา")
+# ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+# Rich — Token objects (text, byte_start/end, char_start/end, kind)
+for t in kham.segment_tokens("ธนาคาร100แห่ง"):
+    print(t.text, t.char_start, t.char_end, t.kind)
+# ธนาคาร  0  6  Thai
+# 100      6  9  Number
+# แห่ง     9 13  Thai
+
+# Normalize before segmenting
+text = kham.normalize("ข้้าว")   # "ข้าว"  (dedup tone mark)
+words = kham.segment(text)`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { segment, segment_tokens, normalize } from '/wasm/kham_wasm.js';
+await init(); // call once on page load
+
+// Simple — JS Array of strings
+const words = segment("กินข้าวกับปลา");
+// ["กิน", "ข้าว", "กับ", "ปลา"]
+
+// Rich — Token objects (text, charStart, charEnd, byteStart, byteEnd, kind)
+const tokens = segment_tokens("ธนาคาร100แห่ง");
+for (const t of tokens) {
+  console.log(t.text, t.char_start, t.char_end, t.kind);
+}
+
+// Normalize before segmenting
+const clean = normalize("ข้้าว");   // "ข้าว"
+const toks  = segment(clean);`,
             },
           ]}
         />
-        <div class="mt-3 text-sm text-slate-500">
-          <strong>Key methods:</strong>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">Tokenizer::new()</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">Tokenizer::builder()</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">.segment(&str) → Vec&lt;Token&gt;</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">.normalize(&str) → String</code>
+        <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          <strong>Rust key methods:</strong>
+          <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Tokenizer::new()</code>
+          <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Tokenizer::builder()</code>
+          <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">.segment(&amp;str) → Vec&lt;Token&gt;</code>
         </div>
       </section>
 
-      <!-- Token / TokenKind -->
+      <!-- ── Token / TokenKind ── -->
       <section id="token" class="scroll-mt-24">
         <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">Token / TokenKind</h2>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">Token / TokenKind</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/struct.Token.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 mb-1">
-          Every call to <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">segment()</code> returns
-          a <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">Vec&lt;Token&gt;</code>.
-          Tokens carry the original text slice plus two span types: byte offsets for Rust string slicing,
-          and Unicode scalar-value (char) offsets for Python/JS string indexing.
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Every <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment()</code> call
+          returns tokens carrying the original text plus two span types: byte offsets (Rust slicing)
+          and Unicode scalar-value offsets (Python / JS indexing).
         </p>
         <CodeBlock
           tabs={[
             {
-              label: 'Token fields',
+              label: 'Rust',
               lang: 'rust',
-              code: `use kham_core::{Token, TokenKind, Tokenizer};
+              code: `use kham_core::{TokenKind, NamedEntityKind, Tokenizer};
 
 let tok = Tokenizer::new();
 let input = "ธนาคาร100แห่ง";
 let tokens = tok.segment(input);
 
 for t in &tokens {
-    // t.text      — &str, zero-copy slice of input
-    // t.span      — Range<usize>, byte offsets (use with &input[t.span.clone()])
-    // t.char_span — Range<usize>, Unicode scalar-value offsets
+    // t.text      — &str (zero-copy slice of input)
+    // t.span      — Range<usize> byte offsets
+    // t.char_span — Range<usize> Unicode scalar-value offsets
     // t.kind      — TokenKind
 
-    assert_eq!(&input[t.span.clone()], t.text); // byte span is exact
-    println!("{:8} kind={:12?}  chars={}..{}", t.text, t.kind,
-        t.char_span.start, t.char_span.end);
-}`,
+    assert_eq!(&input[t.span.clone()], t.text);
+}
+
+// TokenKind variants:
+// Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown
+// Named(NamedEntityKind::Person | Place | Org)  ← set by NeTagger`,
             },
             {
-              label: 'TokenKind variants',
-              lang: 'rust',
-              code: `use kham_core::{TokenKind, NamedEntityKind};
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
 
-// Script / category variants:
-let _kinds = [
-    TokenKind::Thai,                         // Thai script word
-    TokenKind::Latin,                        // Latin / ASCII alphabetic
-    TokenKind::Number,                       // digits (ASCII or Thai ๐–๙)
-    TokenKind::Punctuation,                  // punctuation / symbols
-    TokenKind::Emoji,                        // emoji codepoint sequence
-    TokenKind::Whitespace,                   // space, tab, newline
-    TokenKind::Unknown,                      // unclassified
-    TokenKind::Named(NamedEntityKind::Person), // NE — set by NeTagger
-    TokenKind::Named(NamedEntityKind::Place),
-    TokenKind::Named(NamedEntityKind::Org),
-];`,
+tokens = kham.segment_tokens("ธนาคาร100แห่ง")
+
+for t in tokens:
+    # t.text       — str
+    # t.byte_start / t.byte_end  — UTF-8 byte offsets
+    # t.char_start / t.char_end  — Unicode scalar-value offsets
+    # t.kind       — str: "Thai" | "Latin" | "Number" | "Punctuation"
+    #                      "Emoji" | "Whitespace" | "Unknown"
+    #                      "Person" | "Place" | "Org"  (Named entities)
+    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}")`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { segment_tokens } from '/wasm/kham_wasm.js';
+await init();
+
+const tokens = segment_tokens("ธนาคาร100แห่ง");
+
+for (const t of tokens) {
+  // t.text       — string
+  // t.byte_start / t.byte_end  — UTF-8 byte offsets
+  // t.char_start / t.char_end  — Unicode scalar-value offsets
+  // t.kind       — "Thai" | "Latin" | "Number" | "Punctuation"
+  //                "Emoji" | "Whitespace" | "Unknown"
+  //                "Person" | "Place" | "Org"  (Named entities)
+  console.log(t.text, t.kind, t.char_start, t.char_end);
+}`,
             },
           ]}
         />
       </section>
 
-      <!-- FtsTokenizer -->
-      <section id="fts" class="scroll-mt-24">
+      <!-- ── Normalizer ── -->
+      <section id="normalizer" class="scroll-mt-24">
         <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">FtsTokenizer</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/fts/struct.FtsTokenizer.html" target="_blank" rel="noopener noreferrer"
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">normalizer</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/normalizer/index.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 mb-1">
-          Wraps the segmenter with a configurable NLP pipeline in a single pass:
-          stopword tagging, synonym expansion, POS tagging, NE recognition, RTGS romanization, and phonetic codes.
-          Used internally by the PostgreSQL and SQLite extensions.
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Two-rule normalization pass: <strong>(1)</strong> deduplicate consecutive tone marks — keep the last one;
+          <strong>(2)</strong> compose nikhahit (อํ U+0E4D) + sara aa (อา U+0E32) into sara am (อำ U+0E33).
+          Call before segmenting when input may come from user keyboards or OCR.
         </p>
         <CodeBlock
           tabs={[
             {
-              label: 'Default pipeline',
+              label: 'Rust',
               lang: 'rust',
-              code: `use kham_core::fts::FtsTokenizer;
+              code: `use kham_core::normalizer::normalize;
 
-let fts = FtsTokenizer::new();
+// Rule 1 — deduplicate tone marks (keep last)
+assert_eq!(normalize("ข้้าว"), "ข้าว");   // doubled mai tho → single
+assert_eq!(normalize("ก่้"),   "ก้");      // mai ek + mai tho → mai tho
 
-// All tokens with full metadata
-let tokens = fts.segment_for_fts("กินข้าวกับปลา");
-for t in &tokens {
-    println!("{:8} stop={} pos={:?} ne={:?}", t.text, t.is_stop, t.pos, t.ne);
-}
+// Rule 2 — sara am composition
+// nikhahit (U+0E4D) + sara aa (U+0E32) → sara am (U+0E33)
+let decomposed = "\\u{0E01}\\u{0E4D}\\u{0E32}"; // กํา (two codepoints)
+assert_eq!(normalize(decomposed), "กำ");          // กำ  (one codepoint)
 
-// Only indexable tokens (stopwords removed, positions preserved)
-let indexed = fts.index_tokens("กินข้าวกับปลา");
-
-// Flat list of lexeme strings ready for tsvector
-let lexemes = fts.lexemes("กินข้าวกับปลา");`,
+// Already canonical — returned unchanged (no allocation)
+assert_eq!(normalize("กินข้าว"), "กินข้าว");`,
             },
             {
-              label: 'Custom pipeline',
-              lang: 'rust',
-              code: `use kham_core::fts::FtsTokenizer;
-use kham_core::soundex::SoundexAlgorithm;
-use kham_core::stopwords::StopwordSet;
-use kham_core::synonym::SynonymMap;
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
 
-let stops = StopwordSet::from_text("กับ\\nใน\\nของ\\n");
-let syns  = SynonymMap::from_tsv("รถ\\tรถยนต์\\tยานพาหนะ\\n");
+# Rule 1 — deduplicate tone marks
+kham.normalize("ข้้าว")   # → "ข้าว"
 
-let fts = FtsTokenizer::builder()
-    .stopwords(stops)
-    .synonyms(syns)
-    .soundex(SoundexAlgorithm::Lk82)   // add phonetic code to synonyms
-    .number_normalize(true)             // convert Thai digits to ASCII
-    .build();
+# Rule 2 — sara am composition
+# nikhahit (U+0E4D) + sara aa (U+0E32) → sara am (U+0E33)
+kham.normalize("\\u0e01\\u0e4d\\u0e32")  # กํา → กำ
 
-let tokens = fts.segment_for_fts("รถคันนี้");
-let car = tokens.iter().find(|t| t.text == "รถ").unwrap();
-assert!(car.synonyms.contains(&"รถยนต์".to_string()));`,
+# Already canonical — returned unchanged
+kham.normalize("กินข้าว")  # → "กินข้าว"
+
+# Typical usage: normalize before segmenting
+words = kham.segment(kham.normalize(raw_input))`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { normalize, segment } from '/wasm/kham_wasm.js';
+await init();
+
+// Rule 1 — deduplicate tone marks
+normalize("ข้้าว");   // → "ข้าว"
+
+// Rule 2 — sara am composition
+// nikhahit (U+0E4D) + sara aa (U+0E32) → sara am (U+0E33)
+normalize("\\u0E01\\u0E4D\\u0E32");  // กํา → กำ
+
+// Already canonical — returned unchanged
+normalize("กินข้าว");  // → "กินข้าว"
+
+// Typical usage: normalize before segmenting
+const words = segment(normalize(rawInput));`,
             },
           ]}
         />
-        <div class="mt-3 text-sm text-slate-500">
+      </section>
+
+      <!-- ── FtsTokenizer ── -->
+      <section id="fts" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">FtsTokenizer</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/fts/struct.FtsTokenizer.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Full NLP pipeline in a single pass: normalize → segment → NE → stopwords → POS → synonyms → romanization.
+          In Python and WASM this is the primary way to access POS and NE metadata.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::fts::FtsTokenizer;
+use kham_core::soundex::SoundexAlgorithm;
+use kham_core::synonym::SynonymMap;
+
+// Default pipeline
+let fts = FtsTokenizer::new();
+let tokens = fts.segment_for_fts("นายกรัฐมนตรีกินข้าว");
+for t in &tokens {
+    println!("{:8} pos={:?} ne={:?} stop={}", t.text, t.pos, t.ne, t.is_stop);
+}
+
+// index_tokens: preserve positions, filter stopwords for phrase search
+let indexed = fts.index_tokens("กินข้าวกับปลา");
+
+// lexemes: flat Vec<String> of text + synonyms + trigrams (for tsvector)
+let lexemes = fts.lexemes("กินข้าวกับปลา");
+
+// Custom pipeline
+let fts2 = FtsTokenizer::builder()
+    .synonyms(SynonymMap::from_tsv("รถ\\tรถยนต์\\tยานพาหนะ\\n"))
+    .soundex(SoundexAlgorithm::Lk82)
+    .build();`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# FtsToken fields: text, position, kind, is_stop, roman,
+#                  pos, ne, synonyms (list), trigrams (list)
+for t in kham.segment_fts("นายกรัฐมนตรีกินข้าว"):
+    print(f"{t.text:10} pos={t.pos!r:15} ne={t.ne!r} stop={t.is_stop}")
+
+# POS tags: "Noun" | "Verb" | "Adj" | "Adv" | "Particle" | "ProperNoun"
+#           "Pronoun" | "Numeral" | "Classifier" | "Conjunction"
+#           "Auxiliary" | "Determiner" | "Preposition"  (None if OOV)
+# NE tags:  "Person" | "Place" | "Org"  (None if not in gazetteer)
+
+# Romanization is included in every FtsToken
+for t in kham.segment_fts("กินข้าว"):
+    print(t.text, "→", t.roman)   # กิน → kin`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { segment_fts } from '/wasm/kham_wasm.js';
+await init();
+
+// FtsToken properties: text, position, kind, is_stop, roman,
+//                      pos (string|null), ne (string|null),
+//                      synonyms (string[]), trigrams (string[])
+const tokens = segment_fts("นายกรัฐมนตรีกินข้าว");
+for (const t of tokens) {
+  console.log(t.text, '| pos:', t.pos, '| ne:', t.ne,
+              '| stop:', t.is_stop, '| roman:', t.roman);
+}
+
+// POS tags: "Noun" | "Verb" | "Adj" | "Adv" | "Particle" | "ProperNoun"
+//           "Pronoun" | "Numeral" | "Classifier" | "Conjunction"
+//           "Auxiliary" | "Determiner" | "Preposition"  (null if OOV)
+// NE tags:  "Person" | "Place" | "Org"  (null if not in gazetteer)`,
+            },
+          ]}
+        />
+        <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
           <strong>FtsToken fields:</strong>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">text</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">position</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">kind</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">is_stop</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">synonyms</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">trigrams</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">pos</code>
-          <code class="mx-1 bg-slate-100 px-1.5 py-0.5 rounded">ne</code>
+          {['text','position','kind','is_stop','roman','pos','ne','synonyms','trigrams'].map(f => (
+            <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{f}</code>
+          ))}
         </div>
       </section>
 
-      <!-- PosTagger -->
+      <!-- ── PosTagger ── -->
       <section id="pos" class="scroll-mt-24">
         <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">PosTagger</h2>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">PosTagger</h2>
           <a href="https://docs.rs/kham-core/latest/kham_core/pos/struct.PosTagger.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 mb-4">
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
           Dictionary-lookup POS tagger using a 13-category tagset derived from the ORCHID corpus.
-          The built-in table covers the full kham dictionary. Custom tables can be loaded from TSV.
+          In Python and WASM, POS tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code> — direct tagger construction is Rust-only.
         </p>
 
-        <!-- POS category table -->
-        <div class="mb-5 overflow-x-auto rounded-xl border border-slate-200 text-sm">
+        <div class="mb-5 overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 text-sm">
           <table class="w-full text-left">
-            <thead class="bg-slate-50 border-b border-slate-200">
+            <thead class="bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th class="px-4 py-2.5 font-semibold text-slate-600">Tag</th>
-                <th class="px-4 py-2.5 font-semibold text-slate-600">Category</th>
-                <th class="px-4 py-2.5 font-semibold text-slate-600">Examples</th>
+                <th class="px-4 py-2.5 font-semibold text-slate-600 dark:text-slate-400">Tag</th>
+                <th class="px-4 py-2.5 font-semibold text-slate-600 dark:text-slate-400">Category</th>
+                <th class="px-4 py-2.5 font-semibold text-slate-600 dark:text-slate-400">Examples</th>
               </tr>
             </thead>
-            <tbody class="divide-y divide-slate-100">
+            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
               {[
-                ['NOUN',  'Noun',        'คน บ้าน ปลา'],
-                ['VERB',  'Verb',        'กิน ทำ ไป'],
-                ['ADJ',   'Adjective',   'ดี ใหญ่ สวย'],
-                ['ADV',   'Adverb',      'มาก เร็ว เสมอ'],
-                ['PART',  'Particle',    'ครับ ค่ะ นะ'],
-                ['PROPN', 'Proper noun', 'กรุงเทพ ไทย'],
-                ['PRON',  'Pronoun',     'ฉัน เขา เรา'],
-                ['NUM',   'Numeral',     'หนึ่ง สิบ ร้อย'],
-                ['CLAS',  'Classifier',  'ตัว ใบ อัน'],
-                ['CONJ',  'Conjunction', 'และ หรือ แต่'],
-                ['AUX',   'Auxiliary',   'ได้ ต้อง กำลัง'],
-                ['DET',   'Determiner',  'นี้ นั้น ทุก'],
-                ['PREP',  'Preposition', 'ใน บน ตาม'],
+                ['NOUN','Noun','คน บ้าน ปลา'],['VERB','Verb','กิน ทำ ไป'],
+                ['ADJ','Adjective','ดี ใหญ่ สวย'],['ADV','Adverb','มาก เร็ว เสมอ'],
+                ['PART','Particle','ครับ ค่ะ นะ'],['PROPN','Proper noun','กรุงเทพ ไทย'],
+                ['PRON','Pronoun','ฉัน เขา เรา'],['NUM','Numeral','หนึ่ง สิบ ร้อย'],
+                ['CLAS','Classifier','ตัว ใบ อัน'],['CONJ','Conjunction','และ หรือ แต่'],
+                ['AUX','Auxiliary','ได้ ต้อง กำลัง'],['DET','Determiner','นี้ นั้น ทุก'],
+                ['PREP','Preposition','ใน บน ตาม'],
               ].map(([tag, cat, ex]) => (
-                <tr class="hover:bg-slate-50">
-                  <td class="px-4 py-2 font-mono text-xs text-blue-700">{tag}</td>
-                  <td class="px-4 py-2 text-slate-800">{cat}</td>
-                  <td class="px-4 py-2 text-slate-500">{ex}</td>
+                <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/30">
+                  <td class="px-4 py-2 font-mono text-xs text-blue-700 dark:text-blue-400">{tag}</td>
+                  <td class="px-4 py-2 text-slate-800 dark:text-slate-200">{cat}</td>
+                  <td class="px-4 py-2 text-slate-500 dark:text-slate-400">{ex}</td>
                 </tr>
               ))}
             </tbody>
@@ -308,7 +442,11 @@ assert!(car.synonyms.contains(&"รถยนต์".to_string()));`,
         </div>
 
         <CodeBlock
-          code={`use kham_core::pos::PosTagger;
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::pos::PosTagger;
 
 let tagger = PosTagger::builtin();
 
@@ -317,219 +455,427 @@ if let Some(pos) = tagger.tag("กิน") {
     println!("{:?}", pos); // Verb
 }
 
-// Custom tagger from TSV: word TAB POS_TAG
+// Custom tagger from TSV: word<TAB>POS_TAG
 let custom = PosTagger::from_tsv("GPT\\tNOUN\\nแชทบอท\\tNOUN\\n");
-assert_eq!(custom.tag("แชทบอท"), Some(kham_core::pos::PosTag::Noun));`}
-          lang="rust"
-          label="pos.rs"
-        />
-      </section>
-
-      <!-- NeTagger -->
-      <section id="ne" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">NeTagger</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/ne/struct.NeTagger.html" target="_blank" rel="noopener noreferrer"
-             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
-        </div>
-        <p class="text-slate-600 mb-1">
-          Gazetteer-based named entity recogniser. Relabels tokens whose text appears in the NE table
-          from <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">TokenKind::Thai</code> to
-          <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">TokenKind::Named(kind)</code>.
-          Three categories: <strong>Person</strong>, <strong>Place</strong>, <strong>Org</strong>.
-        </p>
-        <CodeBlock
-          code={`use kham_core::ne::NeTagger;
-use kham_core::TokenKind;
-use kham_core::Tokenizer;
-
-// Tag a word directly
-let ne = NeTagger::builtin();
-println!("{:?}", ne.tag("กรุงเทพ")); // Some(Place)
-
-// Post-process a token Vec from Tokenizer::segment
-let tok = Tokenizer::new();
-let tokens = tok.segment("บริษัทไทยออยล์ก่อตั้งในกรุงเทพ");
-let tagged  = ne.tag_tokens(tokens, "บริษัทไทยออยล์ก่อตั้งในกรุงเทพ");
-
-for t in &tagged {
-    if matches!(t.kind, TokenKind::Named(_)) {
-        println!("{} → {:?}", t.text, t.kind);
-    }
-}
-
-// Custom gazetteer from TSV: word TAB NE_TAG  (PERSON | PLACE | ORG)
-let custom = NeTagger::from_tsv("แอนโทรปิก\\tORG\\n");`}
-          lang="rust"
-          label="ne.rs"
-        />
-      </section>
-
-      <!-- RomanizationMap -->
-      <section id="romanizer" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">RomanizationMap</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/romanizer/struct.RomanizationMap.html" target="_blank" rel="noopener noreferrer"
-             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
-        </div>
-        <p class="text-slate-600 mb-1">
-          RTGS (Royal Thai General System of Transcription) romanization lookup.
-          The built-in table covers common words and proper nouns.
-          Use <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">romanize_or_raw()</code> when you
-          always want a string back — it falls through to the original Thai on a cache miss.
-        </p>
-        <CodeBlock
-          code={`use kham_core::romanizer::RomanizationMap;
-
-let rom = RomanizationMap::builtin();
-
-// Single word lookup
-println!("{:?}", rom.romanize("กรุงเทพ"));   // Some("Krung Thep")
-println!("{}", rom.romanize_or_raw("ปลา"));  // "pla" (or "ปลา" if not in table)
-
-// Batch: takes &[&str], returns Vec<String>
-let words  = ["กรุงเทพ", "ประเทศ", "ไทย"];
-let roman  = rom.romanize_tokens(&words);
-println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]`}
-          lang="rust"
-          label="romanizer.rs"
-        />
-      </section>
-
-      <!-- number -->
-      <section id="number" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">number</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/number/index.html" target="_blank" rel="noopener noreferrer"
-             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
-        </div>
-        <p class="text-slate-600 mb-1">
-          Thai numeral utilities: digit conversion, Thai number word parsing, Thai baht text generation.
-        </p>
-        <CodeBlock
-          tabs={[
-            {
-              label: 'Digit conversion',
-              lang: 'rust',
-              code: `use kham_core::number::{thai_digits_to_ascii, is_thai_digit_str};
-
-// ๑๒๓ → "123"
-let ascii = thai_digits_to_ascii("ราคา ๑๒๓ บาท");
-println!("{ascii}"); // "ราคา 123 บาท"
-
-println!("{}", is_thai_digit_str("๙๙๙")); // true`,
+assert_eq!(custom.tag("แชทบอท"), Some(kham_core::pos::PosTag::Noun));`,
             },
             {
-              label: 'Word parsing',
-              lang: 'rust',
-              code: `use kham_core::number::{parse_thai_word, thai_word_to_decimal, u64_to_thai_word};
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
 
-// "หนึ่งร้อยยี่สิบสาม" → 123
-println!("{:?}", parse_thai_word("หนึ่งร้อยยี่สิบสาม")); // Some(123)
+# POS tagging is available through segment_fts()
+# t.pos returns a string tag or None for OOV / non-Thai tokens
 
-// "สองล้าน" → "2000000"
-println!("{:?}", thai_word_to_decimal("สองล้าน")); // Some("2000000")
-
-// 42 → "สี่สิบสอง"
-println!("{}", u64_to_thai_word(42)); // "สี่สิบสอง"`,
+for t in kham.segment_fts("นักเรียนกินข้าวกับปลา"):
+    if t.pos:
+        print(f"{t.text:8} → {t.pos}")
+# นักเรียน → Noun
+# กิน      → Verb
+# ข้าว     → Noun
+# กับ      → Preposition
+# ปลา      → Noun`,
             },
             {
-              label: 'Baht text',
-              lang: 'rust',
-              code: `use kham_core::number::{parse_thai_baht, to_thai_baht_text};
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { segment_fts } from '/wasm/kham_wasm.js';
+await init();
 
-// Parse baht amount from text
-if let Some(amt) = parse_thai_baht("หนึ่งร้อยบาทห้าสิบสตางค์") {
-    println!("{} baht {} satang", amt.baht, amt.satang);
+// POS tagging is available through segment_fts()
+// t.pos returns a string tag or null for OOV / non-Thai tokens
+
+const tokens = segment_fts("นักเรียนกินข้าวกับปลา");
+for (const t of tokens) {
+  if (t.pos) console.log(t.text, '→', t.pos);
 }
-
-// Generate cheque-style baht text
-println!("{}", to_thai_baht_text(1234, 50));
-// "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"`,
+// นักเรียน → Noun
+// กิน      → Verb
+// ข้าว     → Noun
+// กับ      → Preposition
+// ปลา      → Noun`,
             },
           ]}
         />
       </section>
 
-      <!-- sentence -->
-      <section id="sentence" class="scroll-mt-24">
+      <!-- ── NeTagger ── -->
+      <section id="ne" class="scroll-mt-24">
         <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">sentence</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/sentence/index.html" target="_blank" rel="noopener noreferrer"
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">NeTagger</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/ne/struct.NeTagger.html" target="_blank" rel="noopener noreferrer"
              class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
         </div>
-        <p class="text-slate-600 mb-1">
-          Sentence boundary detection. Thai text has no punctuation-based sentence markers,
-          so the segmenter uses whitespace, newlines, and Thai punctuation patterns.
-          Each <code class="text-sm bg-slate-100 px-1 py-0.5 rounded">Sentence</code> is a zero-copy span of the input.
-        </p>
-        <CodeBlock
-          code={`use kham_core::sentence::split_sentences;
-
-let text = "กินข้าวกับปลา วันนี้อากาศดี\\nพรุ่งนี้จะไปเที่ยว";
-let sentences = split_sentences(text);
-
-for (i, s) in sentences.iter().enumerate() {
-    println!("S{}: {:?}", i, s.text);
-}
-// S0: "กินข้าวกับปลา วันนี้อากาศดี"
-// S1: "พรุ่งนี้จะไปเที่ยว"
-
-// Or use SentenceSegmenter directly for reuse
-use kham_core::sentence::SentenceSegmenter;
-let seg = SentenceSegmenter::new();
-let sentences = seg.split(text);`}
-          lang="rust"
-          label="sentence.rs"
-        />
-      </section>
-
-      <!-- soundex -->
-      <section id="soundex" class="scroll-mt-24">
-        <div class="flex items-start justify-between gap-4 mb-2">
-          <h2 class="text-2xl font-bold text-slate-900 font-mono">soundex</h2>
-          <a href="https://docs.rs/kham-core/latest/kham_core/soundex/index.html" target="_blank" rel="noopener noreferrer"
-             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
-        </div>
-        <p class="text-slate-600 mb-1">
-          Thai phonetic encoding with three algorithms: <strong>lk82</strong> (Royal Institute, 1982),
-          <strong>udom83</strong> (Udom, 1983), and <strong>MetaSound</strong> (multi-level encoding).
-          Cross-language matching for Thai–English name search is also supported.
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Gazetteer-based NER with three categories: <strong>Person</strong>, <strong>Place</strong>, <strong>Org</strong>.
+          In Python and WASM, NE tags are accessed via <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">segment_fts()</code>.
         </p>
         <CodeBlock
           tabs={[
             {
-              label: 'Single algorithm',
+              label: 'Rust',
               lang: 'rust',
-              code: `use kham_core::soundex::{lk82, udom83, metasound, sounds_like, SoundexAlgorithm};
+              code: `use kham_core::ne::NeTagger;
+use kham_core::{TokenKind, Tokenizer};
 
-println!("{}", lk82("กรุงเทพ"));     // "ก640"
-println!("{}", udom83("กรุงเทพ"));   // "ก5050"
-println!("{}", metasound("กรุงเทพ")); // "ก300"
+let ne = NeTagger::builtin();
+println!("{:?}", ne.tag("กรุงเทพ")); // Some(Place)
 
-// Check phonetic similarity
-println!("{}", sounds_like("กรุงเทพ", "กรุงแทบ", SoundexAlgorithm::Lk82)); // true`,
+// Post-process tokens from Tokenizer::segment
+let tok = Tokenizer::new();
+let src = "บริษัทไทยออยล์ก่อตั้งในกรุงเทพ";
+let tokens = ne.tag_tokens(tok.segment(src), src);
+
+for t in &tokens {
+    if matches!(t.kind, TokenKind::Named(_)) {
+        println!("{} → {:?}", t.text, t.kind);
+    }
+}
+
+// Custom gazetteer from TSV: word<TAB>NE_TAG  (PERSON | PLACE | ORG)
+let custom = NeTagger::from_tsv("แอนโทรปิก\\tORG\\n");`,
             },
             {
-              label: 'Via enum',
-              lang: 'rust',
-              code: `use kham_core::soundex::{soundex, SoundexAlgorithm};
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
 
-let algos = [SoundexAlgorithm::Lk82, SoundexAlgorithm::Udom83, SoundexAlgorithm::MetaSound];
-for algo in algos {
-    println!("{algo:?}: {}", soundex("สวัสดี", algo));
+# NE tagging is available through segment_fts()
+# t.ne returns "Person" | "Place" | "Org" or None
+
+for t in kham.segment_fts("บริษัทไทยออยล์ก่อตั้งในกรุงเทพ"):
+    if t.ne:
+        print(f"{t.text:12} → {t.ne}")
+# ไทยออยล์  → Org
+# กรุงเทพ   → Place`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { segment_fts } from '/wasm/kham_wasm.js';
+await init();
+
+// NE tagging is available through segment_fts()
+// t.ne returns "Person" | "Place" | "Org" or null
+
+const tokens = segment_fts("บริษัทไทยออยล์ก่อตั้งในกรุงเทพ");
+for (const t of tokens) {
+  if (t.ne) console.log(t.text, '→', t.ne);
+}
+// ไทยออยล์  → Org
+// กรุงเทพ   → Place`,
+            },
+          ]}
+        />
+      </section>
+
+      <!-- ── RomanizationMap ── -->
+      <section id="romanizer" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">RomanizationMap</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/romanizer/struct.RomanizationMap.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          RTGS (Royal Thai General System) table-lookup romanization.
+          Falls back to the original Thai text for out-of-vocabulary words.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::romanizer::RomanizationMap;
+
+let rom = RomanizationMap::builtin();
+
+// Single word lookup
+println!("{:?}", rom.romanize("กรุงเทพ"));   // Some("Krung Thep")
+println!("{}", rom.romanize_or_raw("ปลา"));   // "pla"
+println!("{}", rom.romanize_or_raw("zzz"));   // "zzz"  (OOV → passthrough)
+
+// Batch lookup
+let roman = rom.romanize_tokens(&["กรุงเทพ", "ประเทศ", "ไทย"]);
+println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# romanize() returns list of RomanToken(text, roman)
+for t in kham.romanize("กินข้าวกับปลา"):
+    print(f"{t.text:6} → {t.roman}")
+# กิน   → kin
+# ข้าว  → khao
+# กับ   → kap
+# ปลา   → pla
+
+# roman is also available on every FtsToken
+for t in kham.segment_fts("กรุงเทพ"):
+    print(t.text, t.roman)   # กรุงเทพ  Krung Thep`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { romanize } from '/wasm/kham_wasm.js';
+await init();
+
+// romanize() returns array of RomanToken objects (text, roman)
+const pairs = romanize("กินข้าวกับปลา");
+for (const t of pairs) {
+  console.log(t.text, '→', t.roman);
+}
+// กิน   → kin
+// ข้าว  → khao
+// กับ   → kap
+// ปลา   → pla
+
+// roman is also available on every FtsToken from segment_fts()`,
+            },
+          ]}
+        />
+      </section>
+
+      <!-- ── number ── -->
+      <section id="number" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">number</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/number/index.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Thai numeral utilities: convert Thai digit characters (๐–๙) to ASCII,
+          parse/generate Thai cardinal number words, and render Thai Baht currency text.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::number::{
+    thai_digits_to_ascii, parse_thai_word, u64_to_thai_word,
+    parse_thai_baht, to_thai_baht_text,
+};
+
+// Thai digits → ASCII
+assert_eq!(thai_digits_to_ascii("ราคา ๑๒๓ บาท"), "ราคา 123 บาท");
+
+// Number word parsing
+assert_eq!(parse_thai_word("หนึ่งร้อยยี่สิบสาม"), Some(123));
+assert_eq!(parse_thai_word("สองล้าน"),             Some(2_000_000));
+assert_eq!(parse_thai_word("กินข้าว"),             None); // not a number
+
+// Number → Thai word
+println!("{}", u64_to_thai_word(42));        // "สี่สิบสอง"
+println!("{}", u64_to_thai_word(1_000_000)); // "หนึ่งล้าน"
+
+// Baht text
+println!("{}", to_thai_baht_text(1234, 50));
+// "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"
+if let Some(amt) = parse_thai_baht("หนึ่งร้อยบาทถ้วน") {
+    println!("{} baht {} satang", amt.baht, amt.satang); // 100 0
 }`,
             },
             {
-              label: 'Cross-language',
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# Thai digits → ASCII
+kham.thai_digits_to_ascii("ราคา ๑๒๓ บาท")   # "ราคา 123 บาท"
+
+# Thai word → number (returns int or None)
+kham.thai_word_to_number("หนึ่งร้อยยี่สิบสาม")  # 123
+kham.thai_word_to_number("สองล้าน")              # 2000000
+kham.thai_word_to_number("กินข้าว")              # None
+
+# Number → Thai word (accepts full u64 range)
+kham.number_to_thai_word(42)          # "สี่สิบสอง"
+kham.number_to_thai_word(1_000_000)   # "หนึ่งล้าน"
+
+# Baht text
+kham.number_to_baht_text(1234, 50)
+# "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"
+
+amt = kham.parse_baht_text("หนึ่งร้อยบาทถ้วน")  # BahtAmount or None
+if amt:
+    print(amt.baht, amt.satang)   # 100  0`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, {
+  thai_digits_to_ascii, thai_word_to_number, number_to_thai_word,
+  number_to_baht_text, parse_baht_text,
+} from '/wasm/kham_wasm.js';
+await init();
+
+// Thai digits → ASCII
+thai_digits_to_ascii("ราคา ๑๒๓ บาท");   // "ราคา 123 บาท"
+
+// Thai word → number (returns decimal string; "" if not a number)
+thai_word_to_number("หนึ่งร้อยยี่สิบสาม");  // "123"
+thai_word_to_number("กินข้าว");              // ""  (not a number)
+
+// Number → Thai word (u32 max ~4.29 billion)
+number_to_thai_word(42);          // "สี่สิบสอง"
+number_to_thai_word(1_000_000);   // "หนึ่งล้าน"
+
+// Baht text
+number_to_baht_text(1234, 50);
+// "หนึ่งพันสองร้อยสามสิบสี่บาทห้าสิบสตางค์"
+
+const r = parse_baht_text("หนึ่งร้อยบาทถ้วน");
+if (r.valid) console.log(r.baht, r.satang);  // 100  0`,
+            },
+          ]}
+        />
+      </section>
+
+      <!-- ── sentence ── -->
+      <section id="sentence" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">sentence</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/sentence/index.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Sentence boundary detection. Splits on newlines, Thai markers (ฯ ๚ ๛),
+          and Western punctuation (<code class="text-sm bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">! ? .</code> followed by space).
+          Each sentence span carries char offsets for Python/JS string slicing.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
               lang: 'rust',
-              code: `use kham_core::soundex::{thai_english_soundex, sounds_like_cross_lang};
+              code: `use kham_core::sentence::split_sentences;
 
-// Encode a Thai name into its English phonetic equivalent
-println!("{}", thai_english_soundex("สมชาย")); // "S520" (Soundex of "Somchai")
+let text = "คุณชอบอาหารไทยไหม? ผมชอบต้มยำกุ้ง!\\nอาหารไทยรสเผ็ด";
+let sents = split_sentences(text);
 
-// Match Thai name against English spelling
-println!("{}", sounds_like_cross_lang("สมชาย", "Somchai")); // true`,
+for (i, s) in sents.iter().enumerate() {
+    println!("S{i}: {:?}  chars={}..{}", s.text, s.char_span.start, s.char_span.end);
+}
+// S0: "คุณชอบอาหารไทยไหม?"     chars=0..19
+// S1: " ผมชอบต้มยำกุ้ง!"       chars=19..36
+// S2: "\\nอาหารไทยรสเผ็ด"       chars=36..50`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# split_sentences() returns list of Sentence(text, char_start, char_end)
+text = "คุณชอบอาหารไทยไหม? ผมชอบต้มยำกุ้ง!\\nอาหารไทยรสเผ็ด"
+for i, s in enumerate(kham.split_sentences(text)):
+    print(f"S{i}: {s.text!r}  chars={s.char_start}..{s.char_end}")
+
+# Reconstruct original text from spans:
+reconstructed = "".join(s.text for s in kham.split_sentences(text))
+assert reconstructed == text`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { split_sentences } from '/wasm/kham_wasm.js';
+await init();
+
+// split_sentences() returns array of Sentence objects (text, char_start, char_end)
+const text = "คุณชอบอาหารไทยไหม? ผมชอบต้มยำกุ้ง!\\nอาหารไทยรสเผ็ด";
+const sents = split_sentences(text);
+
+for (const s of sents) {
+  console.log(s.text, s.char_start, s.char_end);
+}
+
+// Slice original string using char offsets
+// (use [...text] spread to get Unicode scalar values)
+const chars = [...text];
+for (const s of sents) {
+  console.log(chars.slice(s.char_start, s.char_end).join(''));
+}`,
+            },
+          ]}
+        />
+      </section>
+
+      <!-- ── soundex ── -->
+      <section id="soundex" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-2">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">soundex</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/soundex/index.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-1">
+          Thai phonetic encoding: <strong>lk82</strong> (12 groups, 4-char), <strong>udom83</strong> (14 groups, 4-char),
+          <strong>MetaSound</strong> (3 chars/syllable). Plus a Thai–English cross-language algorithm
+          (Suwanvisat &amp; Prasitjutrakul 1998) for transliterated name search.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::soundex::{
+    soundex, sounds_like, SoundexAlgorithm,
+    thai_english_soundex, sounds_like_cross_lang,
+};
+
+// Thai soundex
+println!("{}", soundex("กาน", SoundexAlgorithm::Lk82));      // "1600"
+println!("{}", soundex("กาน", SoundexAlgorithm::Udom83));    // "1900"
+println!("{}", soundex("กาน", SoundexAlgorithm::MetaSound)); // "112"
+
+// Similarity check
+assert!(sounds_like("กาน", "ขาน", SoundexAlgorithm::Lk82));  // same group
+assert!(!sounds_like("ลาน", "ราน", SoundexAlgorithm::Udom83)); // ล/ร split
+
+// Thai–English cross-language
+println!("{}", thai_english_soundex("Somchai")); // same as thai_english_soundex("สมชาย")
+assert!(sounds_like_cross_lang("สมชาย", "Somchai")); // true`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# Thai soundex  (algo defaults to "lk82")
+kham.soundex_word("กาน")              # "1600"  (lk82)
+kham.soundex_word("กาน", "udom83")    # "1900"
+kham.soundex_word("กาน", "metasound") # "112"
+
+# Similarity check
+kham.sounds_like("กาน", "ขาน")            # True  (same lk82 group)
+kham.sounds_like("ลาน", "ราน", "udom83")  # False (ล/ร split in udom83)
+
+# Thai–English cross-language
+kham.thai_english_soundex("Somchai")       # same code as "สมชาย"
+kham.sounds_like_cross_lang("สมชาย", "Somchai")   # True
+kham.sounds_like_cross_lang("Robert",  "Rupert")   # True`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, {
+  soundex_word, sounds_like, thai_english_soundex, sounds_like_cross_lang,
+} from '/wasm/kham_wasm.js';
+await init();
+
+// Thai soundex  (algo defaults to "lk82")
+soundex_word("กาน");               // "1600"  (lk82)
+soundex_word("กาน", "udom83");     // "1900"
+soundex_word("กาน", "metasound");  // "112"
+
+// Similarity check
+sounds_like("กาน", "ขาน");             // true  (same lk82 group)
+sounds_like("ลาน", "ราน", "udom83");   // false (ล/ร split in udom83)
+
+// Thai–English cross-language
+thai_english_soundex("Somchai");        // same code as "สมชาย"
+sounds_like_cross_lang("สมชาย", "Somchai");   // true
+sounds_like_cross_lang("Robert",  "Rupert");   // true`,
             },
           ]}
         />
@@ -538,12 +884,12 @@ println!("{}", sounds_like_cross_lang("สมชาย", "Somchai")); // true`,
     </div><!-- /space-y-20 -->
 
     <!-- Footer nav -->
-    <div class="mt-16 pt-8 border-t border-slate-200 flex justify-between text-sm">
-      <a href="/getting-started" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+    <div class="mt-16 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+      <a href="/getting-started" class="text-blue-600 dark:text-blue-400 hover:underline font-medium transition-colors">
         ← Getting Started
       </a>
       <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer"
-         class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+         class="text-blue-600 dark:text-blue-400 hover:underline font-medium transition-colors">
         Full rustdoc on docs.rs ↗
       </a>
     </div>
