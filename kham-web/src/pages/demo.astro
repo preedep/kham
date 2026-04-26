@@ -1,0 +1,53 @@
+---
+import Layout from '../layouts/Layout.astro';
+import LiveDemo from '../components/LiveDemo.astro';
+---
+
+<Layout
+  title="Live Demo — kham Thai Segmenter"
+  description="Interactive Thai word segmentation playground powered by kham-wasm running entirely in your browser."
+  lang="en"
+>
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <div class="mb-10">
+      <h1 class="text-4xl font-bold text-slate-900 mb-3">Live Demo</h1>
+      <p class="text-lg text-slate-600 max-w-2xl">
+        Thai word segmentation running entirely in your browser via WebAssembly — no server required.
+        Type any Thai text and click <strong>Segment</strong>, or pick a sample.
+      </p>
+    </div>
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+      <LiveDemo />
+    </div>
+
+    <div class="mt-10 grid sm:grid-cols-3 gap-6 text-sm text-slate-600">
+      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+        <h3 class="font-semibold text-slate-800 mb-1">Token kinds</h3>
+        <ul class="space-y-1">
+          <li><span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>Thai script</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1.5"></span>Latin</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1.5"></span>Number</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5"></span>Punctuation</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-purple-400 mr-1.5"></span>Emoji</li>
+        </ul>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+        <h3 class="font-semibold text-slate-800 mb-1">Span columns</h3>
+        <p><strong>Chars</strong> — Unicode scalar-value offsets, suitable for Python / JS <code class="text-xs bg-white px-1 py-0.5 rounded border border-slate-200">str.slice()</code></p>
+        <p class="mt-2"><strong>Bytes</strong> — UTF-8 byte offsets, used internally by Rust / PostgreSQL FTS.</p>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
+        <h3 class="font-semibold text-slate-800 mb-1">Coming in v0.3</h3>
+        <ul class="space-y-1">
+          <li>POS tagging (13 categories)</li>
+          <li>Named Entity Recognition</li>
+          <li>Romanization (RTGS)</li>
+          <li>Phonetic codes (lk82 / udom83)</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</Layout>

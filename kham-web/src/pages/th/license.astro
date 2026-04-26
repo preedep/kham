@@ -1,0 +1,134 @@
+---
+import Layout from '../../layouts/Layout.astro';
+---
+
+<Layout title="ใบอนุญาต — kham" lang="th"
+  description="kham ใช้ใบอนุญาตคู่ MIT และ Apache-2.0 หน้านี้แสดงใบอนุญาตซอฟต์แวร์และรายการอ้างอิงข้อมูลของบุคคลที่สาม">
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <div class="mb-12">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-white mb-3">ใบอนุญาต</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        kham ใช้ใบอนุญาตคู่ <strong>MIT</strong> และ <strong>Apache-2.0</strong>
+        คุณสามารถเลือกใช้ภายใต้ใบอนุญาตใดก็ได้ตามที่ต้องการ
+      </p>
+    </div>
+
+    <!-- License choice -->
+    <section class="mb-14">
+      <div class="grid sm:grid-cols-2 gap-6 mb-8">
+        <a href="https://github.com/preedep/kham/blob/main/LICENSE-MIT" target="_blank" rel="noopener noreferrer"
+           class="block p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md transition-all group">
+          <div class="text-2xl mb-2">📄</div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">MIT License</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">ใช้ได้อย่างอิสระ เพียงเก็บประกาศลิขสิทธิ์ไว้</p>
+          <span class="text-xs text-blue-600 dark:text-blue-400 mt-3 inline-block">ดูบน GitHub ↗</span>
+        </a>
+        <a href="https://github.com/preedep/kham/blob/main/LICENSE-APACHE" target="_blank" rel="noopener noreferrer"
+           class="block p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md transition-all group">
+          <div class="text-2xl mb-2">📋</div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">Apache License 2.0</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">ใช้ได้อย่างอิสระพร้อม patent grant เหมาะสำหรับองค์กร</p>
+          <span class="text-xs text-blue-600 dark:text-blue-400 mt-3 inline-block">ดูบน GitHub ↗</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- MIT License text -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">MIT License</h2>
+      <pre class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-6 text-sm text-slate-700 dark:text-slate-300 font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap">{`MIT License
+
+Copyright (c) 2026 Nix.Labs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`}</pre>
+    </section>
+
+    <!-- Apache text -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">Apache License 2.0</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4">
+        Copyright 2026 Nix.Labs ได้รับอนุญาตภายใต้ Apache License เวอร์ชัน 2.0 ("ใบอนุญาต") คุณไม่สามารถใช้ไฟล์นี้ได้นอกจากจะเป็นไปตามใบอนุญาต
+        คุณสามารถรับสำเนาใบอนุญาตได้ที่
+        <a href="https://www.apache.org/licenses/LICENSE-2.0" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">
+          https://www.apache.org/licenses/LICENSE-2.0
+        </a>
+      </p>
+      <a href="https://github.com/preedep/kham/blob/main/LICENSE-APACHE" target="_blank" rel="noopener noreferrer"
+         class="inline-block mt-2 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+        ข้อความ Apache 2.0 ฉบับเต็มบน GitHub ↗
+      </a>
+    </section>
+
+    <!-- Corpus attributions -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">การอ้างอิงข้อมูลของบุคคลที่สาม</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-6">
+        kham บรรจุชุดข้อมูลแบบ open source หลายชุดในตอน compile time รายละเอียดแต่ละชุดพร้อมใบอนุญาตและแหล่งที่มาอยู่ด้านล่าง
+      </p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              {['ชุดข้อมูล', 'ใช้สำหรับ', 'ใบอนุญาต', 'แหล่งที่มา'].map(h => (
+                <th scope="col" class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {[
+              ['words_th.txt', 'dictionary คำภาษาไทยในตัว', 'CC0 1.0', 'Thai word list (สาธารณสมบัติ)'],
+              ['tnc_freq.txt', 'ตาราง TNC frequency สำหรับ DP scoring', 'CC0', 'Thai National Corpus (TNC) / Thai Textbook Corpus (TTC)'],
+              ['stopwords (PyThaiNLP)', 'Thai stop-word set (1,029 รายการ)', 'Apache-2.0', 'โปรเจกต์ PyThaiNLP'],
+              ['ne_th.tsv — ประเทศ', 'NE gazetteer ชื่อประเทศ', 'Apache-2.0', 'โปรเจกต์ PyThaiNLP'],
+              ['ne_th.tsv — Wikipedia titles', 'NE gazetteer สถานที่/องค์กร (+17,240 รายการ)', 'CC-BY-SA 4.0', 'หัวข้อบทความ Wikipedia ภาษาไทย'],
+              ['ne_th.tsv — นามสกุล', 'NE gazetteer บุคคล (+8,980 รายการ)', 'CC-BY-SA 4.0', 'คลังนามสกุลภาษาไทย'],
+              ['pos_th.tsv', 'POS tag lookup (13 หมวดหมู่ ORCHID, ~9,000 รายการ)', 'CC-BY 4.0', 'ORCHID corpus (NECTEC)'],
+              ['romanization_th.tsv', 'ตาราง RTGS romanization (415 รายการ)', 'CC0', 'ตารางถอดอักษรโรมัน RTGS ราชบัณฑิตยสภา'],
+            ].map(([dataset, use, license, source]) => (
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <td class="px-5 py-3 font-mono text-xs text-slate-800 dark:text-slate-200">{dataset}</td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400">{use}</td>
+                <td class="px-5 py-3">
+                  <span class:list={[
+                    'inline-block px-2 py-0.5 rounded text-xs font-medium',
+                    license.startsWith('CC0') ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                    license.startsWith('Apache') ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300' :
+                    license.startsWith('CC-BY-SA') ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300' :
+                    'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300'
+                  ]}>{license}</span>
+                </td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs">{source}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-4 text-sm text-slate-500 dark:text-slate-500">
+        ข้อมูล CC-BY-SA 4.0 ใช้เฉพาะใน dictionary ที่ฝังมากับ library binary เท่านั้น
+        การ implement อัลกอริทึมเป็นแบบ clean-room ไม่ได้ derived จากโค้ดที่มีลิขสิทธิ์ใดๆ
+      </p>
+    </section>
+
+    <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 flex justify-between text-sm">
+      <a href="/th/changelog" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors">← บันทึกการเปลี่ยนแปลง</a>
+      <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer"
+         class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors">GitHub ↗</a>
+    </div>
+  </div>
+</Layout>

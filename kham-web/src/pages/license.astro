@@ -1,0 +1,139 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="License — kham" lang="en"
+  description="kham is dual-licensed under MIT and Apache-2.0. This page lists the software license and all third-party corpus attributions.">
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <div class="mb-12">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-white mb-3">License</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        kham is dual-licensed under <strong>MIT</strong> and <strong>Apache-2.0</strong>.
+        You may use it under either license at your option.
+      </p>
+    </div>
+
+    <!-- License choice -->
+    <section class="mb-14">
+      <div class="grid sm:grid-cols-2 gap-6 mb-8">
+        <a href="https://github.com/preedep/kham/blob/main/LICENSE-MIT" target="_blank" rel="noopener noreferrer"
+           class="block p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md transition-all group">
+          <div class="text-2xl mb-2">📄</div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">MIT License</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Permissive — do anything, keep the copyright notice.</p>
+          <span class="text-xs text-blue-600 dark:text-blue-400 mt-3 inline-block">View on GitHub ↗</span>
+        </a>
+        <a href="https://github.com/preedep/kham/blob/main/LICENSE-APACHE" target="_blank" rel="noopener noreferrer"
+           class="block p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md transition-all group">
+          <div class="text-2xl mb-2">📋</div>
+          <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-1 group-hover:text-blue-600 dark:group-hover:text-blue-400">Apache License 2.0</h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400">Permissive with patent grant — suitable for enterprise use.</p>
+          <span class="text-xs text-blue-600 dark:text-blue-400 mt-3 inline-block">View on GitHub ↗</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- MIT License text -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">MIT License</h2>
+      <pre class="bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl p-6 text-sm text-slate-700 dark:text-slate-300 font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap">{`MIT License
+
+Copyright (c) 2026 Nix.Labs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`}</pre>
+    </section>
+
+    <!-- Apache text (summary + link) -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-4">Apache License 2.0</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4">
+        Copyright 2026 Nix.Labs. Licensed under the Apache License, Version 2.0 (the "License"); you may not use
+        this file except in compliance with the License. You may obtain a copy of the License at
+        <a href="https://www.apache.org/licenses/LICENSE-2.0" class="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer">
+          https://www.apache.org/licenses/LICENSE-2.0
+        </a>.
+      </p>
+      <p class="text-slate-600 dark:text-slate-400">
+        Unless required by applicable law or agreed to in writing, software distributed under the License is
+        distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and limitations under the License.
+      </p>
+      <a href="https://github.com/preedep/kham/blob/main/LICENSE-APACHE" target="_blank" rel="noopener noreferrer"
+         class="inline-block mt-4 text-sm text-blue-600 dark:text-blue-400 hover:underline">
+        Full Apache 2.0 text on GitHub ↗
+      </a>
+    </section>
+
+    <!-- Corpus attributions -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">Third-party Data Attributions</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-6">
+        kham bundles several open datasets at compile time. Each is listed below with its license and source.
+      </p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              {['Dataset', 'Used for', 'License', 'Source'].map(h => (
+                <th scope="col" class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {[
+              ['words_th.txt', 'Built-in Thai word dictionary', 'CC0 1.0', 'Thai word list (public domain)'],
+              ['tnc_freq.txt', 'TNC frequency table for DP scoring', 'CC0', 'Thai National Corpus (TNC) / Thai Textbook Corpus (TTC)'],
+              ['stopwords (PyThaiNLP)', 'Thai stop-word set (1,029 entries)', 'Apache-2.0', 'PyThaiNLP project'],
+              ['ne_th.tsv — countries', 'NE country gazetteer', 'Apache-2.0', 'PyThaiNLP project'],
+              ['ne_th.tsv — Wikipedia titles', 'NE place/org gazetteer (+17,240 entries)', 'CC-BY-SA 4.0', 'Wikipedia Thai article titles'],
+              ['ne_th.tsv — family names', 'NE person gazetteer (+8,980 entries)', 'CC-BY-SA 4.0', 'Thai family names corpus'],
+              ['pos_th.tsv', 'POS tag lookup (13 ORCHID categories, ~9,000 entries)', 'CC-BY 4.0', 'ORCHID corpus (NECTEC)'],
+              ['romanization_th.tsv', 'RTGS romanization map (415 entries)', 'CC0', 'Royal Institute of Thailand RTGS tables'],
+            ].map(([dataset, use, license, source]) => (
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                <td class="px-5 py-3 font-mono text-xs text-slate-800 dark:text-slate-200">{dataset}</td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400">{use}</td>
+                <td class="px-5 py-3">
+                  <span class:list={[
+                    'inline-block px-2 py-0.5 rounded text-xs font-medium',
+                    license.startsWith('CC0') ? 'bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300' :
+                    license.startsWith('Apache') ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300' :
+                    license.startsWith('CC-BY-SA') ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-800 dark:text-yellow-300' :
+                    'bg-purple-100 dark:bg-purple-900/40 text-purple-800 dark:text-purple-300'
+                  ]}>{license}</span>
+                </td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 text-xs">{source}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-4 text-sm text-slate-500 dark:text-slate-500">
+        CC-BY-SA 4.0 data is used only in embedded dictionaries distributed with the library binary.
+        Algorithm implementations are clean-room, not derived from any copyrighted code.
+      </p>
+    </section>
+
+    <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800 flex justify-between text-sm">
+      <a href="/changelog" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors">← Changelog</a>
+      <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer"
+         class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium transition-colors">GitHub ↗</a>
+    </div>
+  </div>
+</Layout>

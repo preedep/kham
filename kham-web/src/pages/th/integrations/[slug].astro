@@ -1,0 +1,258 @@
+---
+import Layout from '../../../layouts/Layout.astro';
+import CodeBlock from '../../../components/CodeBlock.astro';
+
+export function getStaticPaths() {
+  return ['postgresql', 'sqlite', 'python', 'wasm'].map(slug => ({ params: { slug } }));
+}
+
+interface Section {
+  heading: string;
+  body?: string;
+  tabs?: { label: string; lang: string; code: string }[];
+  code?: string;
+  lang?: string;
+  label?: string;
+}
+
+interface IntegrationData {
+  title: string;
+  icon: string;
+  description: string;
+  sections: Section[];
+}
+
+const integrations: Record<string, IntegrationData> = {
+  postgresql: {
+    title: 'PostgreSQL FTS',
+    icon: '🐘',
+    description: 'kham-pg เป็น extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL ช่วยตัดคำภาษาไทยในการทำ full-text search แทน parser ค่าเริ่มต้นของ PostgreSQL',
+    sections: [
+      {
+        heading: 'สิ่งที่ต้องมีก่อน',
+        body: 'PostgreSQL 14 ขึ้นไป, Rust toolchain (1.85+) และ pg_config ใน PATH',
+        code: 'pg_config --version   # PostgreSQL 14 หรือใหม่กว่า',
+        lang: 'bash', label: 'shell',
+      },
+      {
+        heading: 'Build และติดตั้ง',
+        code: `cargo build -p kham-pg --release
+make -C kham-pg install`,
+        lang: 'bash', label: 'shell',
+      },
+      {
+        heading: 'Load และตั้งค่า',
+        code: `LOAD 'kham';
+
+CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR thai    WITH simple;
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR latin   WITH english_stem;`,
+        lang: 'sql', label: 'psql',
+      },
+      {
+        heading: 'Index เอกสาร',
+        code: `CREATE TABLE articles (
+  id  SERIAL PRIMARY KEY,
+  body TEXT,
+  tsv TSVECTOR
+);
+
+UPDATE articles SET tsv = to_tsvector('kham_cfg', body);
+CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);`,
+        lang: 'sql', label: 'psql',
+      },
+      {
+        heading: 'ค้นหาด้วย ts_headline',
+        code: `SELECT id,
+  ts_headline('kham_cfg', body, query,
+    'StartSel=<mark>, StopSel=</mark>') AS snippet
+FROM articles,
+     to_tsquery('kham_cfg', 'ข้าว & ปลา') AS query
+WHERE tsv @@ query
+ORDER BY ts_rank(tsv, query) DESC;`,
+        lang: 'sql', label: 'psql',
+      },
+    ],
+  },
+
+  sqlite: {
+    title: 'SQLite FTS5',
+    icon: '🗃️',
+    description: 'kham-sqlite เป็น loadable extension สำหรับ SQLite ที่ให้ custom FTS5 tokenizer ช่วยตัดคำภาษาไทยในการทำ FTS5 MATCH query ให้ถูกต้อง',
+    sections: [
+      {
+        heading: 'สิ่งที่ต้องมีก่อน',
+        body: 'SQLite ที่เปิดใช้งาน FTS5 และรองรับ load_extension บน macOS ต้องติดตั้งจาก Homebrew เพราะ system sqlite3 ปิด load_extension',
+        tabs: [
+          { label: 'macOS', lang: 'bash', code: 'brew install sqlite' },
+          { label: 'Ubuntu/Debian', lang: 'bash', code: 'sudo apt install libsqlite3-dev sqlite3' },
+        ],
+      },
+      {
+        heading: 'Build extension',
+        code: `cargo build -p kham-sqlite --release
+# ไฟล์อยู่ที่:
+#   Linux:  target/release/libkham_sqlite.so
+#   macOS:  target/release/libkham_sqlite.dylib`,
+        lang: 'bash', label: 'shell',
+      },
+      {
+        heading: 'Load และสร้างตาราง FTS5',
+        code: `.load ./target/release/libkham_sqlite
+
+CREATE VIRTUAL TABLE docs USING fts5(
+  title, body,
+  tokenize = 'kham'
+);`,
+        lang: 'sql', label: 'sqlite3',
+      },
+      {
+        heading: 'Insert และค้นหา',
+        code: `INSERT INTO docs VALUES
+  ('อาหารไทย', 'กินข้าวกับปลาและผัก'),
+  ('เมืองหลวง', 'กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย');
+
+SELECT * FROM docs WHERE docs MATCH 'ปลา';
+SELECT snippet(docs, 1, '<b>', '</b>', '…', 10)
+FROM docs WHERE docs MATCH 'กรุงเทพ';`,
+        lang: 'sql', label: 'sqlite3',
+      },
+    ],
+  },
+
+  python: {
+    title: 'Python',
+    icon: '🐍',
+    description: 'Python bindings ของ kham สร้างด้วย PyO3 เปิดให้ใช้งาน API ตัดคำแบบเต็มรูปแบบ รวมถึง Token object พร้อม kind, POS, NE และข้อมูล span',
+    sections: [
+      {
+        heading: 'ติดตั้ง',
+        tabs: [
+          { label: 'pip', lang: 'bash', code: 'pip install kham' },
+          { label: 'uv', lang: 'bash', code: 'uv add kham' },
+          { label: 'poetry', lang: 'bash', code: 'poetry add kham' },
+        ],
+      },
+      {
+        heading: 'ตัดคำพื้นฐาน',
+        code: `import kham
+
+words = kham.segment("กินข้าวกับปลา")
+print(words)
+# ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+mixed = kham.segment("Hello กรุงเทพ 2024!")
+print(mixed)`,
+        lang: 'python', label: 'example.py',
+      },
+      {
+        heading: 'Token object แบบ rich',
+        code: `import kham
+
+tokens = kham.segment_tokens("กินข้าวกับปลา")
+for tok in tokens:
+    print(f"{tok.text!r:10}  kind={tok.kind:12}  chars={tok.char_start}..{tok.char_end}")`,
+        lang: 'python', label: 'example.py',
+      },
+      {
+        heading: 'Field ของ Token',
+        code: `tok.text        # str  — ข้อความ token
+tok.kind        # str  — "Thai" | "Latin" | "Number" | "Punctuation" | ...
+tok.char_start  # int  — จุดเริ่มต้น Unicode (ใช้กับ str.slice())
+tok.char_end    # int  — จุดสิ้นสุด Unicode
+tok.byte_start  # int  — byte offset UTF-8 เริ่มต้น
+tok.byte_end    # int  — byte offset UTF-8 สิ้นสุด`,
+        lang: 'python', label: 'reference',
+      },
+    ],
+  },
+
+  wasm: {
+    title: 'WebAssembly / npm',
+    icon: '🌐',
+    description: 'kham-wasm นำการตัดคำภาษาไทยมาสู่เบราว์เซอร์และ Node.js โดยไม่ต้องใช้เซิร์ฟเวอร์ ไฟล์ WASM ขนาดประมาณ 300 KB และมี dictionary ในตัว',
+    sections: [
+      {
+        heading: 'ติดตั้ง',
+        code: 'npm install kham-wasm',
+        lang: 'bash', label: 'shell',
+      },
+      {
+        heading: 'Browser — ES module',
+        body: 'import init และเรียกครั้งเดียวเพื่อโหลดไฟล์ .wasm จากนั้นใช้ segment() หรือ segment_tokens() ได้เลย',
+        code: `import init, { segment, segment_tokens } from 'kham-wasm';
+
+await init(); // โหลด WebAssembly module
+
+const words = segment("กินข้าวกับปลา");
+console.log(words);
+// ["กิน", "ข้าว", "กับ", "ปลา"]`,
+        lang: 'typescript', label: 'browser.ts',
+      },
+      {
+        heading: 'Lazy loading (แนะนำ)',
+        body: 'โหลด WASM ในพื้นหลังเพื่อไม่ให้บล็อคการแสดงผลหน้าเว็บ',
+        code: `let kham: any = null;
+
+async function getKham() {
+  if (kham) return kham;
+  const mod = await import('kham-wasm');
+  await mod.default();
+  kham = mod;
+  return kham;
+}
+
+// โหลดล่วงหน้าในพื้นหลัง
+getKham().catch(console.error);`,
+        lang: 'typescript', label: 'lazy.ts',
+      },
+    ],
+  },
+};
+
+const { slug } = Astro.params;
+const data = integrations[slug as keyof typeof integrations];
+---
+
+<Layout title={`${data.title} — คู่มือการใช้งาน kham`} description={data.description} lang="th">
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <nav class="text-sm text-slate-500 mb-8">
+      <a href="/th/getting-started" class="hover:text-slate-800 transition-colors">เริ่มต้นใช้งาน</a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-800 font-medium">{data.title}</span>
+    </nav>
+
+    <div class="mb-12">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-4xl">{data.icon}</span>
+        <h1 class="text-4xl font-bold text-slate-900">{data.title}</h1>
+      </div>
+      <p class="text-lg text-slate-600 max-w-2xl">{data.description}</p>
+    </div>
+
+    <div class="space-y-14">
+      {data.sections.map((section, i) => (
+        <section>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="flex-none w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">{i + 1}</span>
+            <h2 class="text-xl font-semibold text-slate-900">{section.heading}</h2>
+          </div>
+          {section.body && <p class="text-slate-600 mb-4 ml-10">{section.body}</p>}
+          <div class="ml-10">
+            {section.tabs
+              ? <CodeBlock tabs={section.tabs} />
+              : <CodeBlock code={section.code} lang={section.lang} label={section.label} />
+            }
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <div class="mt-16 pt-8 border-t border-slate-200 flex justify-between text-sm">
+      <a href="/th/getting-started" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">← เริ่มต้นใช้งาน</a>
+      <a href="/th/demo" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">ทดลองใช้งาน →</a>
+    </div>
+  </div>
+</Layout>

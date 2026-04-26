@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="60%" style="stop-color:#1e293b"/>
+      <stop offset="100%" style="stop-color:#172554"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <!-- Logo mark -->
+  <text x="96" y="290" font-family="system-ui, sans-serif" font-size="160" font-weight="700" fill="#3b82f6">ข</text>
+  <!-- Name -->
+  <text x="240" y="280" font-family="system-ui, sans-serif" font-size="120" font-weight="700" fill="#f8fafc">kham</text>
+  <!-- Version badge -->
+  <rect x="240" y="308" width="156" height="36" rx="18" fill="#1d4ed8" fill-opacity="0.6"/>
+  <text x="318" y="332" font-family="system-ui, sans-serif" font-size="20" font-weight="600" fill="#93c5fd" text-anchor="middle">v0.5.0</text>
+  <!-- Tagline -->
+  <text x="96" y="420" font-family="system-ui, sans-serif" font-size="36" fill="#94a3b8">Fast Thai word segmentation in Rust</text>
+  <!-- Sub tagline -->
+  <text x="96" y="470" font-family="system-ui, sans-serif" font-size="26" fill="#64748b">no_std · Rust · WASM · Python · PostgreSQL · SQLite</text>
+  <!-- Domain -->
+  <text x="1104" y="590" font-family="system-ui, monospace" font-size="24" fill="#475569" text-anchor="end">kham.io</text>
+</svg>

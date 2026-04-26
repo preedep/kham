@@ -1,0 +1,42 @@
+---
+const badges = [
+  {
+    href: 'https://crates.io/crates/kham-core',
+    src: 'https://img.shields.io/crates/v/kham-core?label=crates.io&style=flat-square',
+    alt: 'crates.io version',
+  },
+  {
+    href: 'https://docs.rs/kham-core',
+    src: 'https://img.shields.io/docsrs/kham-core?style=flat-square',
+    alt: 'docs.rs',
+  },
+  {
+    href: 'https://github.com/preedep/kham/actions/workflows/ci.yml',
+    src: 'https://img.shields.io/github/actions/workflow/status/preedep/kham/ci.yml?branch=main&label=CI&style=flat-square',
+    alt: 'CI status',
+  },
+  {
+    href: 'https://crates.io/crates/kham-core',
+    src: 'https://img.shields.io/crates/l/kham-core?style=flat-square',
+    alt: 'license',
+  },
+  {
+    href: 'https://github.com/preedep/kham',
+    src: 'https://img.shields.io/badge/MSRV-1.85-blue?style=flat-square',
+    alt: 'MSRV 1.85',
+  },
+  {
+    href: 'https://www.npmjs.com/package/kham-wasm',
+    src: 'https://img.shields.io/npm/dm/kham-wasm?label=npm%20downloads&style=flat-square',
+    alt: 'npm downloads',
+  },
+];
+---
+
+<div class="flex flex-wrap justify-center gap-2">
+  {badges.map(({ href, src, alt }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" class="inline-flex">
+      <img src={src} alt={alt} loading="lazy" height="20" />
+    </a>
+  ))}
+</div>

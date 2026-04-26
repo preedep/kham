@@ -1,0 +1,131 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+import { useTranslations } from '../../i18n/utils';
+
+const t = useTranslations('th');
+
+const sections = [
+  {
+    id: 'rust', icon: '🦀', title: 'Rust',
+    subtitle: 'Native crate — zero-copy, no_std core',
+    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.5"' },
+    example: { lang: 'rust', label: 'main.rs', code: `use kham_core::Tokenizer;
+
+fn main() {
+    let tok = Tokenizer::new();
+    let tokens = tok.segment("กินข้าวกับปลา");
+    println!("{:?}", tokens);
+    // ["กิน", "ข้าว", "กับ", "ปลา"]
+}` },
+    link: '/th/integrations/postgresql',
+  },
+  {
+    id: 'python', icon: '🐍', title: 'Python',
+    subtitle: 'PyO3 bindings — segment() และ segment_tokens()',
+    install: { lang: 'bash', label: 'shell', code: 'pip install kham' },
+    example: { lang: 'python', label: 'example.py', code: `import kham
+
+words = kham.segment("กินข้าวกับปลา")
+print(words)
+# ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+for tok in kham.segment_tokens("Hello กรุงเทพ 2024"):
+    print(tok.text, tok.kind, tok.char_start, tok.char_end)` },
+    link: '/th/integrations/python',
+  },
+  {
+    id: 'wasm', icon: '🌐', title: 'WebAssembly / npm',
+    subtitle: 'ทำงานในเบราว์เซอร์และ Node.js — ไม่ต้องใช้เซิร์ฟเวอร์',
+    install: { lang: 'bash', label: 'shell', code: 'npm install kham-wasm' },
+    example: { lang: 'typescript', label: 'browser.ts', code: `import init, { segment, segment_tokens } from 'kham-wasm';
+await init();
+
+const words = segment("กินข้าวกับปลา");
+console.log(words);
+// ["กิน", "ข้าว", "กับ", "ปลา"]` },
+    link: '/th/integrations/wasm',
+  },
+  {
+    id: 'cli', icon: '💻', title: 'CLI',
+    subtitle: 'โปรแกรมตัดคำจาก command line',
+    install: { lang: 'bash', label: 'shell', code: 'cargo install kham-cli' },
+    example: { lang: 'bash', label: 'shell', code: `# ตัดคำภาษาไทย
+kham "กินข้าวกับปลา"
+# กิน|ข้าว|กับ|ปลา
+
+# โหมด FTS
+kham --fts "กินข้าวกับปลา"
+
+# FTS + phonetic code
+kham --fts --soundex lk82 "กินข้าวกับปลา"` },
+  },
+  {
+    id: 'postgresql', icon: '🐘', title: 'PostgreSQL FTS',
+    subtitle: 'extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL 14+',
+    install: { lang: 'bash', label: 'shell', code: `cargo build -p kham-pg --release\nmake -C kham-pg install` },
+    example: { lang: 'sql', label: 'example.sql', code: `LOAD 'kham';
+CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR thai WITH simple;
+
+UPDATE docs SET tsv = to_tsvector('kham_cfg', body);
+SELECT id FROM docs WHERE tsv @@ to_tsquery('kham_cfg', 'ข้าว');` },
+    link: '/th/integrations/postgresql',
+  },
+  {
+    id: 'sqlite', icon: '🗃️', title: 'SQLite FTS5',
+    subtitle: 'Loadable tokenizer extension สำหรับ SQLite FTS5',
+    install: { lang: 'bash', label: 'shell', code: `cargo build -p kham-sqlite --release
+# macOS: brew install sqlite` },
+    example: { lang: 'sql', label: 'sqlite3 shell', code: `.load ./target/release/libkham_sqlite
+
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize = 'kham');
+INSERT INTO docs VALUES ('กินข้าวกับปลา');
+SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
+    link: '/th/integrations/sqlite',
+  },
+];
+---
+
+<Layout title="เริ่มต้นใช้งาน — kham" lang="th"
+  description="คู่มือเริ่มต้นใช้งาน kham สำหรับ Rust, Python, WebAssembly, CLI, PostgreSQL FTS และ SQLite FTS5">
+  <div class="max-w-5xl mx-auto px-6 py-16">
+    <div class="mb-12">
+      <h1 class="text-4xl font-bold text-slate-900 mb-3">{t('gs.title')}</h1>
+      <p class="text-lg text-slate-600 max-w-2xl">{t('gs.subtitle')}</p>
+      <nav class="flex flex-wrap gap-3 mt-6">
+        {sections.map(s => (
+          <a href={`#${s.id}`}
+             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700 transition-colors">
+            <span>{s.icon}</span> {s.title}
+          </a>
+        ))}
+      </nav>
+    </div>
+
+    <div class="space-y-20">
+      {sections.map(s => (
+        <section id={s.id} class="scroll-mt-24">
+          <div class="flex items-center gap-3 mb-2">
+            <span class="text-3xl">{s.icon}</span>
+            <h2 class="text-2xl font-bold text-slate-900">{s.title}</h2>
+          </div>
+          <p class="text-slate-500 mb-6">{s.subtitle}</p>
+          <div class="space-y-3">
+            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">{t('gs.install')}</h3>
+            <CodeBlock code={s.install.code} lang={s.install.lang} label={s.install.label} />
+            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide pt-2">{t('gs.usage')}</h3>
+            <CodeBlock code={s.example.code} lang={s.example.lang} label={s.example.label} />
+          </div>
+          {s.link && (
+            <a href={s.link}
+               class="inline-flex items-center gap-1 mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">
+              {t('gs.full-guide')}
+            </a>
+          )}
+        </section>
+      ))}
+    </div>
+  </div>
+</Layout>

@@ -1,0 +1,217 @@
+---
+interface Props {
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+
+const samples = [
+  'กินข้าวกับปลา',
+  'กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย',
+  'บริษัทไทยออยล์จำกัดมหาชน',
+  'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ',
+];
+
+const kindColors: Record<string, string> = {
+  Thai: 'bg-blue-100 text-blue-800',
+  Latin: 'bg-green-100 text-green-800',
+  Number: 'bg-yellow-100 text-yellow-800',
+  Punctuation: 'bg-slate-100 text-slate-700',
+  Emoji: 'bg-purple-100 text-purple-800',
+  Whitespace: 'bg-slate-100 text-slate-500',
+  Unknown: 'bg-red-100 text-red-700',
+};
+---
+
+<div class="live-demo-root font-sans" data-compact={compact.toString()}>
+  <!-- Input -->
+  <div class="mb-4">
+    <label for="demo-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+      Thai text
+    </label>
+    <textarea
+      id="demo-input"
+      rows={compact ? 2 : 3}
+      placeholder="พิมพ์ข้อความภาษาไทย…"
+      aria-label="Thai text input for segmentation"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-slate-400"
+    >{samples[0]}</textarea>
+  </div>
+
+  <!-- Samples -->
+  <div class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Sample texts">
+    <span class="text-xs text-slate-500 self-center">Samples:</span>
+    {samples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[180px]"
+        data-text={s}
+        title={s}
+        aria-label={`Use sample: ${s}`}
+      >
+        {s.length > 14 ? s.slice(0, 14) + '…' : s}
+      </button>
+    ))}
+  </div>
+
+  <!-- Controls row -->
+  <div class="flex items-center gap-3 mb-6">
+    <button
+      id="demo-run"
+      type="button"
+      aria-label="Segment Thai text"
+      aria-busy="false"
+      class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+    >
+      <svg id="demo-spinner" class="hidden animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+      </svg>
+      <span id="demo-btn-label">Segment</span>
+    </button>
+    <span id="demo-status" class="text-sm text-slate-500 hidden" role="status" aria-live="polite"></span>
+  </div>
+
+  <!-- Results -->
+  <div id="demo-results" class="hidden" aria-live="polite" aria-label="Segmentation results">
+    <!-- Token pills -->
+    <div id="demo-pills" class="flex flex-wrap gap-2 mb-5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Token pills"></div>
+
+    <!-- Table (hidden in compact mode) -->
+    {!compact && (
+      <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm text-left" aria-label="Token details">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Chars</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Bytes</th>
+            </tr>
+          </thead>
+          <tbody id="demo-tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
+        </table>
+      </div>
+    )}
+
+    <p id="demo-count" class="text-xs text-slate-400 mt-3" aria-live="polite"></p>
+  </div>
+</div>
+
+<script is:inline>
+(function () {
+  const KIND_COLORS = {
+    Thai:        'bg-blue-100 text-blue-800',
+    Latin:       'bg-green-100 text-green-800',
+    Number:      'bg-yellow-100 text-yellow-800',
+    Punctuation: 'bg-slate-100 text-slate-700',
+    Emoji:       'bg-purple-100 text-purple-800',
+    Whitespace:  'bg-slate-100 text-slate-500',
+    Unknown:     'bg-red-100 text-red-700',
+  };
+
+  let wasmMod = null;
+
+  async function loadWasm() {
+    if (wasmMod) return wasmMod;
+    const mod = await import('/wasm/kham_wasm.js');
+    await mod.default();
+    wasmMod = mod;
+    return wasmMod;
+  }
+
+  function kindBadge(kind) {
+    const cls = KIND_COLORS[kind] || 'bg-slate-100 text-slate-700';
+    return `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${cls}">${kind}</span>`;
+  }
+
+  function renderResults(tokens) {
+    const pills = document.getElementById('demo-pills');
+    const tbody = document.getElementById('demo-tbody');
+    const count = document.getElementById('demo-count');
+    const results = document.getElementById('demo-results');
+
+    // Pills
+    pills.innerHTML = tokens.map(t => {
+      const cls = KIND_COLORS[t.kind] || 'bg-slate-100 text-slate-700';
+      return `<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${cls}">${t.text}</span>`;
+    }).join('');
+
+    // Table rows (tbody may be absent in compact mode)
+    if (tbody) {
+      tbody.innerHTML = tokens.map((t, i) => `
+        <tr class="hover:bg-slate-50">
+          <td class="px-4 py-2.5 text-slate-400 font-mono text-xs">${i + 1}</td>
+          <td class="px-4 py-2.5 font-medium text-slate-900">${t.text}</td>
+          <td class="px-4 py-2.5">${kindBadge(t.kind)}</td>
+          <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.char_start}–${t.char_end}</td>
+          <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.byte_start}–${t.byte_end}</td>
+        </tr>
+      `).join('');
+    }
+
+    if (count) count.textContent = `${tokens.length} token${tokens.length !== 1 ? 's' : ''}`;
+    results.classList.remove('hidden');
+  }
+
+  function setLoading(loading) {
+    const btn = document.getElementById('demo-run');
+    const spinner = document.getElementById('demo-spinner');
+    const label = document.getElementById('demo-btn-label');
+    const status = document.getElementById('demo-status');
+    btn.disabled = loading;
+    btn.setAttribute('aria-busy', loading ? 'true' : 'false');
+    spinner.classList.toggle('hidden', !loading);
+    label.textContent = loading ? 'Loading…' : 'Segment';
+    status.classList.toggle('hidden', !loading);
+    status.textContent = loading ? 'Initialising WebAssembly…' : '';
+  }
+
+  async function runSegment() {
+    const input = document.getElementById('demo-input');
+    const text = input.value.trim();
+    if (!text) return;
+
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const tokens = mod.segment_tokens(text);
+      renderResults(tokens);
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      status.classList.remove('hidden');
+      status.textContent = 'Error loading WebAssembly. Check console.';
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Wire up after DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const run = document.getElementById('demo-run');
+    if (run) run.addEventListener('click', runSegment);
+
+    document.querySelectorAll('.demo-sample').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const input = document.getElementById('demo-input');
+        input.value = btn.dataset.text;
+      });
+    });
+
+    // Also run on Enter inside textarea (Ctrl/Cmd+Enter)
+    const input = document.getElementById('demo-input');
+    if (input) {
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          runSegment();
+        }
+      });
+    }
+
+    // Preload WASM in background so first click is instant
+    loadWasm().catch(() => {});
+  });
+})();
+</script>

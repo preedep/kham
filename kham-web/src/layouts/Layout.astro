@@ -1,0 +1,75 @@
+---
+import '../styles/global.css';
+import NavBar from '../components/NavBar.astro';
+import Footer from '../components/Footer.astro';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  title: string;
+  description?: string;
+  lang?: Lang;
+}
+
+const {
+  title,
+  description = 'kham — Fast Thai word segmentation in Rust. Zero-dependency, no_std core. Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS.',
+  lang = 'en',
+} = Astro.props;
+
+const canonicalUrl = new URL(Astro.url.pathname, 'https://kham.io').href;
+const ogImage = 'https://kham.io/og.svg';
+const thPath = lang === 'en'
+  ? `/th${Astro.url.pathname === '/' ? '/' : Astro.url.pathname}`
+  : Astro.url.pathname;
+const enPath = lang === 'th'
+  ? (Astro.url.pathname.replace(/^\/th/, '') || '/')
+  : Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang={lang === 'th' ? 'th' : 'en'} class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="sitemap" href="/sitemap-index.xml" />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="kham" />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:locale" content={lang === 'th' ? 'th_TH' : 'en_US'} />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={title} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+
+    <!-- hreflang alternates -->
+    <link rel="alternate" hreflang="en" href={new URL(enPath, 'https://kham.io').href} />
+    <link rel="alternate" hreflang="th" href={new URL(thPath, 'https://kham.io').href} />
+    <link rel="alternate" hreflang="x-default" href={new URL(enPath, 'https://kham.io').href} />
+
+    <title>{title}</title>
+  </head>
+  <body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col min-h-screen transition-colors">
+    <!-- Skip to main content (accessibility) -->
+    <a href="#main-content"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:bg-blue-600 focus:text-white focus:px-4 focus:py-2 focus:rounded-lg focus:font-semibold">
+      Skip to main content
+    </a>
+    <NavBar lang={lang} />
+    <main id="main-content" class="flex-1">
+      <slot />
+    </main>
+    <Footer lang={lang} />
+  </body>
+</html>
