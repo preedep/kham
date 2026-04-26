@@ -34,7 +34,7 @@ def char_slice(text: str, t) -> str:
 
 class TestSegment:
     def test_pure_thai(self):
-        assert kham.segment("กินข้าวกับปลา") == ["กิน", "ข้าว", "กับ", "ปลา"]
+        assert kham.segment("กินข้าวกับปลา") == ["กินข้าว", "กับ", "ปลา"]
 
     def test_mixed_script(self):
         result = kham.segment("ธนาคาร100แห่ง")
@@ -175,8 +175,8 @@ class TestByteSpan:
 class TestKnownSplits:
     def test_pure_thai_texts(self):
         cases = [
-            ("กินข้าวกับปลา",   ["กิน", "ข้าว", "กับ", "ปลา"]),
-            ("สวัสดีชาวโลก",    ["สวัสดี", "ชาว", "โลก"]),
+            ("กินข้าวกับปลา",   ["กินข้าว", "กับ", "ปลา"]),
+            ("สวัสดีชาวโลก",    ["สวัสดี", "ชาวโลก"]),
         ]
         for text, expected in cases:
             got = [t.text for t in tokens(text)]

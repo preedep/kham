@@ -27,3 +27,4 @@ Repository = "https://github.com/preedep/kham"
 module-name = "kham"
 manifest-path = "Cargo.toml"
 features = ["pyo3/extension-module"]
+readme = "README.md"

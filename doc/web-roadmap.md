@@ -24,8 +24,8 @@ Goal: interactive Thai segmentation playground powered by kham-wasm in the brows
 
 - [x] Build kham-wasm and wire into Astro via `public/wasm/` (copied by `setup:wasm` script)
 - [x] `LiveDemo.astro` component — Thai text input → tokenized output table
-- [x] Token table columns: `text`, `kind`, `char span`, `byte span` (POS/NE/romanization deferred to v0.3 — not yet in WASM API)
-- [ ] Toggle options: FTS mode, soundex algorithm (lk82 / udom83 / MetaSound) — deferred to v0.3
+- [x] Token table columns: `text`, `kind`, `char span`, `byte span` (POS/NE/romanization deferred to v0.7 — see Phase 7)
+- [ ] Toggle options: FTS mode, soundex algorithm (lk82 / udom83 / MetaSound) — deferred to v0.7 (see Phase 7)
 - [x] `/demo` full-page playground with sample texts
 - [x] Lazy-load WASM (dynamic import via `is:inline` script) — page not blocked
 - [x] Embed demo teaser on landing page (`/`)
@@ -91,6 +91,30 @@ Goal: production-ready site, discoverable by search engines and Thai NLP communi
 - [x] Dark mode support (Tailwind `dark:` classes on NavBar, Footer, Layout, LiveDemo, license page)
 - [x] Accessibility audit (skip-to-content link, aria-live, aria-label, aria-busy, scope on th, role on nav)
 - [ ] Lighthouse score ≥ 90 on all pages (verify after deployment)
+
+---
+
+## Phase 7 — WASM API Expansion & Enhanced Demo (v0.7)
+
+Goal: expose the full kham-core NLP pipeline in WASM and upgrade the live demo to show POS, NE, romanization, and more.
+
+### WASM bindings (`kham-wasm/src/lib.rs`)
+
+- [ ] `segment_fts(text)` — returns `FtsToken[]` with `text`, `kind`, `pos`, `ne`, `is_stop`, `synonyms` fields (wraps `FtsTokenizer::segment_for_fts`)
+- [ ] `romanize(text)` — returns `{word, roman}[]` via `RomanizationMap::romanize_tokens`
+- [ ] `split_sentences(text)` — returns `string[]` sentence boundaries via `split_sentences()`
+- [ ] `soundex_word(word, algo)` — returns soundex code string; `algo` = `"lk82"` | `"udom83"` | `"metasound"` | `"cross"`
+- [ ] `normalize(text)` — returns normalized string via `normalizer::normalize`
+
+### Demo UI (`kham-web/`)
+
+- [ ] FTS mode toggle — switch `segment_tokens` → `segment_fts`; show `pos`, `ne`, `is_stop` columns
+- [ ] POS badge column — colour-coded POS tag per Thai token (e.g. NOUN=blue, VERB=green, ADJ=yellow)
+- [ ] NE highlight — Person / Place / Org tokens highlighted with distinct colours
+- [ ] Romanization column — RTGS roman for each Thai token (toggle on/off)
+- [ ] Soundex column — lk82 / udom83 / MetaSound selector; show code next to each Thai token
+- [ ] Sentence splitter panel — paste paragraph → show sentence boundaries
+- [ ] Normalizer panel — show raw vs normalised diff
 
 ---
 

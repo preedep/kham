@@ -1,6 +1,9 @@
 ---
 import Layout from '../layouts/Layout.astro';
 import LiveDemo from '../components/LiveDemo.astro';
+import SoundexWidget from '../components/SoundexWidget.astro';
+import NormalizerWidget from '../components/NormalizerWidget.astro';
+import NumberWidget from '../components/NumberWidget.astro';
 ---
 
 <Layout
@@ -10,22 +13,39 @@ import LiveDemo from '../components/LiveDemo.astro';
 >
   <div class="max-w-4xl mx-auto px-6 py-16">
     <div class="mb-10">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">Live Demo</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">
-        Thai word segmentation running entirely in your browser via WebAssembly — no server required.
-        Type any Thai text and click <strong>Segment</strong>, or pick a sample.
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">Live Demo</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        Thai NLP running entirely in your browser via WebAssembly — no server required.
+        Segment text, explore POS &amp; NE tags, split sentences, or test phonetic matching.
       </p>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+    <!-- Main segmentation demo -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
       <LiveDemo />
     </div>
 
-    <div class="mt-10 grid sm:grid-cols-3 gap-6 text-sm text-slate-600">
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">Token kinds</h3>
+    <!-- Soundex widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
+      <SoundexWidget />
+    </div>
+
+    <!-- Normalizer widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
+      <NormalizerWidget />
+    </div>
+
+    <!-- Number conversion widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+      <NumberWidget />
+    </div>
+
+    <!-- Info cards -->
+    <div class="grid sm:grid-cols-3 gap-6 text-sm text-slate-600 dark:text-slate-400">
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">Token kinds</h3>
         <ul class="space-y-1">
-          <li><span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>Thai script</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>Thai · Named entity</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1.5"></span>Latin</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1.5"></span>Number</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5"></span>Punctuation</li>
@@ -33,19 +53,24 @@ import LiveDemo from '../components/LiveDemo.astro';
         </ul>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">Span columns</h3>
-        <p><strong>Chars</strong> — Unicode scalar-value offsets, suitable for Python / JS <code class="text-xs bg-white px-1 py-0.5 rounded border border-slate-200">str.slice()</code></p>
-        <p class="mt-2"><strong>Bytes</strong> — UTF-8 byte offsets, used internally by Rust / PostgreSQL FTS.</p>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">FTS mode extras</h3>
+        <ul class="space-y-1">
+          <li><strong class="text-slate-700 dark:text-slate-300">POS</strong> — 13 ORCHID-derived categories</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">NE</strong> — Person · Place · Org</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Stop</strong> — built-in stopword list</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Roman</strong> — RTGS romanization toggle</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Synonyms</strong> — number normalization</li>
+        </ul>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">Coming in v0.3</h3>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">Soundex algorithms</h3>
         <ul class="space-y-1">
-          <li>POS tagging (13 categories)</li>
-          <li>Named Entity Recognition</li>
-          <li>Romanization (RTGS)</li>
-          <li>Phonetic codes (lk82 / udom83)</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">LK82</strong> — 12 groups · 4-char code</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Udom83</strong> — 14 groups · finer sibilants</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">MetaSound</strong> — 3 chars per syllable</li>
+          <li class="pt-1 text-xs text-slate-400 dark:text-slate-500">Used for fuzzy / phonetic FTS search</li>
         </ul>
       </div>
     </div>

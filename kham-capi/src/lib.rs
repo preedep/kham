@@ -28,11 +28,26 @@
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
 
-use kham_core::fts::FtsTokenizer;
-use kham_core::{TokenKind, Tokenizer};
+use kham_core::{
+    fts::FtsTokenizer,
+    normalizer::normalize as core_normalize,
+    number::{
+        parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
+        thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
+        u64_to_thai_word as core_number_to_word,
+    },
+    romanizer::RomanizationMap,
+    sentence::split_sentences as core_split,
+    soundex::{
+        soundex as core_soundex, sounds_like as core_sounds_like,
+        sounds_like_cross_lang as core_sounds_like_cross,
+        thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
+    },
+    TokenKind, Tokenizer,
+};
 
 // ---------------------------------------------------------------------------
-// Token kind helper
+// Helpers
 // ---------------------------------------------------------------------------
 
 fn kind_cstring(kind: TokenKind) -> CString {
@@ -47,6 +62,37 @@ fn kind_cstring(kind: TokenKind) -> CString {
         TokenKind::Named(ne) => ne.as_str(),
     })
     .unwrap()
+}
+
+fn strings_to_c_array(strings: Vec<String>) -> (*mut *mut c_char, usize) {
+    let mut v: Vec<*mut c_char> = strings
+        .into_iter()
+        .map(|s| CString::new(s).unwrap_or_default().into_raw())
+        .collect();
+    let len = v.len();
+    let ptr = v.as_mut_ptr();
+    std::mem::forget(v);
+    (ptr, len)
+}
+
+unsafe fn free_c_array(ptr: *mut *mut c_char, len: usize) {
+    let v = unsafe { Vec::from_raw_parts(ptr, len, len) };
+    for s in v {
+        drop(unsafe { CString::from_raw(s) });
+    }
+}
+
+/// Parse an optional algo string (`"lk82"`, `"udom83"`, `"metasound"`).
+/// NULL or unrecognised → [`SoundexAlgorithm::Lk82`].
+unsafe fn parse_algo(algo: *const c_char) -> SoundexAlgorithm {
+    if algo.is_null() {
+        return SoundexAlgorithm::Lk82;
+    }
+    match unsafe { CStr::from_ptr(algo) }.to_str().unwrap_or("") {
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        _ => SoundexAlgorithm::Lk82,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -227,7 +273,7 @@ pub unsafe extern "C" fn kham_token_list_free(list: *mut KhamTokenList) {
 // FTS API — FtsTokenizer pipeline results
 // ---------------------------------------------------------------------------
 
-/// A single FTS token with stopword flag, synonym list, and trigrams.
+/// A single FTS token with stopword flag, synonym list, trigrams, POS, NE, and romanization.
 ///
 /// All pointer fields are heap-allocated and owned by the containing
 /// [`KhamFtsTokenList`]. Free the list with [`kham_fts_token_list_free`] —
@@ -247,6 +293,19 @@ pub struct KhamFtsToken {
     pub kind: *mut c_char,
     /// `true` if this token matches the built-in stopword list.
     pub is_stop: bool,
+    /// RTGS romanization of the token text. Never NULL; equals the original
+    /// text for non-Thai or out-of-vocabulary tokens.
+    pub roman: *mut c_char,
+    /// POS tag string, or `NULL` if the word is not in the POS dictionary.
+    ///
+    /// Possible values: `"Noun"`, `"Verb"`, `"Adj"`, `"Adv"`, `"Particle"`,
+    /// `"ProperNoun"`, `"Pronoun"`, `"Numeral"`, `"Classifier"`,
+    /// `"Conjunction"`, `"Auxiliary"`, `"Determiner"`, `"Preposition"`.
+    pub pos: *mut c_char,
+    /// Named entity category, or `NULL` if not in the NE gazetteer.
+    ///
+    /// Possible values: `"Person"`, `"Place"`, `"Org"`.
+    pub ne: *mut c_char,
     /// Heap-allocated array of `synonyms_len` null-terminated synonym strings.
     pub synonyms: *mut *mut c_char,
     /// Number of entries in `synonyms`.
@@ -269,33 +328,10 @@ pub struct KhamFtsTokenList {
     pub len: usize,
 }
 
-fn strings_to_c_array(strings: Vec<String>) -> (*mut *mut c_char, usize) {
-    let mut v: Vec<*mut c_char> = strings
-        .into_iter()
-        .map(|s| CString::new(s).unwrap_or_default().into_raw())
-        .collect();
-    let len = v.len();
-    let ptr = v.as_mut_ptr();
-    std::mem::forget(v);
-    (ptr, len)
-}
-
-/// Free a heap-allocated `*mut *mut c_char` array produced by [`strings_to_c_array`].
-///
-/// # Safety
-///
-/// * `ptr` and `len` must match a value previously returned by [`strings_to_c_array`].
-/// * Must not be called more than once for the same allocation.
-unsafe fn free_c_array(ptr: *mut *mut c_char, len: usize) {
-    let v = unsafe { Vec::from_raw_parts(ptr, len, len) };
-    for s in v {
-        drop(unsafe { CString::from_raw(s) });
-    }
-}
-
 /// Segment `text` through the FTS pipeline and return annotated tokens.
 ///
 /// Uses the built-in stopword list, no synonyms, and trigram size 3.
+/// Each token includes POS tag, NE category, and RTGS romanization.
 ///
 /// # Safety
 ///
@@ -314,11 +350,20 @@ pub unsafe extern "C" fn kham_fts_segment(text: *const c_char) -> *mut KhamFtsTo
     };
 
     let fts = FtsTokenizer::new();
+    let roman_map = RomanizationMap::builtin();
     let fts_tokens = fts.segment_for_fts(s);
 
     let mut c_tokens: Vec<KhamFtsToken> = fts_tokens
         .into_iter()
         .map(|t| {
+            let roman = roman_map.romanize_or_raw(&t.text).to_owned();
+            let pos_ptr = t
+                .pos
+                .map(|p| CString::new(p.as_str()).unwrap_or_default().into_raw())
+                .unwrap_or(std::ptr::null_mut());
+            let ne_ptr =
+                t.ne.map(|n| CString::new(n.as_str()).unwrap_or_default().into_raw())
+                    .unwrap_or(std::ptr::null_mut());
             let (synonyms, synonyms_len) = strings_to_c_array(t.synonyms);
             let (trigrams, trigrams_len) = strings_to_c_array(t.trigrams);
             KhamFtsToken {
@@ -326,6 +371,9 @@ pub unsafe extern "C" fn kham_fts_segment(text: *const c_char) -> *mut KhamFtsTo
                 position: t.position,
                 kind: kind_cstring(t.kind).into_raw(),
                 is_stop: t.is_stop,
+                roman: CString::new(roman).unwrap_or_default().into_raw(),
+                pos: pos_ptr,
+                ne: ne_ptr,
                 synonyms,
                 synonyms_len,
                 trigrams,
@@ -358,6 +406,13 @@ pub unsafe extern "C" fn kham_fts_token_list_free(list: *mut KhamFtsTokenList) {
     for t in tokens {
         drop(unsafe { CString::from_raw(t.text) });
         drop(unsafe { CString::from_raw(t.kind) });
+        drop(unsafe { CString::from_raw(t.roman) });
+        if !t.pos.is_null() {
+            drop(unsafe { CString::from_raw(t.pos) });
+        }
+        if !t.ne.is_null() {
+            drop(unsafe { CString::from_raw(t.ne) });
+        }
         unsafe { free_c_array(t.synonyms, t.synonyms_len) };
         unsafe { free_c_array(t.trigrams, t.trigrams_len) };
     }
@@ -407,5 +462,462 @@ pub unsafe extern "C" fn kham_fts_lexemes(
 pub unsafe extern "C" fn kham_fts_lexemes_free(lexemes: *mut *mut c_char, len: usize) {
     if !lexemes.is_null() {
         unsafe { free_c_array(lexemes, len) };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// String free — used by all functions that return *mut c_char
+// ---------------------------------------------------------------------------
+
+/// Free a null-terminated string returned by any kham function that returns
+/// `char *` (e.g. [`kham_normalize`], [`kham_soundex`], [`kham_number_to_thai_word`]).
+///
+/// # Safety
+///
+/// * `s` must have been allocated by a kham function.
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_string_free(s: *mut c_char) {
+    if !s.is_null() {
+        drop(unsafe { CString::from_raw(s) });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Normalization
+// ---------------------------------------------------------------------------
+
+/// Normalize Thai text: deduplicate tone marks and compose sara am.
+///
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_normalize(text: *const c_char) -> *mut c_char {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    CString::new(core_normalize(s).as_bytes())
+        .unwrap_or_default()
+        .into_raw()
+}
+
+// ---------------------------------------------------------------------------
+// Romanization
+// ---------------------------------------------------------------------------
+
+/// A token text paired with its RTGS romanization.
+///
+/// Owned by the enclosing [`KhamRomanTokenList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamRomanToken {
+    /// Null-terminated original token text.
+    pub text: *mut c_char,
+    /// Null-terminated RTGS romanization.
+    pub roman: *mut c_char,
+}
+
+/// Heap-allocated array of [`KhamRomanToken`] values.
+///
+/// Must be freed with [`kham_roman_token_list_free`].
+#[repr(C)]
+pub struct KhamRomanTokenList {
+    /// Pointer to an array of `len` [`KhamRomanToken`] values.
+    pub tokens: *mut KhamRomanToken,
+    /// Number of tokens.
+    pub len: usize,
+}
+
+/// Segment `text` and return each token paired with its RTGS romanization.
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_roman_token_list_free`].
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_romanize(text: *const c_char) -> *mut KhamRomanTokenList {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let map = RomanizationMap::builtin();
+    let tok = Tokenizer::new();
+    let mut c_tokens: Vec<KhamRomanToken> = tok
+        .segment(s)
+        .iter()
+        .map(|t| KhamRomanToken {
+            text: CString::new(t.text).unwrap_or_default().into_raw(),
+            roman: CString::new(map.romanize_or_raw(t.text))
+                .unwrap_or_default()
+                .into_raw(),
+        })
+        .collect();
+
+    let len = c_tokens.len();
+    let ptr = c_tokens.as_mut_ptr();
+    std::mem::forget(c_tokens);
+
+    Box::into_raw(Box::new(KhamRomanTokenList { tokens: ptr, len }))
+}
+
+/// Free a [`KhamRomanTokenList`] value returned by [`kham_romanize`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_romanize`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_roman_token_list_free(list: *mut KhamRomanTokenList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let tokens = unsafe { Vec::from_raw_parts(list.tokens, list.len, list.len) };
+    for t in tokens {
+        if !t.text.is_null() {
+            drop(unsafe { CString::from_raw(t.text) });
+        }
+        if !t.roman.is_null() {
+            drop(unsafe { CString::from_raw(t.roman) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sentence splitting
+// ---------------------------------------------------------------------------
+
+/// A sentence span with text and Unicode char offsets.
+///
+/// Owned by the enclosing [`KhamSentenceList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamSentence {
+    /// Null-terminated UTF-8 sentence text.
+    pub text: *mut c_char,
+    /// Start Unicode scalar-value offset in the original input string.
+    pub char_start: usize,
+    /// End Unicode scalar-value offset in the original input string.
+    pub char_end: usize,
+}
+
+/// Heap-allocated array of [`KhamSentence`] values.
+///
+/// Must be freed with [`kham_sentence_list_free`].
+#[repr(C)]
+pub struct KhamSentenceList {
+    /// Pointer to an array of `len` [`KhamSentence`] values.
+    pub sentences: *mut KhamSentence,
+    /// Number of sentences.
+    pub len: usize,
+}
+
+/// Split `text` into sentence spans.
+///
+/// Boundaries: Thai markers (ฯ ๚ ๛), newlines, and Western punctuation
+/// (`! ? .` followed by a space).
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_sentence_list_free`].
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_split_sentences(text: *const c_char) -> *mut KhamSentenceList {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let mut c_sents: Vec<KhamSentence> = core_split(s)
+        .into_iter()
+        .map(|sent| KhamSentence {
+            text: CString::new(sent.text).unwrap_or_default().into_raw(),
+            char_start: sent.char_span.start,
+            char_end: sent.char_span.end,
+        })
+        .collect();
+
+    let len = c_sents.len();
+    let ptr = c_sents.as_mut_ptr();
+    std::mem::forget(c_sents);
+
+    Box::into_raw(Box::new(KhamSentenceList {
+        sentences: ptr,
+        len,
+    }))
+}
+
+/// Free a [`KhamSentenceList`] value returned by [`kham_split_sentences`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_split_sentences`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_sentence_list_free(list: *mut KhamSentenceList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let sents = unsafe { Vec::from_raw_parts(list.sentences, list.len, list.len) };
+    for s in sents {
+        if !s.text.is_null() {
+            drop(unsafe { CString::from_raw(s.text) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Soundex
+// ---------------------------------------------------------------------------
+
+/// Encode `word` using the specified phonetic algorithm.
+///
+/// `algo` is one of `"lk82"` (default), `"udom83"`, or `"metasound"`.
+/// Pass `NULL` for `algo` to use the default (`"lk82"`).
+///
+/// Returns a newly allocated null-terminated string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `word` must be a valid null-terminated UTF-8 string.
+/// * `algo` may be `NULL` (→ lk82) or a valid null-terminated string.
+/// * Returns `NULL` if `word` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_soundex(word: *const c_char, algo: *const c_char) -> *mut c_char {
+    if word.is_null() {
+        return std::ptr::null_mut();
+    }
+    let w = match unsafe { CStr::from_ptr(word) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    let alg = unsafe { parse_algo(algo) };
+    CString::new(core_soundex(w, alg))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Return `true` if `a` and `b` sound alike under the given algorithm.
+///
+/// `algo` is one of `"lk82"` (default), `"udom83"`, or `"metasound"`.
+/// Pass `NULL` for `algo` to use the default.
+///
+/// # Safety
+///
+/// * `a` and `b` must be valid null-terminated UTF-8 strings.
+/// * `algo` may be `NULL`.
+/// * Returns `false` if either input is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_sounds_like(
+    a: *const c_char,
+    b: *const c_char,
+    algo: *const c_char,
+) -> bool {
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+    let (Ok(sa), Ok(sb)) = (
+        unsafe { CStr::from_ptr(a) }.to_str(),
+        unsafe { CStr::from_ptr(b) }.to_str(),
+    ) else {
+        return false;
+    };
+    let alg = unsafe { parse_algo(algo) };
+    core_sounds_like(sa, sb, alg)
+}
+
+/// Compute the Thai–English cross-language soundex for `word`.
+///
+/// Accepts both Thai script and ASCII input.
+/// Returns a newly allocated null-terminated string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `word` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `word` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_thai_english_soundex(word: *const c_char) -> *mut c_char {
+    if word.is_null() {
+        return std::ptr::null_mut();
+    }
+    let w = match unsafe { CStr::from_ptr(word) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    CString::new(core_thai_english_soundex(w))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Return `true` if `a` and `b` are phonetically similar across Thai and English.
+///
+/// # Safety
+///
+/// * `a` and `b` must be valid null-terminated UTF-8 strings.
+/// * Returns `false` if either input is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_sounds_like_cross_lang(a: *const c_char, b: *const c_char) -> bool {
+    if a.is_null() || b.is_null() {
+        return false;
+    }
+    let (Ok(sa), Ok(sb)) = (
+        unsafe { CStr::from_ptr(a) }.to_str(),
+        unsafe { CStr::from_ptr(b) }.to_str(),
+    ) else {
+        return false;
+    };
+    core_sounds_like_cross(sa, sb)
+}
+
+// ---------------------------------------------------------------------------
+// Number conversion
+// ---------------------------------------------------------------------------
+
+/// Convert Thai digit characters (๐–๙) in `text` to ASCII digits.
+///
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_thai_digits_to_ascii(text: *const c_char) -> *mut c_char {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    CString::new(core_thai_digits_to_ascii(s))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Convert the integer `n` to its Thai cardinal word representation.
+///
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+#[no_mangle]
+pub extern "C" fn kham_number_to_thai_word(n: u64) -> *mut c_char {
+    CString::new(core_number_to_word(n))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Parse a Thai cardinal number word into an integer.
+///
+/// On success writes the value to `*out_n` and returns `true`.
+/// Returns `false` (and does not write to `*out_n`) if the text is not a
+/// valid Thai number word.
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * `out_n` must be a valid non-null pointer to a `uint64_t`.
+/// * Returns `false` if `text` or `out_n` is null.
+#[no_mangle]
+pub unsafe extern "C" fn kham_thai_word_to_number(text: *const c_char, out_n: *mut u64) -> bool {
+    if text.is_null() || out_n.is_null() {
+        return false;
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+    match core_parse_thai_word(s) {
+        Some(n) => {
+            unsafe { *out_n = n };
+            true
+        }
+        None => false,
+    }
+}
+
+/// Render a Baht amount as Thai currency text.
+///
+/// `satang` must be 0–99.
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+#[no_mangle]
+pub extern "C" fn kham_number_to_baht_text(baht: u64, satang: u8) -> *mut c_char {
+    CString::new(core_to_baht_text(baht, satang))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// A parsed Thai Baht currency amount.
+#[repr(C)]
+pub struct KhamBahtAmount {
+    /// Whole baht amount.
+    pub baht: u64,
+    /// Satang (0–99).
+    pub satang: u8,
+}
+
+/// Parse a Thai Baht currency string.
+///
+/// Returns a heap-allocated [`KhamBahtAmount`] on success, or `NULL` if the
+/// string is not a valid Thai Baht amount.
+/// Free with [`kham_baht_amount_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `text` is null, contains invalid UTF-8, or is not a
+///   valid Thai Baht string.
+#[no_mangle]
+pub unsafe extern "C" fn kham_parse_baht_text(text: *const c_char) -> *mut KhamBahtAmount {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match core_parse_baht(s) {
+        Some(amt) => Box::into_raw(Box::new(KhamBahtAmount {
+            baht: amt.baht,
+            satang: amt.satang,
+        })),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Free a [`KhamBahtAmount`] returned by [`kham_parse_baht_text`].
+///
+/// # Safety
+///
+/// * `amt` must have been allocated by [`kham_parse_baht_text`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_baht_amount_free(amt: *mut KhamBahtAmount) {
+    if !amt.is_null() {
+        drop(unsafe { Box::from_raw(amt) });
     }
 }

@@ -14,9 +14,18 @@ const year = new Date().getFullYear();
 <footer class="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 transition-colors">
   <div class="max-w-6xl mx-auto px-6 py-10">
     <div class="flex flex-col md:flex-row justify-between items-center gap-6">
-      <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
-        <span class="text-blue-600 font-bold text-lg">ข</span>
-        <span class="font-semibold text-slate-800 dark:text-slate-200">kham</span>
+      <div class="flex items-center gap-2.5 text-slate-600 dark:text-slate-400">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" class="shrink-0">
+          <defs>
+            <linearGradient id="kham-footer-g" x1="0" y1="0" x2="32" y2="32" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#2563eb"/>
+              <stop offset="1" stop-color="#4f46e5"/>
+            </linearGradient>
+          </defs>
+          <rect width="32" height="32" rx="8" fill="url(#kham-footer-g)"/>
+          <text x="16" y="23" font-family="system-ui,-apple-system,sans-serif" font-size="15" font-weight="700" text-anchor="middle" fill="white">คำ</text>
+        </svg>
+        <span class="font-semibold text-slate-800 dark:text-slate-200 tracking-tight">kham</span>
         <span class="text-sm">— {t('footer.tagline')}</span>
       </div>
 

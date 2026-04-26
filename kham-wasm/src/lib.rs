@@ -7,7 +7,8 @@
 //!
 //! Then from JavaScript / TypeScript:
 //! ```js
-//! import init, { segment, segment_tokens } from "./pkg/kham_wasm.js";
+//! import init, { segment, segment_tokens, segment_fts,
+//!                romanize, split_sentences } from "./pkg/kham_wasm.js";
 //! await init();
 //!
 //! // Simple: array of token strings
@@ -19,12 +20,38 @@
 //! for (const t of tokens) {
 //!     console.log(t.text, t.char_start, t.char_end, t.kind);
 //! }
-//! // ธนาคาร 0 6 Thai
-//! // 100    6 9 Number
-//! // แห่ง   9 13 Thai
+//!
+//! // FTS: rich NLP metadata per token (pos, ne, is_stop, roman, synonyms)
+//! const ftsToks = segment_fts("นายกรัฐมนตรีกินข้าว");
+//! for (const t of ftsToks) {
+//!     console.log(t.text, t.pos, t.ne, t.roman, t.is_stop);
+//! }
+//!
+//! // Romanization only
+//! const roman = romanize("กินข้าว");
+//! // [{text:"กิน", roman:"kin"}, {text:"ข้าว", roman:"khao"}]
+//!
+//! // Sentence splitting
+//! const sents = split_sentences("กินข้าว ดื่มน้ำ\nนอนหลับ");
+//! for (const s of sents) { console.log(s.text, s.char_start, s.char_end); }
 //! ```
 
-use kham_core::{TokenKind, Tokenizer};
+use kham_core::{
+    fts::FtsTokenizer,
+    number::{
+        parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
+        thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
+        u64_to_thai_word as core_number_to_word,
+    },
+    romanizer::RomanizationMap,
+    sentence::split_sentences as core_split,
+    soundex::{
+        soundex as core_soundex, sounds_like as core_sounds_like,
+        sounds_like_cross_lang as core_sounds_like_cross,
+        thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
+    },
+    TokenKind, Tokenizer,
+};
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -99,11 +126,160 @@ impl Token {
 
     /// Token kind: `"Thai"`, `"Latin"`, `"Number"`, `"Punctuation"`,
     /// `"Emoji"`, `"Whitespace"`, or `"Unknown"`.
-    /// Named entity tokens (reachable via the FTS API) use `"Person"`,
-    /// `"Place"`, or `"Org"` instead of `"Thai"`.
     #[wasm_bindgen(getter)]
     pub fn kind(&self) -> String {
         self.kind.to_owned()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// FtsToken
+// ---------------------------------------------------------------------------
+
+/// A token produced by the FTS pipeline with full NLP metadata.
+///
+/// - `text` — token string (normalized)
+/// - `position` — ordinal index in the non-whitespace token sequence (0-based)
+/// - `kind` — script/category string; Named entity tokens use `"Person"` /
+///   `"Place"` / `"Org"` instead of `"Thai"`
+/// - `is_stop` — `true` if the token is in the built-in stopword list
+/// - `roman` — RTGS romanization of the token text; equals `text` for
+///   non-Thai tokens (Latin, Number, etc.) and unknown Thai words
+/// - `pos` — ORCHID-derived POS tag string, or `null` if OOV / non-Thai
+///   (`"Noun"` | `"Verb"` | `"Adj"` | `"Adv"` | `"Particle"` | `"ProperNoun"`
+///   | `"Pronoun"` | `"Numeral"` | `"Classifier"` | `"Conjunction"`
+///   | `"Auxiliary"` | `"Determiner"` | `"Preposition"`)
+/// - `ne` — named entity category string, or `null`
+///   (`"Person"` | `"Place"` | `"Org"`)
+/// - `synonyms` — synonym / number-normalisation expansions (may be empty)
+/// - `trigrams` — character trigrams for `Unknown` tokens; empty otherwise
+#[wasm_bindgen]
+pub struct FtsToken {
+    text: String,
+    position: usize,
+    kind: &'static str,
+    is_stop: bool,
+    roman: String,
+    synonyms: Vec<String>,
+    trigrams: Vec<String>,
+    pos: Option<&'static str>,
+    ne: Option<&'static str>,
+}
+
+#[wasm_bindgen]
+impl FtsToken {
+    /// The token text (may be normalised relative to the raw input).
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// Ordinal position in the non-whitespace token sequence (0-based).
+    #[wasm_bindgen(getter)]
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
+    /// Token kind string.
+    #[wasm_bindgen(getter)]
+    pub fn kind(&self) -> String {
+        self.kind.to_owned()
+    }
+
+    /// `true` if this token matches the built-in Thai stopword list.
+    #[wasm_bindgen(getter)]
+    pub fn is_stop(&self) -> bool {
+        self.is_stop
+    }
+
+    /// RTGS romanization of the token. Equals the original text for non-Thai
+    /// or out-of-vocabulary tokens.
+    #[wasm_bindgen(getter)]
+    pub fn roman(&self) -> String {
+        self.roman.clone()
+    }
+
+    /// Synonym expansions (empty array if none).
+    #[wasm_bindgen(getter)]
+    pub fn synonyms(&self) -> Vec<JsValue> {
+        self.synonyms.iter().map(|s| JsValue::from_str(s)).collect()
+    }
+
+    /// Character trigrams for `Unknown` tokens; empty array for all other kinds.
+    #[wasm_bindgen(getter)]
+    pub fn trigrams(&self) -> Vec<JsValue> {
+        self.trigrams.iter().map(|s| JsValue::from_str(s)).collect()
+    }
+
+    /// POS tag string, or `null` if OOV or non-Thai.
+    #[wasm_bindgen(getter)]
+    pub fn pos(&self) -> Option<String> {
+        self.pos.map(|s| s.to_owned())
+    }
+
+    /// Named entity category string, or `null` if not in the NE gazetteer.
+    #[wasm_bindgen(getter)]
+    pub fn ne(&self) -> Option<String> {
+        self.ne.map(|s| s.to_owned())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// RomanToken
+// ---------------------------------------------------------------------------
+
+/// A token paired with its RTGS romanization, returned by [`romanize`].
+#[wasm_bindgen]
+pub struct RomanToken {
+    text: String,
+    roman: String,
+}
+
+#[wasm_bindgen]
+impl RomanToken {
+    /// The original token text.
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// RTGS romanization. Equals `text` for non-Thai or out-of-vocabulary tokens.
+    #[wasm_bindgen(getter)]
+    pub fn roman(&self) -> String {
+        self.roman.clone()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Sentence
+// ---------------------------------------------------------------------------
+
+/// A sentence span returned by [`split_sentences`].
+#[wasm_bindgen]
+pub struct Sentence {
+    text: String,
+    char_start: usize,
+    char_end: usize,
+}
+
+#[wasm_bindgen]
+impl Sentence {
+    /// The sentence text (zero-copy slice of the input, including terminator).
+    #[wasm_bindgen(getter)]
+    pub fn text(&self) -> String {
+        self.text.clone()
+    }
+
+    /// Start Unicode scalar-value (char) offset in the source string.
+    #[wasm_bindgen(getter)]
+    pub fn char_start(&self) -> usize {
+        self.char_start
+    }
+
+    /// End Unicode scalar-value (char) offset in the source string.
+    #[wasm_bindgen(getter)]
+    pub fn char_end(&self) -> usize {
+        self.char_end
     }
 }
 
@@ -113,16 +289,7 @@ impl Token {
 
 /// Segment Thai text and return an array of token strings.
 ///
-/// Mixed-script input (Thai + Latin + numbers) is handled correctly.
 /// Whitespace tokens are excluded from the output.
-///
-/// # Arguments
-///
-/// * `text` — Input string (valid UTF-8; JavaScript strings are always UTF-8 safe).
-///
-/// # Returns
-///
-/// A JavaScript `Array` of `string` token values.
 #[wasm_bindgen]
 pub fn segment(text: &str) -> Vec<JsValue> {
     Tokenizer::new()
@@ -133,19 +300,9 @@ pub fn segment(text: &str) -> Vec<JsValue> {
 }
 
 /// Segment Thai text and return an array of [`Token`] objects with full span
-/// information.
+/// information (`text`, `byte_start`/`byte_end`, `char_start`/`char_end`, `kind`).
 ///
-/// Each token carries `text`, `byte_start`/`byte_end` (UTF-8 byte offsets),
-/// `char_start`/`char_end` (Unicode scalar-value offsets), and `kind`.
 /// Whitespace tokens are excluded from the output.
-///
-/// # Arguments
-///
-/// * `text` — Input string (valid UTF-8).
-///
-/// # Returns
-///
-/// A JavaScript `Array` of [`Token`] objects.
 #[wasm_bindgen]
 pub fn segment_tokens(text: &str) -> Vec<Token> {
     Tokenizer::new()
@@ -160,4 +317,233 @@ pub fn segment_tokens(text: &str) -> Vec<Token> {
             kind: kind_str(t.kind),
         })
         .collect()
+}
+
+/// Segment Thai text through the full FTS pipeline and return an array of
+/// [`FtsToken`] objects with NLP metadata.
+///
+/// The built-in pipeline includes: text normalisation, word segmentation,
+/// named-entity recognition, stopword tagging, POS tagging, synonym expansion
+/// (number normalisation), and RTGS romanization. Whitespace tokens are
+/// excluded.
+#[wasm_bindgen]
+pub fn segment_fts(text: &str) -> Vec<FtsToken> {
+    let roman_map = RomanizationMap::builtin();
+    FtsTokenizer::new()
+        .segment_for_fts(text)
+        .into_iter()
+        .map(|t| {
+            let roman = roman_map.romanize_or_raw(&t.text).to_owned();
+            FtsToken {
+                roman,
+                text: t.text,
+                position: t.position,
+                kind: kind_str(t.kind),
+                is_stop: t.is_stop,
+                synonyms: t.synonyms,
+                trigrams: t.trigrams,
+                pos: t.pos.map(|p| p.as_str()),
+                ne: t.ne.map(|n| n.as_str()),
+            }
+        })
+        .collect()
+}
+
+/// Segment Thai text and return each token paired with its RTGS romanization.
+///
+/// For non-Thai tokens (Latin, Number, Punctuation) and unknown Thai words,
+/// `roman` equals the original `text`. Whitespace tokens are excluded.
+#[wasm_bindgen]
+pub fn romanize(text: &str) -> Vec<RomanToken> {
+    let map = RomanizationMap::builtin();
+    Tokenizer::new()
+        .segment(text)
+        .into_iter()
+        .map(|t| RomanToken {
+            roman: map.romanize_or_raw(t.text).to_owned(),
+            text: t.text.to_owned(),
+        })
+        .collect()
+}
+
+/// Normalise Thai text and return the canonical form.
+///
+/// Applies two transformations:
+/// 1. **Duplicate tone marks** — consecutive tone marks (อ่ อ้ อ๊ อ๋) are
+///    collapsed to the last one (e.g. `ก่้` → `ก้`).
+/// 2. **Sara Am composition** — nikhahit + sara aa (`อํ` + `อา`) is
+///    composed into sara am (`อำ`).
+///
+/// Returns the input unchanged if no normalisation is needed.
+#[wasm_bindgen]
+pub fn normalize(text: &str) -> String {
+    kham_core::normalizer::normalize(text)
+}
+
+/// Encode a single Thai word using the selected phonetic algorithm.
+///
+/// `algo` must be one of `"lk82"` (default), `"udom83"`, or `"metasound"`.
+/// Unknown values fall back to `"lk82"`.
+///
+/// - `lk82` / `udom83` — always returns a 4-character ASCII code.
+/// - `metasound` — returns 3 characters per syllable (variable length).
+///
+/// Returns `"0000"` / `"000"` if the word contains no Thai consonants.
+#[wasm_bindgen]
+pub fn soundex_word(word: &str, algo: &str) -> String {
+    let algorithm = match algo {
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        _ => SoundexAlgorithm::Lk82,
+    };
+    core_soundex(word, algorithm)
+}
+
+/// Return `true` if `a` and `b` produce the same soundex code under `algo`.
+///
+/// `algo` must be `"lk82"` (default), `"udom83"`, or `"metasound"`.
+#[wasm_bindgen]
+pub fn sounds_like(a: &str, b: &str, algo: &str) -> bool {
+    let algorithm = match algo {
+        "udom83" => SoundexAlgorithm::Udom83,
+        "metasound" => SoundexAlgorithm::MetaSound,
+        _ => SoundexAlgorithm::Lk82,
+    };
+    core_sounds_like(a, b, algorithm)
+}
+
+/// Encode a Thai or English word using the Thai–English cross-language soundex
+/// (Suwanvisat & Prasitjutrakul 1998).
+///
+/// Accepts both Thai script and ASCII; the same table is applied, so
+/// `thai_english_soundex("Robert")` and `thai_english_soundex("โรเบิร์ต")`
+/// share a common prefix.
+#[wasm_bindgen]
+pub fn thai_english_soundex(word: &str) -> String {
+    core_thai_english_soundex(word)
+}
+
+/// Return `true` if `a` and `b` sound alike under the Thai–English
+/// cross-language soundex (Suwanvisat & Prasitjutrakul 1998).
+///
+/// Accepts any mix of Thai and ASCII input.
+#[wasm_bindgen]
+pub fn sounds_like_cross_lang(a: &str, b: &str) -> bool {
+    core_sounds_like_cross(a, b)
+}
+
+/// Split text into sentences and return an array of [`Sentence`] objects.
+///
+/// Each sentence carries `text`, `char_start`, and `char_end`
+/// (Unicode scalar-value offsets into the original string).
+///
+/// Sentence boundaries are detected on Thai sentence-final markers
+/// (ฯ, ๛, ๚), newlines, and common Western punctuation (`.` `!` `?`),
+/// with decimal/abbreviation protection to avoid false splits.
+#[wasm_bindgen]
+pub fn split_sentences(text: &str) -> Vec<Sentence> {
+    core_split(text)
+        .into_iter()
+        .map(|s| Sentence {
+            text: s.text.to_owned(),
+            char_start: s.char_span.start,
+            char_end: s.char_span.end,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// BahtResult
+// ---------------------------------------------------------------------------
+
+/// Result of parsing a Thai Baht currency string via [`parse_baht_text`].
+/// Always check [`BahtResult::valid`] before using [`BahtResult::baht`] /
+/// [`BahtResult::satang`].
+#[wasm_bindgen]
+pub struct BahtResult {
+    baht: u32,
+    satang: u8,
+    valid: bool,
+}
+
+#[wasm_bindgen]
+impl BahtResult {
+    /// Whole baht amount.
+    #[wasm_bindgen(getter)]
+    pub fn baht(&self) -> u32 {
+        self.baht
+    }
+
+    /// Satang (0–99; 100 satang = 1 baht).
+    #[wasm_bindgen(getter)]
+    pub fn satang(&self) -> u8 {
+        self.satang
+    }
+
+    /// `true` if the input was a valid Thai Baht string.
+    #[wasm_bindgen(getter)]
+    pub fn valid(&self) -> bool {
+        self.valid
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Number conversion functions
+// ---------------------------------------------------------------------------
+
+/// Convert Thai digit characters (๐–๙) in `text` to ASCII digits.
+/// Non-Thai characters are passed through unchanged.
+#[wasm_bindgen]
+pub fn thai_digits_to_ascii(text: &str) -> String {
+    core_thai_digits_to_ascii(text)
+}
+
+/// Convert a number to its Thai cardinal word representation.
+///
+/// e.g. `123` → `"หนึ่งร้อยยี่สิบสาม"`, `0` → `"ศูนย์"`.
+#[wasm_bindgen]
+pub fn number_to_thai_word(n: u32) -> String {
+    core_number_to_word(n as u64)
+}
+
+/// Parse a Thai cardinal number word and return its decimal string.
+///
+/// Returns an empty string when the input is not a recognised number word.
+/// e.g. `"หนึ่งร้อยยี่สิบสาม"` → `"123"`, `"กินข้าว"` → `""`.
+#[wasm_bindgen]
+pub fn thai_word_to_number(text: &str) -> String {
+    match core_parse_thai_word(text) {
+        Some(n) => n.to_string(),
+        None => String::new(),
+    }
+}
+
+/// Render a Baht amount as Thai currency text.
+///
+/// `satang` must be 0–99 (100 satang = 1 baht).
+/// e.g. `(123, 50)` → `"หนึ่งร้อยยี่สิบสามบาทห้าสิบสตางค์"`,
+///      `(100, 0)` → `"หนึ่งร้อยบาทถ้วน"`.
+#[wasm_bindgen]
+pub fn number_to_baht_text(baht: u32, satang: u8) -> String {
+    core_to_baht_text(baht as u64, satang)
+}
+
+/// Parse a Thai Baht currency string into a [`BahtResult`].
+///
+/// Returns a result with `valid = false` when the input is not a recognised
+/// Thai Baht string (no `บาท` marker, or unrecognised number words).
+#[wasm_bindgen]
+pub fn parse_baht_text(text: &str) -> BahtResult {
+    match core_parse_baht(text) {
+        Some(b) => BahtResult {
+            baht: b.baht.min(u32::MAX as u64) as u32,
+            satang: b.satang,
+            valid: true,
+        },
+        None => BahtResult {
+            baht: 0,
+            satang: 0,
+            valid: false,
+        },
+    }
 }
