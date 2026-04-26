@@ -63,12 +63,18 @@ export const ui = {
     'api.table.desc': 'Description',
     'api.back': '← Getting Started',
     'api.rustdoc': 'Full rustdoc on docs.rs ↗',
+    // Benchmarks
+    'nav.benchmarks': 'Benchmarks',
+    // Changelog
+    'nav.changelog': 'Changelog',
   },
   th: {
     // Nav
     'nav.getting-started': 'เริ่มต้นใช้งาน',
     'nav.demo': 'ทดลองใช้งาน',
     'nav.api': 'อ้างอิง API',
+    'nav.benchmarks': 'ประสิทธิภาพ',
+    'nav.changelog': 'บันทึกการเปลี่ยนแปลง',
     // Footer
     'footer.tagline': 'ตัดคำภาษาไทยด้วย Rust',
     'footer.getting-started': 'เริ่มต้นใช้งาน',

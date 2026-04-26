@@ -73,10 +73,10 @@ Goal: developer-facing API docs for kham-core public API.
 
 Goal: transparency on performance and release history.
 
-- [ ] `/benchmarks` — criterion throughput numbers vs nlpO3 / PyThaiNLP
-- [ ] `/benchmarks` — accuracy F1 table against CC0 gold corpus
-- [ ] `/changelog` — per-version release notes (pulled from git tags / CHANGELOG.md)
-- [ ] CHANGELOG.md at repo root (keep in sync with releases)
+- [x] `/benchmarks` — criterion throughput numbers vs nlpO3 / PyThaiNLP
+- [x] `/benchmarks` — accuracy F1 table against CC0 gold corpus
+- [x] `/changelog` — per-version release notes (pulled from git tags / CHANGELOG.md)
+- [x] CHANGELOG.md at repo root (keep in sync with releases)
 
 ---
 
