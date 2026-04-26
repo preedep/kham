@@ -1,4 +1,13 @@
 ---
+import { useTranslations, prefix } from '../i18n/utils';
+import type { Lang } from '../i18n/ui';
+
+interface Props {
+  lang?: Lang;
+}
+const { lang = 'en' } = Astro.props;
+const t = useTranslations(lang);
+const p = prefix(lang);
 const year = new Date().getFullYear();
 ---
 
@@ -8,13 +17,13 @@ const year = new Date().getFullYear();
       <div class="flex items-center gap-2 text-slate-600">
         <span class="text-blue-600 font-bold text-lg">ข</span>
         <span class="font-semibold text-slate-800">kham</span>
-        <span class="text-sm">— Thai word segmentation in Rust</span>
+        <span class="text-sm">— {t('footer.tagline')}</span>
       </div>
 
       <nav class="flex flex-wrap justify-center gap-6 text-sm text-slate-600">
-        <a href="/getting-started" class="hover:text-slate-900 transition-colors">Getting Started</a>
-        <a href="/demo" class="hover:text-slate-900 transition-colors">Demo</a>
-        <a href="/api" class="hover:text-slate-900 transition-colors">API</a>
+        <a href={`${p}/getting-started`} class="hover:text-slate-900 transition-colors">{t('footer.getting-started')}</a>
+        <a href={`${p}/demo`} class="hover:text-slate-900 transition-colors">{t('nav.demo')}</a>
+        <a href={`${p}/api`} class="hover:text-slate-900 transition-colors">{t('nav.api')}</a>
         <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">GitHub</a>
         <a href="https://crates.io/crates/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">crates.io</a>
         <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">docs.rs</a>
@@ -22,7 +31,7 @@ const year = new Date().getFullYear();
       </nav>
 
       <p class="text-sm text-slate-500">
-        &copy; {year} kham contributors &mdash; MIT OR Apache-2.0
+        &copy; {year} kham contributors &mdash; {t('footer.license')}
       </p>
     </div>
   </div>

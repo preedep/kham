@@ -2,20 +2,23 @@
 import '../styles/global.css';
 import NavBar from '../components/NavBar.astro';
 import Footer from '../components/Footer.astro';
+import type { Lang } from '../i18n/ui';
 
 interface Props {
   title: string;
   description?: string;
+  lang?: Lang;
 }
 
 const {
   title,
   description = 'kham — Fast Thai word segmentation in Rust. Zero-dependency, no_std core. Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS.',
+  lang = 'en',
 } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang === 'th' ? 'th' : 'en'}>
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -24,13 +27,15 @@ const {
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
+    {lang === 'th' && <link rel="alternate" hreflang="en" href={Astro.url.pathname.replace(/^\/th/, '') || '/'} />}
+    {lang === 'en' && <link rel="alternate" hreflang="th" href={`/th${Astro.url.pathname === '/' ? '/' : Astro.url.pathname}`} />}
     <title>{title}</title>
   </head>
   <body class="bg-white text-slate-900 flex flex-col min-h-screen">
-    <NavBar />
+    <NavBar lang={lang} />
     <main class="flex-1">
       <slot />
     </main>
-    <Footer />
+    <Footer lang={lang} />
   </body>
 </html>
