@@ -1,0 +1,384 @@
+---
+import Layout from '../../layouts/Layout.astro';
+import CodeBlock from '../../components/CodeBlock.astro';
+
+export function getStaticPaths() {
+  return ['postgresql', 'sqlite', 'python', 'wasm'].map(slug => ({ params: { slug } }));
+}
+
+interface Section {
+  heading: string;
+  body?: string;
+  tabs?: { label: string; lang: string; code: string }[];
+  code?: string;
+  lang?: string;
+  label?: string;
+}
+
+interface IntegrationData {
+  title: string;
+  icon: string;
+  description: string;
+  sections: Section[];
+}
+
+const integrations: Record<string, IntegrationData> = {
+  postgresql: {
+    title: 'PostgreSQL FTS',
+    icon: '🐘',
+    description: 'kham-pg is a PostgreSQL text-search parser extension. It tokenises Thai text for full-text search, replacing the built-in parser for Thai-script documents.',
+    sections: [
+      {
+        heading: 'Prerequisites',
+        body: 'PostgreSQL 14 or later, Rust toolchain (1.85+), and pg_config in your PATH.',
+        code: 'pg_config --version   # PostgreSQL 14 or later\nrustup target add x86_64-unknown-linux-gnu  # if cross-compiling',
+        lang: 'bash',
+        label: 'shell',
+      },
+      {
+        heading: 'Build and install',
+        code: `# From the kham monorepo root
+cargo build -p kham-pg --release
+make -C kham-pg install
+
+# Verify the .so is in place
+ls "$(pg_config --pkglibdir)"/kham*`,
+        lang: 'bash',
+        label: 'shell',
+      },
+      {
+        heading: 'Load and configure',
+        body: 'Load the parser, create a text search configuration, and add mappings for Thai and other token types.',
+        code: `-- Load the shared library
+LOAD 'kham';
+
+-- Create a text search parser backed by kham
+CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
+
+-- Map token types to dictionaries
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR thai    WITH simple;
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR latin   WITH english_stem;
+ALTER TEXT SEARCH CONFIGURATION kham_cfg
+  ADD MAPPING FOR integer WITH simple;`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
+        heading: 'Index documents',
+        code: `CREATE TABLE articles (
+  id    SERIAL PRIMARY KEY,
+  title TEXT,
+  body  TEXT,
+  tsv   TSVECTOR
+);
+
+-- Populate the tsvector column
+UPDATE articles
+SET tsv = to_tsvector('kham_cfg', coalesce(title, '') || ' ' || coalesce(body, ''));
+
+-- GIN index for fast search
+CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);
+
+-- Keep it up-to-date automatically
+CREATE TRIGGER articles_tsv_update
+  BEFORE INSERT OR UPDATE ON articles
+  FOR EACH ROW EXECUTE FUNCTION
+    tsvector_update_trigger(tsv, 'public.kham_cfg', title, body);`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
+        heading: 'Search with ts_headline',
+        code: `SELECT
+  id,
+  ts_headline(
+    'kham_cfg',
+    body,
+    query,
+    'StartSel=<mark>, StopSel=</mark>, MaxWords=20'
+  ) AS snippet
+FROM articles,
+     to_tsquery('kham_cfg', 'ข้าว & ปลา') AS query
+WHERE tsv @@ query
+ORDER BY ts_rank(tsv, query) DESC
+LIMIT 10;`,
+        lang: 'sql',
+        label: 'psql',
+      },
+    ],
+  },
+
+  sqlite: {
+    title: 'SQLite FTS5',
+    icon: '🗃️',
+    description: 'kham-sqlite is a loadable SQLite extension that provides a custom FTS5 tokenizer. It splits Thai text correctly so that FTS5 MATCH queries work on Thai documents.',
+    sections: [
+      {
+        heading: 'Prerequisites',
+        body: 'SQLite with FTS5 enabled and the ability to load extensions. On macOS, the system sqlite3 disables load_extension — install via Homebrew instead.',
+        tabs: [
+          { label: 'macOS', lang: 'bash', code: 'brew install sqlite\n# Use /opt/homebrew/opt/sqlite/bin/sqlite3, not /usr/bin/sqlite3' },
+          { label: 'Ubuntu/Debian', lang: 'bash', code: 'sudo apt install libsqlite3-dev sqlite3' },
+          { label: 'Arch', lang: 'bash', code: 'sudo pacman -S sqlite' },
+        ],
+      },
+      {
+        heading: 'Build the extension',
+        code: `# From the kham monorepo root
+cargo build -p kham-sqlite --release
+
+# The shared library is at:
+#   Linux:  target/release/libkham_sqlite.so
+#   macOS:  target/release/libkham_sqlite.dylib`,
+        lang: 'bash',
+        label: 'shell',
+      },
+      {
+        heading: 'Load and create a FTS5 table',
+        code: `.load ./target/release/libkham_sqlite
+
+CREATE VIRTUAL TABLE docs USING fts5(
+  title,
+  body,
+  tokenize = 'kham'
+);`,
+        lang: 'sql',
+        label: 'sqlite3',
+      },
+      {
+        heading: 'Insert and search',
+        code: `INSERT INTO docs VALUES
+  ('อาหารไทย',  'กินข้าวกับปลาและผัก'),
+  ('เมืองหลวง', 'กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย');
+
+-- Simple MATCH
+SELECT title, body FROM docs WHERE docs MATCH 'ปลา';
+
+-- BM25 ranking
+SELECT title, bm25(docs) AS score
+FROM docs
+WHERE docs MATCH 'เมือง'
+ORDER BY score;
+
+-- Snippet highlight
+SELECT snippet(docs, 1, '<b>', '</b>', '…', 10)
+FROM docs
+WHERE docs MATCH 'กรุงเทพ';`,
+        lang: 'sql',
+        label: 'sqlite3',
+      },
+    ],
+  },
+
+  python: {
+    title: 'Python',
+    icon: '🐍',
+    description: 'kham\'s Python bindings are built with PyO3 and expose the full segmentation API — including rich Token objects with kind, POS, NE, and span information.',
+    sections: [
+      {
+        heading: 'Install',
+        tabs: [
+          { label: 'pip', lang: 'bash', code: 'pip install kham' },
+          { label: 'uv', lang: 'bash', code: 'uv add kham' },
+          { label: 'poetry', lang: 'bash', code: 'poetry add kham' },
+        ],
+      },
+      {
+        heading: 'Basic segmentation',
+        code: `import kham
+
+# Returns a list of strings
+words = kham.segment("กินข้าวกับปลา")
+print(words)
+# ['กิน', 'ข้าว', 'กับ', 'ปลา']
+
+# Mixed-script input is handled correctly
+mixed = kham.segment("Hello กรุงเทพ 2024!")
+print(mixed)
+# ['Hello', ' ', 'กรุงเทพ', ' ', '2024', '!']`,
+        lang: 'python',
+        label: 'example.py',
+      },
+      {
+        heading: 'Rich Token objects',
+        body: 'segment_tokens() returns Token objects with text, kind, and Unicode char spans — ideal for NLP pipelines.',
+        code: `import kham
+
+tokens = kham.segment_tokens("กินข้าวกับปลา")
+for tok in tokens:
+    print(f"{tok.text!r:10}  kind={tok.kind:12}  chars={tok.char_start}..{tok.char_end}")
+
+# 'กิน'       kind=Thai          chars=0..3
+# 'ข้าว'      kind=Thai          chars=3..7
+# 'กับ'       kind=Thai          chars=7..10
+# 'ปลา'       kind=Thai          chars=10..13`,
+        lang: 'python',
+        label: 'example.py',
+      },
+      {
+        heading: 'Token fields',
+        body: 'Every Token object exposes the following attributes:',
+        code: `tok.text        # str  — the token text
+tok.kind        # str  — "Thai" | "Latin" | "Number" | "Punctuation" | "Emoji" | "Whitespace" | "Unknown"
+tok.char_start  # int  — Unicode scalar-value start offset (use with str.slice())
+tok.char_end    # int  — Unicode scalar-value end offset
+tok.byte_start  # int  — UTF-8 byte start offset
+tok.byte_end    # int  — UTF-8 byte end offset`,
+        lang: 'python',
+        label: 'reference',
+      },
+      {
+        heading: 'Build from source (optional)',
+        code: `# Requires Rust toolchain + maturin
+pip install maturin
+git clone https://github.com/preedep/kham
+cd kham
+maturin develop -m kham-python/Cargo.toml`,
+        lang: 'bash',
+        label: 'shell',
+      },
+    ],
+  },
+
+  wasm: {
+    title: 'WebAssembly / npm',
+    icon: '🌐',
+    description: 'kham-wasm brings Thai word segmentation to the browser and Node.js with zero server dependencies. The WASM binary is ~300 KB and includes the full dictionary.',
+    sections: [
+      {
+        heading: 'Install',
+        code: 'npm install kham-wasm\n# or: yarn add kham-wasm  /  pnpm add kham-wasm',
+        lang: 'bash',
+        label: 'shell',
+      },
+      {
+        heading: 'Browser — ES module',
+        body: 'Import init and call it once to load the .wasm file, then use segment() or segment_tokens() freely.',
+        code: `import init, { segment, segment_tokens } from 'kham-wasm';
+
+// Load the WebAssembly module (fetches kham_wasm_bg.wasm)
+await init();
+
+// Segment into strings
+const words = segment("กินข้าวกับปลา");
+console.log(words);
+// ["กิน", "ข้าว", "กับ", "ปลา"]
+
+// Rich tokens
+const tokens = segment_tokens("Hello กรุงเทพ 2024");
+tokens.forEach(t => {
+  console.log(t.text, t.kind, t.char_start, t.char_end);
+});`,
+        lang: 'typescript',
+        label: 'browser.ts',
+      },
+      {
+        heading: 'Lazy loading (recommended)',
+        body: 'Load the WASM in the background so it does not block the initial page render.',
+        code: `let kham: Awaited<ReturnType<typeof import('kham-wasm')['default']>> | null = null;
+
+async function getKham() {
+  if (kham) return kham;
+  const mod = await import('kham-wasm');
+  await mod.default();       // init
+  kham = mod;
+  return kham;
+}
+
+// Preload silently in the background
+getKham().catch(console.error);
+
+async function onSegment(text: string) {
+  const { segment_tokens } = await getKham();
+  return segment_tokens(text);
+}`,
+        lang: 'typescript',
+        label: 'lazy.ts',
+      },
+      {
+        heading: 'Token fields',
+        code: `// Token object returned by segment_tokens()
+tok.text        // string — the token text
+tok.kind        // string — "Thai" | "Latin" | "Number" | "Punctuation" | "Emoji" | "Whitespace" | "Unknown"
+tok.char_start  // number — Unicode scalar-value start (JS string index for BMP text)
+tok.char_end    // number — Unicode scalar-value end
+tok.byte_start  // number — UTF-8 byte start offset
+tok.byte_end    // number — UTF-8 byte end offset`,
+        lang: 'typescript',
+        label: 'types.ts',
+      },
+      {
+        heading: 'Build from source',
+        code: `# Requires Rust + wasm-pack
+curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+git clone https://github.com/preedep/kham
+cd kham
+wasm-pack build kham-wasm --target web --release
+# Output: kham-wasm/pkg/`,
+        lang: 'bash',
+        label: 'shell',
+      },
+    ],
+  },
+};
+
+const { slug } = Astro.params;
+const data = integrations[slug as keyof typeof integrations];
+---
+
+<Layout title={`${data.title} Integration — kham`} description={data.description}>
+  <div class="max-w-4xl mx-auto px-6 py-16">
+    <!-- Breadcrumb -->
+    <nav class="text-sm text-slate-500 mb-8" aria-label="Breadcrumb">
+      <a href="/getting-started" class="hover:text-slate-800 transition-colors">Getting Started</a>
+      <span class="mx-2">/</span>
+      <span class="text-slate-800 font-medium">{data.title}</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="mb-12">
+      <div class="flex items-center gap-3 mb-3">
+        <span class="text-4xl">{data.icon}</span>
+        <h1 class="text-4xl font-bold text-slate-900">{data.title}</h1>
+      </div>
+      <p class="text-lg text-slate-600 max-w-2xl">{data.description}</p>
+    </div>
+
+    <!-- Sections -->
+    <div class="space-y-14">
+      {data.sections.map((section, i) => (
+        <section>
+          <div class="flex items-center gap-3 mb-3">
+            <span class="flex-none w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
+              {i + 1}
+            </span>
+            <h2 class="text-xl font-semibold text-slate-900">{section.heading}</h2>
+          </div>
+          {section.body && (
+            <p class="text-slate-600 mb-4 ml-10">{section.body}</p>
+          )}
+          <div class="ml-10">
+            {section.tabs ? (
+              <CodeBlock tabs={section.tabs} />
+            ) : (
+              <CodeBlock code={section.code} lang={section.lang} label={section.label} />
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+
+    <!-- Footer nav -->
+    <div class="mt-16 pt-8 border-t border-slate-200 flex justify-between text-sm">
+      <a href="/getting-started" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+        ← All targets
+      </a>
+      <a href="/demo" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+        Try the live demo →
+      </a>
+    </div>
+  </div>
+</Layout>

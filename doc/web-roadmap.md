@@ -36,18 +36,18 @@ Goal: interactive Thai segmentation playground powered by kham-wasm in the brows
 
 Goal: installation guides for every target so new users can be productive in minutes.
 
-- [ ] `/getting-started` — quickstart sections per target:
+- [x] `/getting-started` — quickstart sections per target:
   - Rust (Cargo.toml snippet + minimal example)
   - Python (`pip install kham` + `segment()` example)
   - WASM / npm (browser + Node.js)
   - CLI (`cargo install kham-cli` + usage)
   - PostgreSQL FTS5 (extension install + SQL example)
   - SQLite FTS5 (`.load` + FTS5 virtual table example)
-- [ ] `CodeBlock.astro` — multi-language tabbed code snippets with copy button
-- [ ] `/integrations/postgresql` — full PG setup guide + ts_vector example
-- [ ] `/integrations/sqlite` — full SQLite FTS5 setup guide
-- [ ] `/integrations/python` — PyO3 binding guide + token fields
-- [ ] `/integrations/wasm` — browser + Node.js guide
+- [x] `CodeBlock.astro` — multi-language tabbed code snippets with copy button (uses Astro `<Code>` + Shiki, no extra packages)
+- [x] `/integrations/postgresql` — full PG setup guide + ts_headline example
+- [x] `/integrations/sqlite` — full SQLite FTS5 setup guide
+- [x] `/integrations/python` — PyO3 binding guide + token fields
+- [x] `/integrations/wasm` — browser + Node.js guide
 
 ---
 

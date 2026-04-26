@@ -1,0 +1,95 @@
+---
+import { Code } from 'astro:components';
+
+export interface CodeTab {
+  label: string;
+  lang: string;
+  code: string;
+}
+
+interface Props {
+  tabs?: CodeTab[];
+  code?: string;
+  lang?: string;
+  label?: string;
+}
+
+const { tabs, code, lang = 'bash', label } = Astro.props;
+const allTabs: CodeTab[] = tabs ?? (code ? [{ label: label ?? lang, lang, code }] : []);
+const multi = allTabs.length > 1;
+---
+
+<div class="code-block-root my-4 rounded-xl overflow-hidden border border-slate-700 text-sm">
+  {multi && (
+    <div class="flex bg-slate-800 border-b border-slate-700" role="tablist">
+      {allTabs.map((tab, i) => (
+        <button
+          type="button"
+          role="tab"
+          class:list={[
+            'code-tab px-4 py-2.5 text-xs font-medium transition-colors whitespace-nowrap',
+            i === 0
+              ? 'text-white border-b-2 border-blue-400 bg-slate-900'
+              : 'text-slate-400 hover:text-slate-200',
+          ]}
+          data-idx={String(i)}
+          aria-selected={i === 0 ? 'true' : 'false'}
+        >
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )}
+
+  {allTabs.map((tab, i) => (
+    <div
+      class:list={['code-panel relative [&>pre]:!rounded-none [&>pre]:!m-0', i > 0 && 'hidden']}
+      data-idx={String(i)}
+    >
+      <Code code={tab.code} lang={tab.lang} theme="github-dark" />
+      <button
+        type="button"
+        class="copy-btn absolute top-3 right-3 text-xs text-slate-400 hover:text-white bg-slate-700 hover:bg-slate-600 px-2.5 py-1 rounded transition-colors z-10"
+        aria-label="Copy code"
+      >
+        Copy
+      </button>
+    </div>
+  ))}
+</div>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.code-block-root').forEach(block => {
+    const tabs = block.querySelectorAll<HTMLButtonElement>('.code-tab');
+    const panels = block.querySelectorAll<HTMLElement>('.code-panel');
+
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const idx = tab.dataset.idx;
+        tabs.forEach(t => {
+          const active = t.dataset.idx === idx;
+          t.classList.toggle('text-white', active);
+          t.classList.toggle('border-b-2', active);
+          t.classList.toggle('border-blue-400', active);
+          t.classList.toggle('bg-slate-900', active);
+          t.classList.toggle('text-slate-400', !active);
+          t.setAttribute('aria-selected', String(active));
+        });
+        panels.forEach(p => {
+          p.classList.toggle('hidden', p.dataset.idx !== idx);
+        });
+      });
+    });
+
+    block.querySelectorAll<HTMLButtonElement>('.copy-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const panel = btn.closest<HTMLElement>('.code-panel');
+        const text = panel?.querySelector('code')?.textContent ?? '';
+        navigator.clipboard.writeText(text).then(() => {
+          btn.textContent = 'Copied!';
+          setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+        });
+      });
+    });
+  });
+</script>

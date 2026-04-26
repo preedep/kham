@@ -58,9 +58,29 @@ For production, import from npm package `kham-wasm` once published.
 ## Key Components
 
 - `BadgeRow.astro` — crates.io / docs.rs / CI / license badges
-- `LiveDemo.astro` — WASM-powered Thai text input + token output
-- `CodeBlock.astro` — syntax-highlighted code snippets (multi-language tabs)
+- `LiveDemo.astro` — WASM-powered Thai text input + token output; loads `/wasm/kham_wasm.js` via `is:inline` dynamic import; supports `compact` prop for landing-page teaser
+- `CodeBlock.astro` — syntax-highlighted code snippets with copy button; uses Astro's built-in `<Code>` (Shiki, no extra packages); accepts `tabs` array or single `code/lang/label`
 - `NavBar.astro` / `Footer.astro`
+
+## CodeBlock usage
+
+```astro
+<!-- Single snippet -->
+<CodeBlock code="cargo add kham-core" lang="bash" label="shell" />
+
+<!-- Multi-tab -->
+<CodeBlock tabs={[
+  { label: 'pip', lang: 'bash', code: 'pip install kham' },
+  { label: 'uv',  lang: 'bash', code: 'uv add kham' },
+]} />
+```
+
+## WASM integration (Phase 2)
+
+- `npm run setup:wasm` copies `kham-wasm/pkg/{kham_wasm.js,kham_wasm_bg.wasm}` → `public/wasm/`; wired as `predev` / `prebuild` hook
+- `public/wasm/` is gitignored (generated artifact)
+- In CI (`web.yml`) wasm-pack builds kham-wasm before `npm run build`
+- Client scripts import via `import('/wasm/kham_wasm.js')` inside `<script is:inline>` — Vite does not process this import; browser fetches it at runtime
 
 ## CI / Deployment
 
