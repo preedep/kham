@@ -1,9 +1,9 @@
 ---
 name: kham-web
-description: Build and maintain the kham.org Astro website. Use when scaffolding kham-web/, adding pages, building the live demo component (kham-wasm in browser), writing Astro components, configuring Tailwind, setting up CI/CD for the site, or deploying to GitHub Pages / Cloudflare Pages.
+description: Build and maintain the kham.io Astro website. Use when scaffolding kham-web/, adding pages, building the live demo component (kham-wasm in browser), writing Astro components, configuring Tailwind, setting up CI/CD for the site, or deploying to GitHub Pages / Cloudflare Pages.
 ---
 
-# kham-web — Astro Website for kham.org
+# kham-web — Astro Website for kham.io
 
 ## Project Location
 

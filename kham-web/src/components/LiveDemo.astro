@@ -25,26 +25,28 @@ const kindColors: Record<string, string> = {
 <div class="live-demo-root font-sans" data-compact={compact.toString()}>
   <!-- Input -->
   <div class="mb-4">
-    <label for="demo-input" class="block text-sm font-medium text-slate-700 mb-1">
+    <label for="demo-input" class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
       Thai text
     </label>
     <textarea
       id="demo-input"
       rows={compact ? 2 : 3}
       placeholder="พิมพ์ข้อความภาษาไทย…"
-      class="w-full rounded-lg border border-slate-300 px-4 py-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+      aria-label="Thai text input for segmentation"
+      class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-4 py-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none placeholder:text-slate-400"
     >{samples[0]}</textarea>
   </div>
 
   <!-- Samples -->
-  <div class="flex flex-wrap gap-2 mb-4">
+  <div class="flex flex-wrap gap-2 mb-4" role="group" aria-label="Sample texts">
     <span class="text-xs text-slate-500 self-center">Samples:</span>
-    {samples.map((s, i) => (
+    {samples.map((s) => (
       <button
         type="button"
-        class="demo-sample text-xs px-3 py-1.5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors truncate max-w-[180px]"
+        class="demo-sample text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[180px]"
         data-text={s}
         title={s}
+        aria-label={`Use sample: ${s}`}
       >
         {s.length > 14 ? s.slice(0, 14) + '…' : s}
       </button>
@@ -56,41 +58,43 @@ const kindColors: Record<string, string> = {
     <button
       id="demo-run"
       type="button"
+      aria-label="Segment Thai text"
+      aria-busy="false"
       class="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
     >
-      <svg id="demo-spinner" class="hidden animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+      <svg id="demo-spinner" class="hidden animate-spin w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" aria-hidden="true">
         <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
       </svg>
       <span id="demo-btn-label">Segment</span>
     </button>
-    <span id="demo-status" class="text-sm text-slate-500 hidden"></span>
+    <span id="demo-status" class="text-sm text-slate-500 hidden" role="status" aria-live="polite"></span>
   </div>
 
   <!-- Results -->
-  <div id="demo-results" class="hidden">
+  <div id="demo-results" class="hidden" aria-live="polite" aria-label="Segmentation results">
     <!-- Token pills -->
-    <div id="demo-pills" class="flex flex-wrap gap-2 mb-5 p-4 bg-slate-50 rounded-lg border border-slate-200 min-h-[52px]"></div>
+    <div id="demo-pills" class="flex flex-wrap gap-2 mb-5 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]" role="list" aria-label="Token pills"></div>
 
     <!-- Table (hidden in compact mode) -->
     {!compact && (
-      <div class="overflow-x-auto rounded-lg border border-slate-200">
-        <table class="w-full text-sm text-left">
-          <thead class="bg-slate-50 border-b border-slate-200">
+      <div class="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm text-left" aria-label="Token details">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
-              <th class="px-4 py-3 font-semibold text-slate-600 w-10">#</th>
-              <th class="px-4 py-3 font-semibold text-slate-600">Text</th>
-              <th class="px-4 py-3 font-semibold text-slate-600">Kind</th>
-              <th class="px-4 py-3 font-semibold text-slate-600">Chars</th>
-              <th class="px-4 py-3 font-semibold text-slate-600">Bytes</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400 w-10">#</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Text</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Kind</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Chars</th>
+              <th scope="col" class="px-4 py-3 font-semibold text-slate-600 dark:text-slate-400">Bytes</th>
             </tr>
           </thead>
-          <tbody id="demo-tbody" class="divide-y divide-slate-100"></tbody>
+          <tbody id="demo-tbody" class="divide-y divide-slate-100 dark:divide-slate-700"></tbody>
         </table>
       </div>
     )}
 
-    <p id="demo-count" class="text-xs text-slate-400 mt-3"></p>
+    <p id="demo-count" class="text-xs text-slate-400 mt-3" aria-live="polite"></p>
   </div>
 </div>
 
@@ -156,6 +160,7 @@ const kindColors: Record<string, string> = {
     const label = document.getElementById('demo-btn-label');
     const status = document.getElementById('demo-status');
     btn.disabled = loading;
+    btn.setAttribute('aria-busy', loading ? 'true' : 'false');
     spinner.classList.toggle('hidden', !loading);
     label.textContent = loading ? 'Loading…' : 'Segment';
     status.classList.toggle('hidden', !loading);

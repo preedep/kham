@@ -1,6 +1,6 @@
 # kham-web Roadmap
 
-Website for **kham.org** — built with Astro + Tailwind + kham-wasm. Lives at `kham-web/` in the monorepo.
+Website for **kham.io** — built with Astro + Tailwind + kham-wasm. Lives at `kham-web/` in the monorepo.
 
 ---
 
@@ -9,12 +9,12 @@ Website for **kham.org** — built with Astro + Tailwind + kham-wasm. Lives at `
 Goal: scaffolded project, CI pipeline, and a deployable landing page with badges.
 
 - [ ] Scaffold `kham-web/` with Astro + Tailwind (`npm create astro`)
-- [ ] Configure `astro.config.mjs` — `output: 'static'`, base URL `kham.org`
+- [ ] Configure `astro.config.mjs` — `output: 'static'`, base URL `kham.io`
 - [ ] `NavBar.astro` + `Footer.astro` components
 - [ ] `BadgeRow.astro` — crates.io version, docs.rs, CI status, license, MSRV, downloads
 - [ ] Landing page (`/`) — hero headline, one-paragraph pitch, badge row, CTA buttons
 - [ ] GitHub Actions workflow `.github/workflows/web.yml` — build + deploy to GitHub Pages
-- [ ] Domain setup — `kham.org` → GitHub Pages / Cloudflare Pages
+- [ ] Domain setup — `kham.io` → GitHub Pages / Cloudflare Pages
 
 ---
 
@@ -84,13 +84,13 @@ Goal: transparency on performance and release history.
 
 Goal: production-ready site, discoverable by search engines and Thai NLP community.
 
-- [ ] `/license` — full MIT + Apache-2.0 text, corpus attribution table (TNC, CC-BY, CC-BY-SA)
-- [ ] Open Graph / Twitter card meta tags on all pages
-- [ ] `sitemap.xml` + `robots.txt` (Astro sitemap integration)
-- [ ] Thai + English page titles and descriptions
-- [ ] Dark mode support (Tailwind `dark:` classes)
-- [ ] Accessibility audit (keyboard nav, aria labels on demo)
-- [ ] Lighthouse score ≥ 90 on all pages
+- [x] `/license` — full MIT + Apache-2.0 text, corpus attribution table (TNC, CC-BY, CC-BY-SA)
+- [x] Open Graph / Twitter card meta tags on all pages
+- [x] `sitemap.xml` + `robots.txt` (Astro sitemap integration via @astrojs/sitemap)
+- [x] Thai + English page titles and descriptions
+- [x] Dark mode support (Tailwind `dark:` classes on NavBar, Footer, Layout, LiveDemo, license page)
+- [x] Accessibility audit (skip-to-content link, aria-live, aria-label, aria-busy, scope on th, role on nav)
+- [ ] Lighthouse score ≥ 90 on all pages (verify after deployment)
 
 ---
 

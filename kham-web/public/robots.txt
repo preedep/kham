@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://kham.io/sitemap-index.xml

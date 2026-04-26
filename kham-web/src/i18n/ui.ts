@@ -67,6 +67,8 @@ export const ui = {
     'nav.benchmarks': 'Benchmarks',
     // Changelog
     'nav.changelog': 'Changelog',
+    // License
+    'nav.license': 'License',
   },
   th: {
     // Nav
@@ -75,6 +77,7 @@ export const ui = {
     'nav.api': 'อ้างอิง API',
     'nav.benchmarks': 'ประสิทธิภาพ',
     'nav.changelog': 'บันทึกการเปลี่ยนแปลง',
+    'nav.license': 'ใบอนุญาต',
     // Footer
     'footer.tagline': 'ตัดคำภาษาไทยด้วย Rust',
     'footer.getting-started': 'เริ่มต้นใช้งาน',

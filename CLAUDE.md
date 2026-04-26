@@ -14,7 +14,7 @@ Batteries-included Thai word segmentation library in Rust. Multi-target: Rust cr
 | `kham-pg/` | PostgreSQL text-search parser extension (`cdylib`). → [kham-pg/CLAUDE.md](kham-pg/CLAUDE.md) |
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
 | `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
-| `kham-web/` | Astro website for kham.org — landing page, live WASM demo, docs, API reference. → [doc/web-roadmap.md](doc/web-roadmap.md) |
+| `kham-web/` | Astro website for kham.io — landing page, live WASM demo, docs, API reference. → [doc/web-roadmap.md](doc/web-roadmap.md) |
 
 ## Commands
 

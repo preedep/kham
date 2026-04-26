@@ -11,26 +11,26 @@ const p = prefix(lang);
 const year = new Date().getFullYear();
 ---
 
-<footer class="border-t border-slate-200 bg-slate-50">
+<footer class="border-t border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 transition-colors">
   <div class="max-w-6xl mx-auto px-6 py-10">
     <div class="flex flex-col md:flex-row justify-between items-center gap-6">
-      <div class="flex items-center gap-2 text-slate-600">
+      <div class="flex items-center gap-2 text-slate-600 dark:text-slate-400">
         <span class="text-blue-600 font-bold text-lg">ข</span>
-        <span class="font-semibold text-slate-800">kham</span>
+        <span class="font-semibold text-slate-800 dark:text-slate-200">kham</span>
         <span class="text-sm">— {t('footer.tagline')}</span>
       </div>
 
-      <nav class="flex flex-wrap justify-center gap-6 text-sm text-slate-600">
-        <a href={`${p}/getting-started`} class="hover:text-slate-900 transition-colors">{t('footer.getting-started')}</a>
-        <a href={`${p}/demo`} class="hover:text-slate-900 transition-colors">{t('nav.demo')}</a>
-        <a href={`${p}/api`} class="hover:text-slate-900 transition-colors">{t('nav.api')}</a>
-        <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">GitHub</a>
-        <a href="https://crates.io/crates/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">crates.io</a>
-        <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">docs.rs</a>
-        <a href="https://www.npmjs.com/package/kham-wasm" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 transition-colors">npm</a>
+      <nav class="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-400" aria-label="Footer navigation">
+        <a href={`${p}/getting-started`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('footer.getting-started')}</a>
+        <a href={`${p}/demo`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.demo')}</a>
+        <a href={`${p}/api`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.api')}</a>
+        <a href={`${p}/license`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.license')}</a>
+        <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-white transition-colors">GitHub</a>
+        <a href="https://crates.io/crates/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-white transition-colors">crates.io</a>
+        <a href="https://docs.rs/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-white transition-colors">docs.rs</a>
       </nav>
 
-      <p class="text-sm text-slate-500">
+      <p class="text-sm text-slate-500 dark:text-slate-500">
         &copy; {year} kham contributors &mdash; {t('footer.license')}
       </p>
     </div>
