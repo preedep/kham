@@ -55,16 +55,17 @@ Goal: installation guides for every target so new users can be productive in min
 
 Goal: developer-facing API docs for kham-core public API.
 
-- [ ] `/api` — overview of public API surface
-- [ ] Document each module with Thai + English examples:
-  - `Segmenter` / `Token` / `TokenKind`
-  - `FtsTokenizer` + pipeline options
-  - `PosTagger` / `PosTag` (13 categories)
+- [x] `/api` — overview table of all public modules with docs.rs links
+- [x] Document each module with Thai + English examples:
+  - `Tokenizer` / `Token` / `TokenKind` (note: public type is `Tokenizer`, not `Segmenter`)
+  - `FtsTokenizer` + full builder pipeline options
+  - `PosTagger` / `PosTag` (13 ORCHID-derived categories, tabulated)
   - `NeTagger` / `NamedEntityKind` (Person / Place / Org)
   - `RomanizationMap` (RTGS)
-  - `number_normalize` / `parse_thai_date` / `split_sentences`
-  - `soundex` (lk82 / udom83 / MetaSound)
-- [ ] Link each module to docs.rs page
+  - `number` module: digit conversion, word parsing, baht text
+  - `sentence` / `split_sentences`
+  - `soundex` (lk82 / udom83 / MetaSound / cross-language)
+- [x] Link each module to docs.rs page
 
 ---
 
