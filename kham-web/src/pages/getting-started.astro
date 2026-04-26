@@ -12,19 +12,19 @@ const sections = [
     example: {
       lang: 'rust',
       label: 'main.rs',
-      code: `use kham_core::Segmenter;
+      code: `use kham_core::Tokenizer;
 
 fn main() {
-    let seg = Segmenter::new();
+    let tok = Tokenizer::new();
 
     // Segment into &str slices (zero-copy)
-    let tokens = seg.segment("กินข้าวกับปลา");
+    let tokens = tok.segment("กินข้าวกับปลา");
     println!("{:?}", tokens);
     // ["กิน", "ข้าว", "กับ", "ปลา"]
 
     // Rich tokens with kind + byte/char spans
-    for tok in seg.segment_tokens("Hello กรุงเทพ 2024") {
-        println!("{:?}  kind={:?}  chars={}..{}", tok.text, tok.kind, tok.char_span.start, tok.char_span.end);
+    for t in tok.segment("Hello กรุงเทพ 2024") {
+        println!("{:?}  kind={:?}  chars={}..{}", t.text, t.kind, t.char_span.start, t.char_span.end);
     }
 }`,
     },
@@ -169,8 +169,8 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
   <div class="max-w-5xl mx-auto px-6 py-16">
     <!-- Header -->
     <div class="mb-12">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">Getting Started</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">Getting Started</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
         kham v0.5.0 — pick your target and be up and running in minutes.
       </p>
       <!-- Quick jump links -->
@@ -178,7 +178,7 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
         {sections.map(s => (
           <a
             href={`#${s.id}`}
-            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700 transition-colors"
+            class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-700 dark:hover:text-blue-400 transition-colors"
           >
             <span>{s.icon}</span> {s.title}
           </a>
@@ -192,22 +192,22 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
         <section id={s.id} class="scroll-mt-24">
           <div class="flex items-center gap-3 mb-2">
             <span class="text-3xl">{s.icon}</span>
-            <h2 class="text-2xl font-bold text-slate-900">{s.title}</h2>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{s.title}</h2>
           </div>
-          <p class="text-slate-500 mb-6">{s.subtitle}</p>
+          <p class="text-slate-500 dark:text-slate-400 mb-6">{s.subtitle}</p>
 
           <div class="space-y-3">
-            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">Install</h3>
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Install</h3>
             <CodeBlock code={s.install.code} lang={s.install.lang} label={s.install.label} />
 
-            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide pt-2">Usage</h3>
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide pt-2">Usage</h3>
             <CodeBlock code={s.example.code} lang={s.example.lang} label={s.example.label} />
           </div>
 
           {s.link && (
             <a
               href={s.link}
-              class="inline-flex items-center gap-1 mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              class="inline-flex items-center gap-1 mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors"
             >
               Full integration guide →
             </a>

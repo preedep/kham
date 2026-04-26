@@ -34,13 +34,13 @@ const tabs = [
   <!-- ── Tab: → Thai Word ── -->
   <div id="num-panel-word" class="num-panel">
     <label for="num-word-input" class="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-      Number <span class="text-slate-400">(0 – 4,294,967,295)</span>
+      Number <span class="text-slate-400">(0 – 9,007,199,254,740,991)</span>
     </label>
     <input
       id="num-word-input"
       type="number"
       min="0"
-      max="4294967295"
+      max="9007199254740991"
       placeholder="1234"
       class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
     />
@@ -113,7 +113,7 @@ const tabs = [
       <div class="flex items-end gap-3">
         <div class="flex-1">
           <label for="num-baht-baht" class="block text-xs text-slate-500 dark:text-slate-400 mb-1">Baht</label>
-          <input id="num-baht-baht" type="number" min="0" max="4294967295" placeholder="100"
+          <input id="num-baht-baht" type="number" min="0" max="9007199254740991" placeholder="100"
             class="w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 px-3 py-2 text-base font-sans focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"/>
         </div>
         <div class="w-24">
@@ -196,15 +196,16 @@ const tabs = [
     if (isNaN(n) || n < 0) { outEl.textContent = '—'; rtEl.classList.add('hidden'); return; }
     try {
       const mod = await loadWasm();
-      const word = mod.number_to_thai_word(n);
+      const word = mod.number_to_thai_word(BigInt(n));
       outEl.textContent = word;
       outEl.className = 'text-xl font-medium text-slate-800 dark:text-slate-100 not-italic';
 
       // round-trip
       const back = mod.thai_word_to_number(word);
       if (back !== '') {
-        rtEl.textContent = `Round-trip: ${word} → ${Number(back).toLocaleString()} ${Number(back) === n ? '✓' : '≠ ' + n}`;
-        rtEl.className = `text-xs ${Number(back) === n ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'} not-hidden`;
+        const backN = Number(back);
+        rtEl.textContent = `Round-trip: ${word} → ${backN.toLocaleString()} ${backN === n ? '✓' : '≠ ' + n}`;
+        rtEl.className = `text-xs ${backN === n ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500'} not-hidden`;
         rtEl.classList.remove('hidden');
       } else {
         rtEl.classList.add('hidden');
@@ -304,7 +305,7 @@ const tabs = [
     }
     try {
       const mod = await loadWasm();
-      const text = mod.number_to_baht_text(baht, satang);
+      const text = mod.number_to_baht_text(BigInt(baht), satang);
       outEl.innerHTML = `<span class="text-slate-800 dark:text-slate-100 not-italic">${text}</span>`;
     } catch (e) { console.error(e); }
   }

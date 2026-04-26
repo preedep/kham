@@ -461,7 +461,7 @@ pub fn split_sentences(text: &str) -> Vec<Sentence> {
 /// [`BahtResult::satang`].
 #[wasm_bindgen]
 pub struct BahtResult {
-    baht: u32,
+    baht: u64,
     satang: u8,
     valid: bool,
 }
@@ -470,7 +470,7 @@ pub struct BahtResult {
 impl BahtResult {
     /// Whole baht amount.
     #[wasm_bindgen(getter)]
-    pub fn baht(&self) -> u32 {
+    pub fn baht(&self) -> u64 {
         self.baht
     }
 
@@ -502,8 +502,8 @@ pub fn thai_digits_to_ascii(text: &str) -> String {
 ///
 /// e.g. `123` → `"หนึ่งร้อยยี่สิบสาม"`, `0` → `"ศูนย์"`.
 #[wasm_bindgen]
-pub fn number_to_thai_word(n: u32) -> String {
-    core_number_to_word(n as u64)
+pub fn number_to_thai_word(n: u64) -> String {
+    core_number_to_word(n)
 }
 
 /// Parse a Thai cardinal number word and return its decimal string.
@@ -524,8 +524,8 @@ pub fn thai_word_to_number(text: &str) -> String {
 /// e.g. `(123, 50)` → `"หนึ่งร้อยยี่สิบสามบาทห้าสิบสตางค์"`,
 ///      `(100, 0)` → `"หนึ่งร้อยบาทถ้วน"`.
 #[wasm_bindgen]
-pub fn number_to_baht_text(baht: u32, satang: u8) -> String {
-    core_to_baht_text(baht as u64, satang)
+pub fn number_to_baht_text(baht: u64, satang: u8) -> String {
+    core_to_baht_text(baht, satang)
 }
 
 /// Parse a Thai Baht currency string into a [`BahtResult`].
@@ -536,7 +536,7 @@ pub fn number_to_baht_text(baht: u32, satang: u8) -> String {
 pub fn parse_baht_text(text: &str) -> BahtResult {
     match core_parse_baht(text) {
         Some(b) => BahtResult {
-            baht: b.baht.min(u32::MAX as u64) as u32,
+            baht: b.baht,
             satang: b.satang,
             valid: true,
         },

@@ -14,9 +14,16 @@ const sections = [
 
 fn main() {
     let tok = Tokenizer::new();
+
+    // ตัดคำเป็น &str slice (zero-copy)
     let tokens = tok.segment("กินข้าวกับปลา");
     println!("{:?}", tokens);
     // ["กิน", "ข้าว", "กับ", "ปลา"]
+
+    // Token รายละเอียด พร้อม kind + byte/char span
+    for t in tok.segment("Hello กรุงเทพ 2024") {
+        println!("{:?}  kind={:?}  chars={}..{}", t.text, t.kind, t.char_span.start, t.char_span.end);
+    }
 }` },
     link: '/th/integrations/postgresql',
   },
@@ -26,10 +33,12 @@ fn main() {
     install: { lang: 'bash', label: 'shell', code: 'pip install kham' },
     example: { lang: 'python', label: 'example.py', code: `import kham
 
+# ตัดคำเป็น list ของ string
 words = kham.segment("กินข้าวกับปลา")
 print(words)
 # ['กิน', 'ข้าว', 'กับ', 'ปลา']
 
+# Token object รายละเอียด
 for tok in kham.segment_tokens("Hello กรุงเทพ 2024"):
     print(tok.text, tok.kind, tok.char_start, tok.char_end)` },
     link: '/th/integrations/python',
@@ -39,11 +48,16 @@ for tok in kham.segment_tokens("Hello กรุงเทพ 2024"):
     subtitle: 'ทำงานในเบราว์เซอร์และ Node.js — ไม่ต้องใช้เซิร์ฟเวอร์',
     install: { lang: 'bash', label: 'shell', code: 'npm install kham-wasm' },
     example: { lang: 'typescript', label: 'browser.ts', code: `import init, { segment, segment_tokens } from 'kham-wasm';
+
+// เรียกครั้งเดียวตอน load (ดาวน์โหลด .wasm)
 await init();
 
 const words = segment("กินข้าวกับปลา");
 console.log(words);
-// ["กิน", "ข้าว", "กับ", "ปลา"]` },
+// ["กิน", "ข้าว", "กับ", "ปลา"]
+
+const tokens = segment_tokens("Hello กรุงเทพ 2024");
+tokens.forEach(t => console.log(t.text, t.kind, t.char_start, t.char_end));` },
     link: '/th/integrations/wasm',
   },
   {
@@ -54,34 +68,52 @@ console.log(words);
 kham "กินข้าวกับปลา"
 # กิน|ข้าว|กับ|ปลา
 
-# โหมด FTS
+# โหมด FTS — kind, POS, NE, stop, syn ต่อ token
 kham --fts "กินข้าวกับปลา"
 
-# FTS + phonetic code
+# FTS + phonetic code ในช่อง syn=
 kham --fts --soundex lk82 "กินข้าวกับปลา"` },
   },
   {
     id: 'postgresql', icon: '🐘', title: 'PostgreSQL FTS',
     subtitle: 'extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL 14+',
-    install: { lang: 'bash', label: 'shell', code: `cargo build -p kham-pg --release\nmake -C kham-pg install` },
-    example: { lang: 'sql', label: 'example.sql', code: `LOAD 'kham';
+    install: { lang: 'bash', label: 'shell', code: `# Build และติดตั้ง (ต้องมี pg_config ใน PATH)
+cargo build -p kham-pg --release
+make -C kham-pg install` },
+    example: { lang: 'sql', label: 'example.sql', code: `-- โหลด extension
+LOAD 'kham';
+
+-- สร้าง text search configuration
 CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
 ALTER TEXT SEARCH CONFIGURATION kham_cfg
   ADD MAPPING FOR thai WITH simple;
 
+-- Index และค้นหา
+CREATE TABLE docs (id SERIAL, body TEXT, tsv TSVECTOR);
 UPDATE docs SET tsv = to_tsvector('kham_cfg', body);
-SELECT id FROM docs WHERE tsv @@ to_tsquery('kham_cfg', 'ข้าว');` },
+CREATE INDEX docs_tsv ON docs USING GIN(tsv);
+
+SELECT id, ts_headline('kham_cfg', body, query) AS snippet
+FROM docs, to_tsquery('kham_cfg', 'ข้าว') query
+WHERE tsv @@ query;` },
     link: '/th/integrations/postgresql',
   },
   {
     id: 'sqlite', icon: '🗃️', title: 'SQLite FTS5',
     subtitle: 'Loadable tokenizer extension สำหรับ SQLite FTS5',
-    install: { lang: 'bash', label: 'shell', code: `cargo build -p kham-sqlite --release
-# macOS: brew install sqlite` },
+    install: { lang: 'bash', label: 'shell', code: `# Build (ต้องมี SQLite headers)
+cargo build -p kham-sqlite --release
+# macOS: brew install sqlite  (system sqlite3 ปิด load_extension)` },
     example: { lang: 'sql', label: 'sqlite3 shell', code: `.load ./target/release/libkham_sqlite
 
-CREATE VIRTUAL TABLE docs USING fts5(body, tokenize = 'kham');
+CREATE VIRTUAL TABLE docs USING fts5(
+  body,
+  tokenize = 'kham'
+);
+
 INSERT INTO docs VALUES ('กินข้าวกับปลา');
+INSERT INTO docs VALUES ('กรุงเทพมหานครเป็นเมืองหลวง');
+
 SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
     link: '/th/integrations/sqlite',
   },
@@ -92,12 +124,12 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
   description="คู่มือเริ่มต้นใช้งาน kham สำหรับ Rust, Python, WebAssembly, CLI, PostgreSQL FTS และ SQLite FTS5">
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">{t('gs.title')}</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">{t('gs.subtitle')}</p>
-      <nav class="flex flex-wrap gap-3 mt-6">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">{t('gs.title')}</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">{t('gs.subtitle')}</p>
+      <nav class="flex flex-wrap gap-3 mt-6" aria-label="Section jump links">
         {sections.map(s => (
           <a href={`#${s.id}`}
-             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700 transition-colors">
+             class="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:border-blue-300 dark:hover:border-blue-600 hover:text-blue-700 dark:hover:text-blue-400 transition-colors">
             <span>{s.icon}</span> {s.title}
           </a>
         ))}
@@ -109,18 +141,18 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
         <section id={s.id} class="scroll-mt-24">
           <div class="flex items-center gap-3 mb-2">
             <span class="text-3xl">{s.icon}</span>
-            <h2 class="text-2xl font-bold text-slate-900">{s.title}</h2>
+            <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100">{s.title}</h2>
           </div>
-          <p class="text-slate-500 mb-6">{s.subtitle}</p>
+          <p class="text-slate-500 dark:text-slate-400 mb-6">{s.subtitle}</p>
           <div class="space-y-3">
-            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide">{t('gs.install')}</h3>
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide">{t('gs.install')}</h3>
             <CodeBlock code={s.install.code} lang={s.install.lang} label={s.install.label} />
-            <h3 class="text-sm font-semibold text-slate-700 uppercase tracking-wide pt-2">{t('gs.usage')}</h3>
+            <h3 class="text-sm font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wide pt-2">{t('gs.usage')}</h3>
             <CodeBlock code={s.example.code} lang={s.example.lang} label={s.example.label} />
           </div>
           {s.link && (
             <a href={s.link}
-               class="inline-flex items-center gap-1 mt-4 text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors">
+               class="inline-flex items-center gap-1 mt-4 text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">
               {t('gs.full-guide')}
             </a>
           )}

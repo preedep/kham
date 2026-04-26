@@ -1,6 +1,9 @@
 ---
 import Layout from '../../layouts/Layout.astro';
 import LiveDemo from '../../components/LiveDemo.astro';
+import SoundexWidget from '../../components/SoundexWidget.astro';
+import NormalizerWidget from '../../components/NormalizerWidget.astro';
+import NumberWidget from '../../components/NumberWidget.astro';
 import { useTranslations } from '../../i18n/utils';
 
 const t = useTranslations('th');
@@ -9,19 +12,39 @@ const t = useTranslations('th');
 <Layout title="ทดลองใช้งาน — kham" description={t('demo.desc')} lang="th">
   <div class="max-w-4xl mx-auto px-6 py-16">
     <div class="mb-10">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">{t('demo.title')}</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">{t('demo.desc')}</p>
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">{t('demo.title')}</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        ประมวลผล NLP ภาษาไทยทั้งหมดในเบราว์เซอร์ผ่าน WebAssembly — ไม่ต้องใช้เซิร์ฟเวอร์
+        ตัดคำ, ดู POS &amp; NE tag, แบ่งประโยค หรือทดสอบการเทียบเสียง
+      </p>
     </div>
 
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+    <!-- Main segmentation demo -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
       <LiveDemo />
     </div>
 
-    <div class="mt-10 grid sm:grid-cols-3 gap-6 text-sm text-slate-600">
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">{t('demo.kinds.title')}</h3>
+    <!-- Soundex widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
+      <SoundexWidget />
+    </div>
+
+    <!-- Normalizer widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-8">
+      <NormalizerWidget />
+    </div>
+
+    <!-- Number conversion widget -->
+    <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm p-6 md:p-8 mb-10">
+      <NumberWidget />
+    </div>
+
+    <!-- Info cards -->
+    <div class="grid sm:grid-cols-3 gap-6 text-sm text-slate-600 dark:text-slate-400">
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">ประเภท Token</h3>
         <ul class="space-y-1">
-          <li><span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>Thai — ภาษาไทย</li>
+          <li><span class="inline-block w-2 h-2 rounded-full bg-blue-400 mr-1.5"></span>Thai · Named entity — ภาษาไทย</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-green-400 mr-1.5"></span>Latin — ภาษาอังกฤษ</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-1.5"></span>Number — ตัวเลข</li>
           <li><span class="inline-block w-2 h-2 rounded-full bg-slate-400 mr-1.5"></span>Punctuation — เครื่องหมาย</li>
@@ -29,19 +52,24 @@ const t = useTranslations('th');
         </ul>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">{t('demo.span.title')}</h3>
-        <p><strong>Chars</strong> — {t('demo.span.chars')}</p>
-        <p class="mt-2"><strong>Bytes</strong> — {t('demo.span.bytes')}</p>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">FTS mode เพิ่มเติม</h3>
+        <ul class="space-y-1">
+          <li><strong class="text-slate-700 dark:text-slate-300">POS</strong> — 13 หมวดหมู่ตาม ORCHID</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">NE</strong> — บุคคล · สถานที่ · องค์กร</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Stop</strong> — stopword ในตัว</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Roman</strong> — แปลง RTGS</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Synonyms</strong> — ปรับตัวเลข</li>
+        </ul>
       </div>
 
-      <div class="bg-slate-50 rounded-xl p-5 border border-slate-200">
-        <h3 class="font-semibold text-slate-800 mb-1">{t('demo.coming.title')}</h3>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+        <h3 class="font-semibold text-slate-800 dark:text-slate-200 mb-2">อัลกอริทึม Soundex</h3>
         <ul class="space-y-1">
-          <li>POS tagging (13 หมวดหมู่)</li>
-          <li>Named Entity Recognition</li>
-          <li>Romanization (RTGS)</li>
-          <li>Phonetic codes (lk82 / udom83)</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">LK82</strong> — 12 กลุ่ม · 4 ตัวอักษร</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">Udom83</strong> — 14 กลุ่ม · แยก ล/ร ชัดเจน</li>
+          <li><strong class="text-slate-700 dark:text-slate-300">MetaSound</strong> — 3 ตัว/พยางค์</li>
+          <li class="pt-1 text-xs text-slate-400 dark:text-slate-500">ใช้สำหรับ fuzzy / phonetic FTS search</li>
         </ul>
       </div>
     </div>
