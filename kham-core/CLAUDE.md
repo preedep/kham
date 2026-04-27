@@ -20,13 +20,17 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 | `pos` | `PosTagger` / `PosTag` — table-driven POS tagging (13 categories) |
 | `ne` | `NeTagger` / `NamedEntityKind` — gazetteer-based NER |
 | `fts` | `FtsTokenizer` / `FtsToken` — full pipeline for PostgreSQL FTS |
-| `romanizer` | `RomanizationMap` — RTGS table-lookup Thai → Latin |
+| `romanizer` | `RomanizationMap` — RTGS table-lookup + rule-based fallback Thai → Latin |
 | `soundex` | Thai phonetic encoding — lk82, udom83, MetaSound, Thai–English cross-language |
+| `spell` | `SpellChecker` — Levenshtein ≤ 2 over built-in dict, ranked by lk82 + TNC frequency |
+| `keyword` | `KeyExtractor` — TF × inverse-corpus-frequency keyword extraction; stopwords excluded |
 
 ## Dictionary
 
 - Built-in: `words_th.txt` (Apache-2.0, PyThaiNLP) embedded at compile time via `include_bytes!`
-- Custom dict: `Tokenizer::builder().dict_file("path")`
+- Custom dict (full rebuild): `Tokenizer::builder().dict_words(words_str)` / `.dict_file("path")` — concatenates BUILTIN_WORDS + custom words and rebuilds trie; O(N) startup
+- Custom dict (fast overlay): `Tokenizer::builder().dict_merge(words_str)` — keeps prebuilt binary, stores custom words in a sorted `Vec`; O(k log k) for k words; use for small domain-specific additions
+- `Dict::with_overlay(words_str)` — same fast path, available directly on a `Dict` instance
 - Trie: Double-Array Trie, O(n) lookup — no external trie-building utilities
 - Never ship BEST corpus or non-CC0 data
 - Frequency data: `tnc_freq.txt` (Apache-2.0, PyThaiNLP) embedded separately — loaded into `FreqMap`, used by newmm DP scorer as tiebreaker; do not merge into the trie binary
@@ -229,17 +233,45 @@ let fts = FtsTokenizer::builder()
 
 ### `romanizer` — `RomanizationMap`
 
-Table-lookup RTGS romanization. No rule-based phonetic engine — table only. Rule-based can be a future `#[cfg(feature = "phonetic")]` extension.
+Table-lookup RTGS romanization with a rule-based fallback for OOV words. The table (415 hand-curated entries) is checked first; for Thai words not in the table, `romanize_word()` applies consonant initial/final tables and vowel diacritic rules.
 
 ```rust
-RomanizationMap::builtin()                   // embedded via include_str!
-RomanizationMap::from_tsv(data: &str)       // last duplicate wins
-map.romanize(word: &str) -> Option<&str>    // zero-copy borrow from map
-map.romanize_or_raw(word: &str) -> &str
+RomanizationMap::builtin()                        // embedded via include_str!
+RomanizationMap::from_tsv(data: &str)            // last duplicate wins
+map.romanize(word: &str) -> Option<&str>         // table only; None for OOV
+map.romanize_or_raw(word: &str) -> &str          // table only; returns raw word for OOV
+map.romanize_or_rule(word: &str) -> String       // table → rule engine → raw passthrough
+map.romanize_owned(word: &str) -> Option<String> // table → rule engine; None for non-Thai
 map.romanize_tokens(tokens: &[&str]) -> Vec<String>
+
+// Rule engine (public, usable standalone):
+romanize_word(word: &str) -> String  // in kham_core::romanizer
 ```
 
+Rule engine coverage: leading vowels (เ แ โ ใ ไ), above vowels (ิ ี ึ ื ั ็), below vowels (ุ ู), following vowels (า ะ ำ), tone marks (skipped), thanthakat silent marker (์), initial and final consonant tables. Does not handle ห นำ, อ นำ, or phinthu clusters — use the table for high-priority words.
+
 Data: `kham-core/data/romanization_th.tsv` — hand-curated, NOT auto-generated. To add entries: edit TSV → `cargo test -p kham-core` → commit TSV alongside API changes.
+
+### `spell` — `SpellChecker`
+
+```rust
+SpellChecker::builtin()                                      // dict + TNC freq + lk82
+checker.suggestions(word: &str, max_n: usize) -> Vec<Suggestion>
+// Suggestion { word, edit_distance: u8, soundex_match: bool, freq_score: u32 }
+// Filters: edit_distance ≤ 2, length pre-filter ±2 chars
+// Sort: soundex_match DESC → edit_distance ASC → freq_score DESC
+```
+
+### `keyword` — `KeyExtractor`
+
+```rust
+KeyExtractor::builtin()                                       // tokenizer + TNC freq + stopwords
+extractor.extract(text: &str, max_n: usize) -> Vec<Keyword>
+// Keyword { word: String, score: f32, count: usize }
+// score = TF × (max_tnc_freq + 1) / (tnc_freq + 1)
+// Filters: kind ∈ {Thai, Latin, Number, Named}, char_len ≥ 2, not a stopword
+// Sort: score DESC (ties broken alphabetically)
+```
 
 ## Testing
 

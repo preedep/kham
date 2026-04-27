@@ -1,6 +1,6 @@
 # kham.rs — Thai Word Segmentation Engine
 
-Batteries-included Thai word segmentation library in Rust. Multi-target: Rust crate, WASM, Python (PyO3), C FFI, CLI, PostgreSQL FTS5, SQLite FTS5.
+Batteries-included Thai NLP library in Rust. Segmentation, spell correction, keyword extraction, phonetic encoding, NER, POS tagging, RTGS romanization, and full-text search pipelines. Multi-target: Rust crate, WASM, Python (PyO3), C FFI, CLI, PostgreSQL FTS5, SQLite FTS5.
 
 ## Architecture
 
