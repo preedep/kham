@@ -6,19 +6,19 @@ import Layout from '../layouts/Layout.astro';
   description="kham segmentation throughput and accuracy F1 (0.975, 94.9% sentence agreement with PyThaiNLP newmm). Measured on Apple M-series with Rust 1.85+.">
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">Benchmarks</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">Benchmarks</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
         Throughput and accuracy numbers for kham v0.5.0, measured on Apple M-series (arm64).
-        All criterion benchmarks run with <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">--release</code> and LTO enabled.
+        All criterion benchmarks run with <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">--release</code> and LTO enabled.
       </p>
     </div>
 
     <!-- Environment -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-4">Environment</h2>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">Environment</h2>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['CPU', 'Apple M-series (arm64)'],
               ['OS', 'macOS'],
@@ -27,26 +27,26 @@ import Layout from '../layouts/Layout.astro';
               ['Built-in dictionary', '62,102 words · 669,387 DARTS states · 5.1 MiB'],
               ['TNC frequency table', '106,125 entries'],
             ].map(([k, v]) => (
-              <tr class="hover:bg-slate-50">
-                <td class="px-5 py-3 font-medium text-slate-700 w-48">{k}</td>
-                <td class="px-5 py-3 text-slate-600 font-mono">{v}</td>
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                <td class="px-5 py-3 font-medium text-slate-700 dark:text-slate-300 w-48">{k}</td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 font-mono">{v}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p class="mt-3 text-sm text-slate-500">
-        Run locally: <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">cargo bench -p kham-core</code>
-        — HTML report at <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">target/criterion/report/index.html</code>
+      <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+        Run locally: <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">cargo bench -p kham-core</code>
+        — HTML report at <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">target/criterion/report/index.html</code>
       </p>
     </section>
 
     <!-- Accuracy -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Accuracy</h2>
-      <p class="text-slate-600 mb-6">
-        Word-boundary precision / recall / F1 against a CC0 gold corpus (<code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">kham-core/testdata/</code>).
-        Also compared against PyThaiNLP <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">word_tokenize(engine='newmm')</code> on 39 benchmark sentences.
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Accuracy</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-6">
+        Word-boundary precision / recall / F1 against a CC0 gold corpus (<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">kham-core/testdata/</code>).
+        Also compared against PyThaiNLP <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">word_tokenize(engine='newmm')</code> on 39 benchmark sentences.
       </p>
 
       <div class="grid sm:grid-cols-3 gap-6 mb-8">
@@ -55,17 +55,17 @@ import Layout from '../layouts/Layout.astro';
           { label: 'Sentence agreement', value: '94.9%', sub: '37/39 vs PyThaiNLP newmm' },
           { label: 'Genuine diffs', value: '0', sub: '2 remaining are confirmed PyThaiNLP errors' },
         ].map(({ label, value, sub }) => (
-          <div class="bg-blue-50 rounded-xl border border-blue-100 p-6 text-center">
-            <div class="text-4xl font-bold text-blue-700 mb-1">{value}</div>
-            <div class="font-semibold text-slate-800 mb-1">{label}</div>
-            <div class="text-xs text-slate-500">{sub}</div>
+          <div class="bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-100 dark:border-blue-800 p-6 text-center">
+            <div class="text-4xl font-bold text-blue-700 dark:text-blue-400 mb-1">{value}</div>
+            <div class="font-semibold text-slate-800 dark:text-slate-200 mb-1">{label}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{sub}</div>
           </div>
         ))}
       </div>
 
-      <div class="bg-slate-50 rounded-xl border border-slate-200 p-5 text-sm text-slate-600">
-        <strong class="text-slate-800">How to reproduce:</strong>
-        <pre class="mt-2 font-mono text-xs bg-white rounded border border-slate-200 p-3 overflow-x-auto">{`cargo run -p kham-bench-accuracy
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5 text-sm text-slate-600 dark:text-slate-400">
+        <strong class="text-slate-800 dark:text-slate-200">How to reproduce:</strong>
+        <pre class="mt-2 font-mono text-xs bg-white dark:bg-slate-900 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 p-3 overflow-x-auto">{`cargo run -p kham-bench-accuracy
 cargo run -p kham-bench-accuracy -- --threshold 0.95   # CI gate
 cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</pre>
       </div>
@@ -73,50 +73,50 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
 
     <!-- Segmentation throughput -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Segmentation Throughput</h2>
-      <p class="text-slate-600 mb-4">Pure Thai input, built-in dictionary, criterion <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">segment/by_length</code> benchmark.</p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Segmentation Throughput</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4">Pure Thai input, built-in dictionary, criterion <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">segment/by_length</code> benchmark.</p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Input', 'Size', 'Time (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['short', '37 B', '879 ns', '42.3 MiB/s'],
               ['medium', '182 B', '3.80 µs', '45.1 MiB/s'],
               ['long', '546 B', '10.9 µs', '47.1 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Mixed-script</h3>
-      <p class="text-slate-600 mb-4 text-sm">Thai + Latin + Number in the same input — <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">segment/mixed</code>.</p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Mixed-script</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">Thai + Latin + Number in the same input — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">segment/mixed</code>.</p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Input', 'Size', 'Time (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['sparse (ธนาคาร100แห่ง)', '26 B', '744 ns', '42.3 MiB/s'],
               ['medium (multi-boundary)', '74 B', '1.73 µs', '43.5 MiB/s'],
               ['dense (alternating script)', '29 B', '535 ns', '55.3 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -126,27 +126,27 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
 
     <!-- Normalization -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Normalization</h2>
-      <p class="text-slate-600 mb-4 text-sm">
-        Unicode normalization (สระลอย reordering, วรรณยุกต์ deduplication, NFC) — <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">normalize/thai</code>.
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Normalization</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        Unicode normalization (สระลอย reordering, วรรณยุกต์ deduplication, NFC) — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">normalize/thai</code>.
       </p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Input', 'Size', 'Time (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['short', '37 B', '79.9 ns', '465 MiB/s'],
               ['medium', '182 B', '199 ns', '864 MiB/s'],
               ['long', '546 B', '507 ns', '1.0 GiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -156,49 +156,49 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
 
     <!-- Dictionary -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Dictionary</h2>
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Dictionary</h2>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Construction</h3>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Construction</h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Operation', 'Time (median)', 'Notes'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['builtin_dict() — binary blob load', '78 µs', 'pay-once startup cost'],
               ['Dict::from_word_list — 62k words', '980 ms', 'only when merging a custom dict'],
               ['Dict::from_word_list — 8-word list', '3.72 µs', 'small custom dict'],
               ['dict/file/read_and_build — disk + build', '1.01 s', 'kham --dict <file> startup'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p class="text-sm text-slate-600 mb-8">
-        <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">builtin_dict()</code> is <strong>~12,500×</strong> faster than
-        <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">Dict::from_word_list</code> because the DARTS trie is pre-compiled
-        by <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">build.rs</code> at compile time; runtime cost is a single O(S) binary decode pass.
+      <p class="text-sm text-slate-600 dark:text-slate-400 mb-8">
+        <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">builtin_dict()</code> is <strong class="text-slate-800 dark:text-slate-200">~12,500×</strong> faster than
+        <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">Dict::from_word_list</code> because the DARTS trie is pre-compiled
+        by <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">build.rs</code> at compile time; runtime cost is a single O(S) binary decode pass.
       </p>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Lookup</h3>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Lookup</h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Operation', 'Time (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['contains — hit (3-byte word กิน)', '7.1 ns', '1.18 GiB/s'],
               ['contains — hit (12-byte word สวัสดี)', '18.3 ns', '940 MiB/s'],
@@ -207,8 +207,8 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
               ['prefixes — medium anchor (60 B)', '36.7 ns', '1.52 GiB/s'],
               ['prefixes — long anchor (97 B)', '74.5 ns', '1.24 GiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -218,23 +218,23 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
 
     <!-- SQLite FTS5 -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">SQLite FTS5 Extension</h2>
-      <p class="text-slate-600 mb-4 text-sm">
-        Criterion benchmarks via <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">rusqlite</code> with bundled SQLite (FTS5 enabled), in-memory database.
-        Pipeline per <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">xTokenize</code> call: normalize → NE tag → stopword → POS → synonym expand → RTGS romanization.
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">SQLite FTS5 Extension</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        Criterion benchmarks via <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">rusqlite</code> with bundled SQLite (FTS5 enabled), in-memory database.
+        Pipeline per <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">xTokenize</code> call: normalize → NE tag → stopword → POS → synonym expand → RTGS romanization.
       </p>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Indexing — INSERT throughput</h3>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Indexing — INSERT throughput</h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Benchmark', 'Input', 'Size', 'Time (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['index/single/short', 'กินข้าวกับปลา', '21 B', '15.5 µs', '2.47 MiB/s'],
               ['index/single/medium', '~63 B Thai prose', '63 B', '41.8 µs', '4.14 MiB/s'],
@@ -244,26 +244,26 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
               ['index/batch_100/medium', '100 × medium', '6.3 KB', '2.54 ms (25.4 µs/doc)', '7.1 MiB/s'],
               ['index/batch_100/long', '100 × long', '18.9 KB', '6.75 ms (67.5 µs/doc)', '7.6 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 text-xs">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300 text-xs">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Query latency</h3>
-      <p class="text-slate-600 mb-4 text-sm">Table pre-populated with 1,000 rows of medium input.</p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Query latency</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">Table pre-populated with 1,000 rows of medium input.</p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Benchmark', 'Query', 'Result rows', 'Time (median)'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['query/single_word/thai_common', 'ข้าว', '1,000', '88.3 µs'],
               ['query/single_word/thai_rare', 'ปลา', '1,000', '88.9 µs'],
@@ -271,8 +271,8 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
               ['query/single_word/latin', 'hello', '0', '1.5 µs'],
               ['query/snippet', 'ข้าว (top 10 snippets)', '10', '417 µs'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -280,9 +280,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
       </div>
     </section>
 
-    <div class="mt-12 pt-8 border-t border-slate-200 flex justify-between text-sm">
-      <a href="/api" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">← API Reference</a>
-      <a href="/changelog" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">Changelog →</a>
+    <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+      <a href="/api" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">← API Reference</a>
+      <a href="/changelog" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">Changelog →</a>
     </div>
   </div>
 </Layout>
