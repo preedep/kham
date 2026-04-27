@@ -12,12 +12,36 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.2.0 | POS tagging, NER, RTGS romanization, number normalization, SQLite FTS5 (`kham-sqlite`) |
 | v0.3.0 | Abbreviation expansion (`AbbrevMap`), Thai date parsing, sentence segmentation |
 | v0.4.0 | Compound-first DP scoring (F1 0.418→0.975 vs PyThaiNLP), Thai Soundex (lk82/udom83/MetaSound/cross-lang), NE/POS/freq data expansion, `kham-bench-accuracy`, `--soundex` CLI flag |
+| v0.5.0 | `kham-pg` ts_headline support, `kham_fts_dict` custom dictionary template (phonetic + RTGS lexemes), C FFI parity (`kham-capi`), full WASM/Python feature parity, kham-web live demo site |
+| v0.5.1 | WASM u32 overflow fix for large numbers, NE tag correction (ประเทศไทย PERSON→PLACE), kham-web dark mode |
+
+---
+
+## v0.6.0 — Planned
+
+| Feature | Module | Priority |
+|---------|--------|----------|
+| **Thai spell correction** | `spell.rs` | High — edit distance + lk82 phonetic ranking; builds on existing dict + soundex |
+| **Rule-based RTGS romanization** | extend `romanizer.rs` | High — table-only (~415 entries) misses OOV words; rule engine covers all Thai |
+| **NE gazetteer expansion** | `ne_th.tsv` | High — ~400 entries is too small for real-world use; target 50k+ |
+| **Keyword extraction (TF-IDF)** | `keyword.rs` | Medium — TF-IDF over segmented tokens; useful for search ranking |
+| **Dict merge API** | `dict.rs` | Medium — `Tokenizer::builder().dict_merge(custom)` overlay without full trie rebuild |
+| **PGXN upload** | infra | High — publish `kham-pg` to pgxn.org |
+| **kham-capi / kham-cli publish** | infra | Medium — publish v0.5.1 to crates.io |
+
+- [ ] **Thai spell correction** (`spell.rs`) — Levenshtein edit distance over dictionary candidates, re-ranked by lk82 phonetic similarity and TNC frequency; `SpellChecker::builtin()` + `SpellChecker::suggestions(word, max_n) -> Vec<Suggestion>`
+- [ ] **Rule-based RTGS romanization** — extend `romanizer.rs` with a rule engine as fallback when table lookup misses
+- [ ] **NE gazetteer expansion** — import additional CC0/CC-BY data; target 50k+ entries
+- [ ] **Keyword extraction** (`keyword.rs`) — TF-IDF `KeyExtractor`; requires corpus IDF table
+- [ ] **Dict merge API** — `Tokenizer::builder().dict_merge(WordList)` incremental overlay
+- [ ] **PGXN upload** — publish `kham-pg` to pgxn.org
+- [ ] **kham-capi / kham-cli publish** — publish to crates.io
 
 ---
 
 ## Active priorities
 
-- [ ] **PGXN upload** — upload `kham_pg-0.3.0.zip` once pgxn.org account is active
+- [ ] **PGXN upload** — upload `kham_pg-0.5.0.zip` once pgxn.org account is active
 - [x] **`ts_headline` support** — HEADLINE callback in `kham-pg/src/shim.c` + `lib.rs`; fills startsel/stopsel/fragdelim; marks matching QI_VAL operands; 5 regress tests
 
 ---
@@ -118,5 +142,5 @@ with zero schema change.
 - [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
 - [x] **kham-sqlite ngram_size** — `ngram_size N` xCreate argument; controls char n-gram size for Unknown tokens; default 3; 0 disables n-grams
 - [ ] **Mobile support (iOS / Android)** — static registration via `kham_sqlite_register(db)` C symbol + `staticlib` crate type; bundled SQLite amalgamation with `SQLITE_ENABLE_FTS5`; Rust targets `aarch64-apple-ios` / `aarch64-linux-android`; prerequisite: finish kham-sqlite v3
-- [ ] **Spelling correction** — edit-distance based; requires significant ML or DP work
+- [ ] **Spelling correction** — moved to v0.6.0; see v0.6.0 section above
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely
