@@ -92,6 +92,7 @@ pub mod dict;
 pub mod error;
 pub mod freq;
 pub mod fts;
+pub mod keyword;
 pub mod ne;
 pub mod ngram;
 pub mod normalizer;

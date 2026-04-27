@@ -29,10 +29,10 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | **PGXN upload** | infra | High — publish `kham-pg` to pgxn.org |
 | **kham-capi / kham-cli publish** | infra | Medium — publish v0.5.1 to crates.io |
 
-- [ ] **Thai spell correction** (`spell.rs`) — Levenshtein edit distance over dictionary candidates, re-ranked by lk82 phonetic similarity and TNC frequency; `SpellChecker::builtin()` + `SpellChecker::suggestions(word, max_n) -> Vec<Suggestion>`
+- [x] **Thai spell correction** (`spell.rs`) — Levenshtein edit distance over dictionary candidates, re-ranked by lk82 phonetic similarity and TNC frequency; `SpellChecker::builtin()` + `SpellChecker::suggestions(word, max_n) -> Vec<Suggestion>`
 - [ ] **Rule-based RTGS romanization** — extend `romanizer.rs` with a rule engine as fallback when table lookup misses
 - [ ] **NE gazetteer expansion** — import additional CC0/CC-BY data; target 50k+ entries
-- [ ] **Keyword extraction** (`keyword.rs`) — TF-IDF `KeyExtractor`; requires corpus IDF table
+- [x] **Keyword extraction** (`keyword.rs`) — `KeyExtractor::builtin()` + `extract(text, max_n) -> Vec<Keyword>`; TF × IDF_proxy scoring (no transcendentals, `no_std` safe); IDF proxy = `(max_tnc_freq + 1) / (tnc_freq + 1)`; stopwords + single-char tokens excluded; 104 tests pass
 - [ ] **Dict merge API** — `Tokenizer::builder().dict_merge(WordList)` incremental overlay
 - [ ] **PGXN upload** — publish `kham-pg` to pgxn.org
 - [ ] **kham-capi / kham-cli publish** — publish to crates.io
