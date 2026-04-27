@@ -138,7 +138,7 @@ jobs:
         run: wasm-pack build kham-wasm --target web --release
       - name: Publish to npm
         working-directory: kham-wasm/pkg
-        run: npm publish --access public
+        run: npm publish --access public || true
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
