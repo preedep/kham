@@ -6,40 +6,61 @@ import Layout from '../layouts/Layout.astro';
   description="Release notes for every kham version — what changed, what was added, and what was fixed.">
   <div class="max-w-4xl mx-auto px-6 py-16">
     <div class="mb-12">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">Changelog</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">
-        All notable changes to kham. Follows <a href="https://keepachangelog.com/en/1.1.0/" class="text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">Keep a Changelog</a> and
-        <a href="https://semver.org/" class="text-blue-600 hover:text-blue-800" target="_blank" rel="noopener noreferrer">Semantic Versioning</a>.
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">Changelog</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        All notable changes to kham. Follows <a href="https://keepachangelog.com/en/1.1.0/" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" target="_blank" rel="noopener noreferrer">Keep a Changelog</a> and
+        <a href="https://semver.org/" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300" target="_blank" rel="noopener noreferrer">Semantic Versioning</a>.
       </p>
     </div>
 
     <div class="space-y-16">
 
+      <!-- v0.5.1 -->
+      <section>
+        <div class="flex items-center gap-4 mb-6">
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.5.1</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-27</span>
+          <a href="https://github.com/preedep/kham/releases/tag/v0.5.1" target="_blank" rel="noopener noreferrer"
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
+        </div>
+        <div class="space-y-6 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>Fixed
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">WASM number overflow</strong> — corrected u32 overflow for large numbers in <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-wasm</code> binding.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">NE tag correction</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">ประเทศไทย</code> re-tagged from PERSON → PLACE.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- v0.5.0 -->
       <section>
         <div class="flex items-center gap-4 mb-6">
-          <span class="text-2xl font-bold text-slate-900">v0.5.0</span>
-          <span class="text-sm text-slate-500 font-mono">2026-04-26</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.5.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-26</span>
           <a href="https://github.com/preedep/kham/releases/tag/v0.5.0" target="_blank" rel="noopener noreferrer"
-             class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-3 py-1">Release ↗</a>
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
         </div>
-        <div class="space-y-6 pl-4 border-l-2 border-blue-200">
+        <div class="space-y-6 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
           <div>
-            <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added — kham-pg
             </h3>
-            <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-              <li><strong>kham_fts_dict</strong> — custom dictionary template expanding each Thai/Named token to up to 6 lexemes: normalised word, lk82 Thai Soundex code, and RTGS romanization. Enables phonetic-fuzzy and Latin-script romanization search without schema changes.</li>
-              <li><strong>ts_headline support</strong> — <code class="bg-slate-100 px-1 rounded font-mono">kham_headline</code> callback registered as HEADLINE function. Marks matching tokens with configurable StartSel/StopSel. 5 regress tests added.</li>
-              <li><strong>Named entity token type</strong> — <code class="bg-slate-100 px-1 rounded font-mono">TokenKind::Named(_) → 7</code> (<code class="bg-slate-100 px-1 rounded font-mono">named</code>) registered in <code class="bg-slate-100 px-1 rounded font-mono">kham_lextypes</code>.</li>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">kham_fts_dict</strong> — custom dictionary template expanding each Thai/Named token to up to 6 lexemes: normalised word, lk82 Thai Soundex code, and RTGS romanization. Enables phonetic-fuzzy and Latin-script romanization search without schema changes.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">ts_headline support</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_headline</code> callback registered as HEADLINE function. Marks matching tokens with configurable StartSel/StopSel. 5 regress tests added.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Named entity token type</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">TokenKind::Named(_) → 7</code> (<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">named</code>) registered in <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_lextypes</code>.</li>
             </ul>
           </div>
           <div>
-            <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>Fixed — kham-pg
             </h3>
-            <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-              <li><strong>PG 16+ lexize calling convention</strong> — arg3 in <code class="bg-slate-100 px-1 rounded font-mono">kham_dict_lexize</code> is a <code class="bg-slate-100 px-1 rounded font-mono">List*</code> on PG 16+, not a bool. Previously caused every token to be silently discarded as a stopword, producing empty tsvectors for all Thai text.</li>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">PG 16+ lexize calling convention</strong> — arg3 in <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_dict_lexize</code> is a <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">List*</code> on PG 16+, not a bool. Previously caused every token to be silently discarded as a stopword, producing empty tsvectors for all Thai text.</li>
             </ul>
           </div>
         </div>
@@ -48,31 +69,31 @@ import Layout from '../layouts/Layout.astro';
       <!-- v0.4.0 -->
       <section>
         <div class="flex items-center gap-4 mb-6">
-          <span class="text-2xl font-bold text-slate-900">v0.4.0</span>
-          <span class="text-sm text-slate-500 font-mono">2026-04-25</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.4.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-25</span>
           <a href="https://github.com/preedep/kham/releases/tag/v0.4.0" target="_blank" rel="noopener noreferrer"
-             class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-3 py-1">Release ↗</a>
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
         </div>
-        <div class="space-y-6 pl-4 border-l-2 border-blue-200">
+        <div class="space-y-6 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
           <div>
-            <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added
             </h3>
-            <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-              <li><strong>Thai phonetic encoding</strong> — <code class="bg-slate-100 px-1 rounded font-mono">soundex</code> module: <code class="bg-slate-100 px-1 rounded font-mono">lk82</code>, <code class="bg-slate-100 px-1 rounded font-mono">udom83</code>, <code class="bg-slate-100 px-1 rounded font-mono">metasound</code>, <code class="bg-slate-100 px-1 rounded font-mono">thai_english_soundex</code>. Unified <code class="bg-slate-100 px-1 rounded font-mono">soundex(word, SoundexAlgorithm)</code> dispatch.</li>
-              <li><strong>CLI <code class="bg-slate-100 px-1 rounded font-mono">--soundex</code> flag</strong> — phonetic code appears in <code class="bg-slate-100 px-1 rounded font-mono">syn=</code> FTS output field.</li>
-              <li><strong>Accuracy benchmark</strong> — <code class="bg-slate-100 px-1 rounded font-mono">kham-bench-accuracy</code> binary: word-boundary P/R/F1 against testdata, <code class="bg-slate-100 px-1 rounded font-mono">--threshold</code> CI gate.</li>
-              <li><strong>PyThaiNLP comparison script</strong> — <code class="bg-slate-100 px-1 rounded font-mono">scripts/compare_pythainlp.py</code> with <code class="bg-slate-100 px-1 rounded font-mono">--export-testdata</code> and <code class="bg-slate-100 px-1 rounded font-mono">--agreed</code> modes.</li>
-              <li><strong>Data expansions</strong> — NE gazetteer +17,240 Wikipedia entries + +8,980 Thai family names → 36,600 total. POS table +8,691 ORCHID entries → ~9,000 total. TNC frequency +2,410 entries.</li>
-              <li><strong>Build size</strong> — <code class="bg-slate-100 px-1 rounded font-mono">tnc_freq.txt</code>, <code class="bg-slate-100 px-1 rounded font-mono">ne_th.tsv</code>, <code class="bg-slate-100 px-1 rounded font-mono">pos_th.tsv</code> zlib-compressed at compile time via <code class="bg-slate-100 px-1 rounded font-mono">build.rs</code>.</li>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Thai phonetic encoding</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">soundex</code> module: <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">lk82</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">udom83</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">metasound</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">thai_english_soundex</code>. Unified <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">soundex(word, SoundexAlgorithm)</code> dispatch.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">CLI <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">--soundex</code> flag</strong> — phonetic code appears in <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">syn=</code> FTS output field.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Accuracy benchmark</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-bench-accuracy</code> binary: word-boundary P/R/F1 against testdata, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">--threshold</code> CI gate.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">PyThaiNLP comparison script</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">scripts/compare_pythainlp.py</code> with <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">--export-testdata</code> and <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">--agreed</code> modes.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Data expansions</strong> — NE gazetteer +17,240 Wikipedia entries + +8,980 Thai family names → 36,600 total. POS table +8,691 ORCHID entries → ~9,000 total. TNC frequency +2,410 entries.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Build size</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">tnc_freq.txt</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">ne_th.tsv</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pos_th.tsv</code> zlib-compressed at compile time via <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">build.rs</code>.</li>
             </ul>
           </div>
           <div>
-            <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-orange-500 inline-block"></span>Changed — breaking
             </h3>
-            <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-              <li><strong>Compound-first DP scoring</strong> — <code class="bg-slate-100 px-1 rounded font-mono">DpScore</code> field order changed: minimising token count is now priority 2 (above dict-word maximisation). Fixes systematic over-segmentation. Micro F1 improved from 0.418 → <strong>0.975</strong>, sentence agreement vs PyThaiNLP newmm: 1/39 → <strong>37/39 (94.9%)</strong>.</li>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Compound-first DP scoring</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">DpScore</code> field order changed: minimising token count is now priority 2 (above dict-word maximisation). Fixes systematic over-segmentation. Micro F1 improved from 0.418 → <strong>0.975</strong>, sentence agreement vs PyThaiNLP newmm: 1/39 → <strong>37/39 (94.9%)</strong>.</li>
             </ul>
           </div>
         </div>
@@ -81,20 +102,20 @@ import Layout from '../layouts/Layout.astro';
       <!-- v0.3.0 -->
       <section>
         <div class="flex items-center gap-4 mb-6">
-          <span class="text-2xl font-bold text-slate-900">v0.3.0</span>
-          <span class="text-sm text-slate-500 font-mono">2026-04-25</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.3.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-25</span>
           <a href="https://github.com/preedep/kham/releases/tag/v0.3.0" target="_blank" rel="noopener noreferrer"
-             class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-3 py-1">Release ↗</a>
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
         </div>
-        <div class="pl-4 border-l-2 border-blue-200">
-          <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+        <div class="pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added
           </h3>
-          <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-            <li><strong>abbrev module</strong> — <code class="bg-slate-100 px-1 rounded font-mono">AbbrevMap</code> with 118-entry built-in TSV (months, era markers, ranks, agencies, Bangkok districts). Greedy longest-first pre-tokenisation expansion.</li>
-            <li><strong>date module</strong> — Thai date normalization: 7 input formats, Buddhist Era + Gregorian, ISO 8601 output.</li>
-            <li><strong>sentence module</strong> — Thai sentence segmentation: Thai terminators, Paiyannoi, universal punctuation, decimal/abbreviation-aware dot rules.</li>
-            <li><strong>FTS pipeline</strong> — <code class="bg-slate-100 px-1 rounded font-mono">FtsTokenizerBuilder::abbrevs()</code> opt-in abbreviation expansion.</li>
+          <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+            <li><strong class="text-slate-800 dark:text-slate-200">abbrev module</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">AbbrevMap</code> with 118-entry built-in TSV (months, era markers, ranks, agencies, Bangkok districts). Greedy longest-first pre-tokenisation expansion.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">date module</strong> — Thai date normalization: 7 input formats, Buddhist Era + Gregorian, ISO 8601 output.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">sentence module</strong> — Thai sentence segmentation: Thai terminators, Paiyannoi, universal punctuation, decimal/abbreviation-aware dot rules.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">FTS pipeline</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizerBuilder::abbrevs()</code> opt-in abbreviation expansion.</li>
           </ul>
         </div>
       </section>
@@ -102,22 +123,22 @@ import Layout from '../layouts/Layout.astro';
       <!-- v0.2.0 -->
       <section>
         <div class="flex items-center gap-4 mb-6">
-          <span class="text-2xl font-bold text-slate-900">v0.2.0</span>
-          <span class="text-sm text-slate-500 font-mono">2026-04-24</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.2.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-24</span>
           <a href="https://github.com/preedep/kham/releases/tag/v0.2.0" target="_blank" rel="noopener noreferrer"
-             class="text-xs text-blue-600 hover:text-blue-800 border border-blue-200 rounded-full px-3 py-1">Release ↗</a>
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
         </div>
-        <div class="pl-4 border-l-2 border-blue-200">
-          <h3 class="font-semibold text-slate-900 mb-2 flex items-center gap-2">
+        <div class="pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
             <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added
           </h3>
-          <ul class="space-y-2 text-sm text-slate-600 list-disc list-inside ml-4">
-            <li><strong>Named Entity Recognition</strong> — <code class="bg-slate-100 px-1 rounded font-mono">NeTagger</code>: gazetteer-based, greedy longest-match, up to 5 consecutive tokens. Built-in NE gazetteer: 10,488 entries. <code class="bg-slate-100 px-1 rounded font-mono">TokenKind::Named(NamedEntityKind)</code> — Person / Place / Org.</li>
-            <li><strong>POS Tagging</strong> — <code class="bg-slate-100 px-1 rounded font-mono">PosTagger</code>: lookup-based, <code class="bg-slate-100 px-1 rounded font-mono">pos_th.tsv</code> with 338 entries, 13 ORCHID-derived categories (NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP).</li>
-            <li><strong>RTGS Romanization</strong> — <code class="bg-slate-100 px-1 rounded font-mono">RomanizationMap</code>: 415-entry table-driven Thai → Roman mapping. Opt-in via FTS pipeline builder.</li>
-            <li><strong>Number normalization</strong> — <code class="bg-slate-100 px-1 rounded font-mono">thai_digits_to_ascii</code>, <code class="bg-slate-100 px-1 rounded font-mono">parse_thai_word</code>, <code class="bg-slate-100 px-1 rounded font-mono">u64_to_thai_word</code>, <code class="bg-slate-100 px-1 rounded font-mono">parse_thai_baht</code>.</li>
-            <li><strong>SQLite FTS5 extension</strong> — <code class="bg-slate-100 px-1 rounded font-mono">kham-sqlite</code> loadable extension: full NLP pipeline, byte-accurate offsets for <code class="bg-slate-100 px-1 rounded font-mono">highlight()</code> and <code class="bg-slate-100 px-1 rounded font-mono">snippet()</code>.</li>
-            <li><strong>FTS pipeline</strong> — <code class="bg-slate-100 px-1 rounded font-mono">FtsTokenizer</code> builder wiring POS, NE, romanization, stopwords, synonym expansion in a single pass.</li>
+          <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+            <li><strong class="text-slate-800 dark:text-slate-200">Named Entity Recognition</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">NeTagger</code>: gazetteer-based, greedy longest-match, up to 5 consecutive tokens. Built-in NE gazetteer: 10,488 entries. <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">TokenKind::Named(NamedEntityKind)</code> — Person / Place / Org.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">POS Tagging</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">PosTagger</code>: lookup-based, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pos_th.tsv</code> with 338 entries, 13 ORCHID-derived categories (NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP).</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">RTGS Romanization</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">RomanizationMap</code>: 415-entry table-driven Thai → Roman mapping. Opt-in via FTS pipeline builder.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">Number normalization</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">thai_digits_to_ascii</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">parse_thai_word</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">u64_to_thai_word</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">parse_thai_baht</code>.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">SQLite FTS5 extension</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-sqlite</code> loadable extension: full NLP pipeline, byte-accurate offsets for <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">highlight()</code> and <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">snippet()</code>.</li>
+            <li><strong class="text-slate-800 dark:text-slate-200">FTS pipeline</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer</code> builder wiring POS, NE, romanization, stopwords, synonym expansion in a single pass.</li>
           </ul>
         </div>
       </section>
@@ -125,23 +146,23 @@ import Layout from '../layouts/Layout.astro';
       <!-- v0.1.x -->
       <section>
         <div class="flex items-center gap-4 mb-6">
-          <span class="text-2xl font-bold text-slate-900">v0.1.0 – v0.1.3</span>
-          <span class="text-sm text-slate-500 font-mono">2026-04-18 – 2026-04-19</span>
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.1.0 – v0.1.3</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-04-18 – 2026-04-19</span>
         </div>
-        <div class="pl-4 border-l-2 border-slate-200 space-y-4 text-sm text-slate-600">
-          <div><strong class="text-slate-800">v0.1.3</strong> — PostgreSQL pg_regress test suite: 67 tests across 4 suites (kham_fts, kham_thai, kham_operators, kham_ranking).</div>
-          <div><strong class="text-slate-800">v0.1.2</strong> — PostgreSQL FTS extension (<code class="bg-slate-100 px-1 rounded font-mono">kham-pg</code>): Thai text search parser for PG 17, 6 token types, <code class="bg-slate-100 px-1 rounded font-mono">make install</code> + Docker regress. FTS modules: stopwords, synonyms, ngrams, <code class="bg-slate-100 px-1 rounded font-mono">FtsTokenizer</code>. C FFI <code class="bg-slate-100 px-1 rounded font-mono">kham_fts_lexemes()</code>.</div>
-          <div><strong class="text-slate-800">v0.1.1</strong> — Dual MIT OR Apache-2.0 licensing. <code class="bg-slate-100 px-1 rounded font-mono">scripts/deploy.sh</code>. <code class="bg-slate-100 px-1 rounded font-mono">pyproject.toml</code> for maturin builds.</div>
-          <div><strong class="text-slate-800">v0.1.0</strong> — Initial release: DAG-based newmm segmentation, DARTS dictionary, TCC boundary detection, Unicode pre-tokenizer, zero-copy Token, Python (PyO3) and WASM (wasm-bindgen) bindings, C FFI (cbindgen), CLI, criterion benchmarks.</div>
+        <div class="pl-4 border-l-2 border-slate-200 dark:border-slate-700 space-y-4 text-sm text-slate-600 dark:text-slate-400">
+          <div><strong class="text-slate-800 dark:text-slate-200">v0.1.3</strong> — PostgreSQL pg_regress test suite: 67 tests across 4 suites (kham_fts, kham_thai, kham_operators, kham_ranking).</div>
+          <div><strong class="text-slate-800 dark:text-slate-200">v0.1.2</strong> — PostgreSQL FTS extension (<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-pg</code>): Thai text search parser for PG 17, 6 token types, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">make install</code> + Docker regress. FTS modules: stopwords, synonyms, ngrams, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer</code>. C FFI <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_fts_lexemes()</code>.</div>
+          <div><strong class="text-slate-800 dark:text-slate-200">v0.1.1</strong> — Dual MIT OR Apache-2.0 licensing. <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">scripts/deploy.sh</code>. <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pyproject.toml</code> for maturin builds.</div>
+          <div><strong class="text-slate-800 dark:text-slate-200">v0.1.0</strong> — Initial release: DAG-based newmm segmentation, DARTS dictionary, TCC boundary detection, Unicode pre-tokenizer, zero-copy Token, Python (PyO3) and WASM (wasm-bindgen) bindings, C FFI (cbindgen), CLI, criterion benchmarks.</div>
         </div>
       </section>
 
     </div>
 
-    <div class="mt-16 pt-8 border-t border-slate-200 flex justify-between text-sm">
-      <a href="/benchmarks" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">← Benchmarks</a>
+    <div class="mt-16 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+      <a href="/benchmarks" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">← Benchmarks</a>
       <a href="https://github.com/preedep/kham/releases" target="_blank" rel="noopener noreferrer"
-         class="text-blue-600 hover:text-blue-800 font-medium transition-colors">All releases on GitHub ↗</a>
+         class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">All releases on GitHub ↗</a>
     </div>
   </div>
 </Layout>

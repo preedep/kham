@@ -6,19 +6,19 @@ import Layout from '../../layouts/Layout.astro';
   description="ตัวเลข throughput การตัดคำและความแม่นยำ F1 (0.975, ตรงกับ PyThaiNLP newmm 94.9%) ของ kham วัดบน Apple M-series">
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
-      <h1 class="text-4xl font-bold text-slate-900 mb-3">ประสิทธิภาพ</h1>
-      <p class="text-lg text-slate-600 max-w-2xl">
-        ตัวเลข throughput และความแม่นยำของ kham v0.5.0 วัดบน Apple M-series (arm64)
-        benchmark ทั้งหมดรันด้วย <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">--release</code> และ LTO เปิดใช้งาน
+      <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">ประสิทธิภาพ</h1>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
+        ตัวเลข throughput และความแม่นยำของ kham v0.5.1 วัดบน Apple M-series (arm64)
+        benchmark ทั้งหมดรันด้วย <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">--release</code> และ LTO เปิดใช้งาน
       </p>
     </div>
 
     <!-- Environment -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-4">สภาพแวดล้อม</h2>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">สภาพแวดล้อม</h2>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['CPU', 'Apple M-series (arm64)'],
               ['OS', 'macOS'],
@@ -27,26 +27,26 @@ import Layout from '../../layouts/Layout.astro';
               ['dictionary ในตัว', '62,102 คำ · 669,387 DARTS states · 5.1 MiB'],
               ['ตาราง TNC frequency', '106,125 รายการ'],
             ].map(([k, v]) => (
-              <tr class="hover:bg-slate-50">
-                <td class="px-5 py-3 font-medium text-slate-700 w-48">{k}</td>
-                <td class="px-5 py-3 text-slate-600 font-mono">{v}</td>
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                <td class="px-5 py-3 font-medium text-slate-700 dark:text-slate-300 w-48">{k}</td>
+                <td class="px-5 py-3 text-slate-600 dark:text-slate-400 font-mono">{v}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p class="mt-3 text-sm text-slate-500">
-        รันเองได้: <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">cargo bench -p kham-core</code>
-        — รายงาน HTML ที่ <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">target/criterion/report/index.html</code>
+      <p class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+        รันเองได้: <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">cargo bench -p kham-core</code>
+        — รายงาน HTML ที่ <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">target/criterion/report/index.html</code>
       </p>
     </section>
 
     <!-- Accuracy -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">ความแม่นยำ</h2>
-      <p class="text-slate-600 mb-6">
-        Precision / Recall / F1 ระดับขอบเขตคำเทียบกับ gold corpus แบบ CC0 (<code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">kham-core/testdata/</code>)
-        และเปรียบเทียบกับ PyThaiNLP <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">word_tokenize(engine='newmm')</code> บน 39 ประโยค
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">ความแม่นยำ</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-6">
+        Precision / Recall / F1 ระดับขอบเขตคำเทียบกับ gold corpus แบบ CC0 (<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">kham-core/testdata/</code>)
+        และเปรียบเทียบกับ PyThaiNLP <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">word_tokenize(engine='newmm')</code> บน 39 ประโยค
       </p>
 
       <div class="grid sm:grid-cols-3 gap-6 mb-8">
@@ -55,17 +55,17 @@ import Layout from '../../layouts/Layout.astro';
           { label: 'ประโยคที่ตรงกัน', value: '94.9%', sub: '37/39 เทียบกับ PyThaiNLP newmm' },
           { label: 'ความต่างที่แท้จริง', value: '0', sub: '2 รายการที่เหลือเป็นข้อผิดพลาดของ PyThaiNLP' },
         ].map(({ label, value, sub }) => (
-          <div class="bg-blue-50 rounded-xl border border-blue-100 p-6 text-center">
-            <div class="text-4xl font-bold text-blue-700 mb-1">{value}</div>
-            <div class="font-semibold text-slate-800 mb-1">{label}</div>
-            <div class="text-xs text-slate-500">{sub}</div>
+          <div class="bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-100 dark:border-blue-800 p-6 text-center">
+            <div class="text-4xl font-bold text-blue-700 dark:text-blue-400 mb-1">{value}</div>
+            <div class="font-semibold text-slate-800 dark:text-slate-200 mb-1">{label}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{sub}</div>
           </div>
         ))}
       </div>
 
-      <div class="bg-slate-50 rounded-xl border border-slate-200 p-5 text-sm text-slate-600">
-        <strong class="text-slate-800">วิธีรันเอง:</strong>
-        <pre class="mt-2 font-mono text-xs bg-white rounded border border-slate-200 p-3 overflow-x-auto">{`cargo run -p kham-bench-accuracy
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5 text-sm text-slate-600 dark:text-slate-400">
+        <strong class="text-slate-800 dark:text-slate-200">วิธีรันเอง:</strong>
+        <pre class="mt-2 font-mono text-xs bg-white dark:bg-slate-900 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 p-3 overflow-x-auto">{`cargo run -p kham-bench-accuracy
 cargo run -p kham-bench-accuracy -- --threshold 0.95   # CI gate
 cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณีที่ผิดพลาด`}</pre>
       </div>
@@ -73,50 +73,50 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
 
     <!-- Segmentation throughput -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Throughput การตัดคำ</h2>
-      <p class="text-slate-600 mb-4">ข้อความภาษาไทยล้วน, dictionary ในตัว, benchmark <code class="bg-slate-100 px-1.5 py-0.5 rounded text-sm font-mono">segment/by_length</code></p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Throughput การตัดคำ</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4">ข้อความภาษาไทยล้วน, dictionary ในตัว, benchmark <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-sm font-mono">segment/by_length</code></p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['ขนาด input', 'Bytes', 'เวลา (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['สั้น (short)', '37 B', '879 ns', '42.3 MiB/s'],
               ['กลาง (medium)', '182 B', '3.80 µs', '45.1 MiB/s'],
               ['ยาว (long)', '546 B', '10.9 µs', '47.1 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">หลายภาษาผสมกัน (Mixed-script)</h3>
-      <p class="text-slate-600 mb-4 text-sm">ภาษาไทย + ภาษาอังกฤษ + ตัวเลขในข้อความเดียวกัน — <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">segment/mixed</code></p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">หลายภาษาผสมกัน (Mixed-script)</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">ภาษาไทย + ภาษาอังกฤษ + ตัวเลขในข้อความเดียวกัน — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">segment/mixed</code></p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Input', 'Bytes', 'เวลา (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['sparse (ธนาคาร100แห่ง)', '26 B', '744 ns', '42.3 MiB/s'],
               ['medium (หลาย boundary)', '74 B', '1.73 µs', '43.5 MiB/s'],
               ['dense (สลับภาษา)', '29 B', '535 ns', '55.3 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -126,27 +126,27 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
 
     <!-- Normalization -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">Normalization</h2>
-      <p class="text-slate-600 mb-4 text-sm">
-        Unicode normalization (จัดเรียงสระลอย, ลบวรรณยุกต์ซ้ำ, NFC) — <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">normalize/thai</code>
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">Normalization</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        Unicode normalization (จัดเรียงสระลอย, ลบวรรณยุกต์ซ้ำ, NFC) — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">normalize/thai</code>
       </p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['ขนาด input', 'Bytes', 'เวลา (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['สั้น', '37 B', '79.9 ns', '465 MiB/s'],
               ['กลาง', '182 B', '199 ns', '864 MiB/s'],
               ['ยาว', '546 B', '507 ns', '1.0 GiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -156,23 +156,23 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
 
     <!-- SQLite FTS5 -->
     <section class="mb-14">
-      <h2 class="text-2xl font-bold text-slate-900 mb-2">SQLite FTS5 Extension</h2>
-      <p class="text-slate-600 mb-4 text-sm">
-        Criterion benchmarks ผ่าน <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">rusqlite</code>, in-memory database, FTS5 เปิดใช้งาน
-        pipeline ต่อการเรียก <code class="bg-slate-100 px-1.5 py-0.5 rounded font-mono">xTokenize</code>: normalize → NE → stopword → POS → synonym → RTGS
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">SQLite FTS5 Extension</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        Criterion benchmarks ผ่าน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">rusqlite</code>, in-memory database, FTS5 เปิดใช้งาน
+        pipeline ต่อการเรียก <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">xTokenize</code>: normalize → NE → stopword → POS → synonym → RTGS
       </p>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Throughput การ index (INSERT)</h3>
-      <div class="overflow-x-auto rounded-xl border border-slate-200 mb-6">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Throughput การ index (INSERT)</h3>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Benchmark', 'Input', 'ขนาด', 'เวลา (median)', 'Throughput'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['index/single/short', 'กินข้าวกับปลา', '21 B', '15.5 µs', '2.47 MiB/s'],
               ['index/single/medium', 'ข้อความภาษาไทย ~63 B', '63 B', '41.8 µs', '4.14 MiB/s'],
@@ -181,26 +181,26 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
               ['index/batch_100/medium', '100 × medium', '6.3 KB', '2.54 ms (25.4 µs/doc)', '7.1 MiB/s'],
               ['index/batch_100/long', '100 × long', '18.9 KB', '6.75 ms (67.5 µs/doc)', '7.6 MiB/s'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 text-xs">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300 text-xs">{cell}</td>)}
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <h3 class="text-lg font-semibold text-slate-800 mb-2">Latency การค้นหา</h3>
-      <p class="text-slate-600 mb-4 text-sm">ตาราง 1,000 แถว ข้อความขนาดกลาง</p>
-      <div class="overflow-x-auto rounded-xl border border-slate-200">
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Latency การค้นหา</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">ตาราง 1,000 แถว ข้อความขนาดกลาง</p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
         <table class="w-full text-sm">
-          <thead class="bg-slate-50 border-b border-slate-200">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
             <tr>
               {['Benchmark', 'Query', 'แถวผลลัพธ์', 'เวลา (median)'].map(h => (
-                <th class="px-5 py-3 text-left font-semibold text-slate-700">{h}</th>
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody class="divide-y divide-slate-100">
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
               ['query/single_word/thai_common', 'ข้าว', '1,000', '88.3 µs'],
               ['query/single_word/thai_rare', 'ปลา', '1,000', '88.9 µs'],
@@ -208,8 +208,8 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
               ['query/single_word/latin', 'hello', '0', '1.5 µs'],
               ['query/snippet', 'ข้าว (top 10)', '10', '417 µs'],
             ].map(row => (
-              <tr class="hover:bg-slate-50">
-                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700">{cell}</td>)}
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
               </tr>
             ))}
           </tbody>
@@ -217,9 +217,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
       </div>
     </section>
 
-    <div class="mt-12 pt-8 border-t border-slate-200 flex justify-between text-sm">
-      <a href="/th/api" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">← อ้างอิง API</a>
-      <a href="/th/changelog" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">บันทึกการเปลี่ยนแปลง →</a>
+    <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+      <a href="/th/api" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">← อ้างอิง API</a>
+      <a href="/th/changelog" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">บันทึกการเปลี่ยนแปลง →</a>
     </div>
   </div>
 </Layout>
