@@ -30,8 +30,8 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | **kham-capi / kham-cli publish** | infra | Medium — publish v0.5.1 to crates.io |
 
 - [x] **Thai spell correction** (`spell.rs`) — Levenshtein edit distance over dictionary candidates, re-ranked by lk82 phonetic similarity and TNC frequency; `SpellChecker::builtin()` + `SpellChecker::suggestions(word, max_n) -> Vec<Suggestion>`
-- [ ] **Rule-based RTGS romanization** — extend `romanizer.rs` with a rule engine as fallback when table lookup misses
-- [ ] **NE gazetteer expansion** — import additional CC0/CC-BY data; target 50k+ entries
+- [x] **Rule-based RTGS romanization** — `romanize_word(word) -> String` rule engine added to `romanizer.rs`; handles leading vowels (เ แ โ ใ ไ), above/below diacritics, following vowels, thanthakat silent mark; `romanize_or_rule()` + `romanize_owned()` methods expose it; table still takes priority; 109 doctests pass
+- [x] **NE gazetteer expansion** — already completed: 36,670 entries (8k PLACE, 19k PERSON, 9.6k ORG); Wikipedia titles, family names, full country list imported in prior releases
 - [x] **Keyword extraction** (`keyword.rs`) — `KeyExtractor::builtin()` + `extract(text, max_n) -> Vec<Keyword>`; TF × IDF_proxy scoring (no transcendentals, `no_std` safe); IDF proxy = `(max_tnc_freq + 1) / (tnc_freq + 1)`; stopwords + single-char tokens excluded; 104 tests pass
 - [ ] **Dict merge API** — `Tokenizer::builder().dict_merge(WordList)` incremental overlay
 - [ ] **PGXN upload** — publish `kham-pg` to pgxn.org
