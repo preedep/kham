@@ -32,14 +32,32 @@ fn ext_path() -> PathBuf {
     let release = root.join(format!("target/release/libkham_sqlite.{ext}"));
 
     if debug.exists() {
-        debug
-    } else if release.exists() {
-        release
-    } else {
-        panic!(
-            "kham-sqlite dylib not found. Run: cargo build -p kham-sqlite\nLooked in:\n  {debug:?}\n  {release:?}"
-        );
+        return debug;
     }
+    if release.exists() {
+        return release;
+    }
+
+    // Dylib not present — build it now. cargo test for a cdylib-only crate
+    // compiles an rlib for the test harness but does not guarantee the cdylib
+    // artifact is written to target/debug/ before integration tests run.
+    let cargo = env!("CARGO");
+    let status = std::process::Command::new(cargo)
+        .args(["build", "-p", "kham-sqlite"])
+        .current_dir(&root)
+        .status()
+        .unwrap_or_else(|e| panic!("failed to spawn `cargo build -p kham-sqlite`: {e}"));
+    assert!(
+        status.success(),
+        "cargo build -p kham-sqlite failed (exit {status})"
+    );
+
+    if debug.exists() {
+        return debug;
+    }
+    panic!(
+        "kham-sqlite dylib still not found after building.\nLooked in:\n  {debug:?}\n  {release:?}"
+    );
 }
 
 /// Open an in-memory connection with the kham extension loaded.

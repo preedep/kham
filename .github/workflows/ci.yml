@@ -65,13 +65,15 @@ jobs:
           key: ${{ matrix.toolchain }}
       - name: Install SQLite headers
         run: sudo apt-get install -y libsqlite3-dev
-      - name: Build
+      - name: Build workspace
         run: >
           cargo build
           --workspace
           --exclude kham-python
           --exclude kham-wasm
           --exclude kham-pg
+      - name: Build kham-sqlite cdylib (required by integration tests)
+        run: cargo build -p kham-sqlite
       - name: Unit + integration tests
         run: >
           cargo test
@@ -175,6 +177,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Build kham-sqlite cdylib (required by integration tests)
+        run: cargo build -p kham-sqlite
       - run: >
           cargo test
           --workspace
