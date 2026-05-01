@@ -282,7 +282,7 @@ mod tests {
         // Verify sort order: soundex DESC, edit_distance ASC, freq DESC
         for window in suggs.windows(2) {
             let (a, b) = (&window[0], &window[1]);
-            let ok = a.soundex_match > b.soundex_match
+            let ok = (a.soundex_match & !b.soundex_match)
                 || (a.soundex_match == b.soundex_match && a.edit_distance < b.edit_distance)
                 || (a.soundex_match == b.soundex_match
                     && a.edit_distance == b.edit_distance
