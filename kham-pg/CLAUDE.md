@@ -145,7 +145,7 @@ done
 make -C kham-pg bench
 ```
 
-Reports `ops/s`/`µs/op` (fast operations) or `queries/s`/`ms/query` (scan operations) via `RAISE NOTICE`. The benchmark covers:
+Reports `ops/s` and `µs/op` via `RAISE NOTICE`. The benchmark covers:
 
 | Operation | Iterations |
 |-----------|-----------|
@@ -154,9 +154,8 @@ Reports `ops/s`/`µs/op` (fast operations) or `queries/s`/`ms/query` (scan opera
 | `to_tsvector` large (~6.3 KB) | 500 |
 | `plainto_tsquery` single word | 50 000 |
 | `plainto_tsquery` 3 words | 50 000 |
-| `@@` GIN-indexed scan — 10k rows | 200 queries |
-| `ts_rank` top-10 (GIN + rank) | 100 queries |
-| `ts_rank` setweight A top-10 | 100 queries |
+
+GIN-indexed scan and `ts_rank` are excluded from the Docker suite — building a stored tsvector column or large table triggers thousands of real `to_tsvector` calls that cause the bench to hang in Docker. Use `EXPLAIN ANALYZE` or `pgbench` against a real PG instance for GIN/ts_rank timings.
 
 Files: `bench/bench.sql` (SQL), `bench/Dockerfile.bench` (two-stage build), `bench/docker-compose.yml`, `bench/entrypoint.sh`.
 

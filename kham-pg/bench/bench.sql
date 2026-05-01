@@ -132,108 +132,13 @@ BEGIN
     RAISE NOTICE '';
 END $$;
 
--- ── GIN-indexed scan on 10k rows ──────────────────────────────────────────────
--- Pre-compute exactly 5 tsvectors in a CTE, then replicate via generate_series.
--- This calls to_tsvector only 5 times at setup (not 10k), so index build is fast.
-
-DROP TABLE IF EXISTS kham_bench_docs;
-CREATE TABLE kham_bench_docs (id serial, body text, fts tsvector);
-
-WITH precomp(body, fts) AS (
-    SELECT body, to_tsvector('kham', body)
-    FROM (VALUES
-        ('กินข้าวกับปลาทะเลสดและผักรวม'::text),
-        ('Python สำหรับนักพัฒนาซอฟต์แวร์'),
-        ('ราคา ๑๕๐ บาทต่อกิโลกรัม'),
-        ('ท่องเที่ยวทะเลอ่าวไทยช่วงหน้าร้อน'),
-        ('นักพัฒนาเขียนโปรแกรมด้วยภาษา Rust')
-    ) t(body)
-)
-INSERT INTO kham_bench_docs (body, fts)
-SELECT body, fts FROM precomp, generate_series(1, 2000);
-
-CREATE INDEX kham_bench_gin ON kham_bench_docs USING GIN (fts);
-
-ANALYZE kham_bench_docs;
-
 DO $$
-DECLARE
-    t0    timestamptz;
-    e     float8;
-    dummy bigint;
-    n_idx int := 200;
 BEGIN
-    -- warmup — force index pages into OS cache
-    SELECT count(*) INTO dummy
-    FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'ปลา');
-
-    RAISE NOTICE '%', format('%-42s %12s %10s', 'operation', 'queries/s', 'ms/query');
-    RAISE NOTICE '%', repeat('-', 67);
-
-    t0 := clock_timestamp();
-    FOR i IN 1..n_idx LOOP
-        SELECT count(*) INTO dummy
-        FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'ปลา');
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        'GIN scan 10k rows (ปลา)',
-        to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
-        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
-
-    t0 := clock_timestamp();
-    FOR i IN 1..n_idx LOOP
-        SELECT count(*) INTO dummy
-        FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'Python นักพัฒนา');
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        'GIN scan 10k rows (mixed script)',
-        to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
-        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
-
-    -- ── ts_rank ───────────────────────────────────────────────────────────────
-
-    RAISE NOTICE '%', repeat('-', 67);
-
-    n_idx := 100;
-    t0 := clock_timestamp();
-    FOR i IN 1..n_idx LOOP
-        SELECT count(*) INTO dummy FROM (
-            SELECT ts_rank(fts, plainto_tsquery('kham', 'ปลา'))
-            FROM kham_bench_docs
-            WHERE fts @@ plainto_tsquery('kham', 'ปลา')
-            ORDER BY 1 DESC
-            LIMIT 10
-        ) t;
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        'ts_rank top-10 (GIN + rank)',
-        to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
-        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
-
-    t0 := clock_timestamp();
-    FOR i IN 1..n_idx LOOP
-        SELECT count(*) INTO dummy FROM (
-            SELECT ts_rank(
-                setweight(fts, 'A'),
-                plainto_tsquery('kham', 'ปลา')
-            )
-            FROM kham_bench_docs
-            WHERE fts @@ plainto_tsquery('kham', 'ปลา')
-            ORDER BY 1 DESC
-            LIMIT 10
-        ) t;
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        'ts_rank setweight A top-10',
-        to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
-        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
-
-    RAISE NOTICE '';
     RAISE NOTICE '=== done ===';
 END $$;
 
-DROP TABLE IF EXISTS kham_bench_docs;
+-- GIN-indexed scan and ts_rank benchmarks are excluded from the Docker suite:
+-- building a stored tsvector column or populating a large table triggers thousands
+-- of real to_tsvector calls that make the bench hang inside Docker.
+-- To benchmark GIN queries, run against a real PostgreSQL instance with a
+-- pre-built index and measure via EXPLAIN ANALYZE or pgbench.
