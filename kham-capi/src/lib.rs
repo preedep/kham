@@ -30,6 +30,7 @@ use std::os::raw::c_char;
 
 use kham_core::{
     fts::FtsTokenizer,
+    keyword::KeyExtractor,
     normalizer::normalize as core_normalize,
     number::{
         parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
@@ -43,6 +44,7 @@ use kham_core::{
         sounds_like_cross_lang as core_sounds_like_cross,
         thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
+    spell::SpellChecker,
     TokenKind, Tokenizer,
 };
 
@@ -919,6 +921,193 @@ pub unsafe extern "C" fn kham_parse_baht_text(text: *const c_char) -> *mut KhamB
 pub unsafe extern "C" fn kham_baht_amount_free(amt: *mut KhamBahtAmount) {
     if !amt.is_null() {
         drop(unsafe { Box::from_raw(amt) });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Spell checking
+// ---------------------------------------------------------------------------
+
+/// A single spelling suggestion.
+///
+/// Owned by the enclosing [`KhamSpellList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamSpellSuggestion {
+    /// Null-terminated UTF-8 candidate word.
+    pub word: *mut c_char,
+    /// Levenshtein edit distance from the input (0–2).
+    pub edit_distance: u8,
+    /// `true` if the lk82 phonetic codes of input and candidate match.
+    pub soundex_match: bool,
+    /// TNC corpus frequency score; `0` if not in the table.
+    pub freq_score: u32,
+}
+
+/// Heap-allocated array of [`KhamSpellSuggestion`] values.
+///
+/// Must be freed with [`kham_spell_list_free`].
+#[repr(C)]
+pub struct KhamSpellList {
+    /// Pointer to an array of `len` [`KhamSpellSuggestion`] values.
+    pub suggestions: *mut KhamSpellSuggestion,
+    /// Number of suggestions.
+    pub len: usize,
+}
+
+/// Return up to `max_n` spelling suggestions for `word`.
+///
+/// Only candidates within Levenshtein edit distance ≤ 2 are returned, sorted
+/// by phonetic match (lk82), then edit distance, then TNC corpus frequency.
+///
+/// # Safety
+///
+/// * `word` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_spell_list_free`].
+/// * Returns `NULL` if `word` is null, contains invalid UTF-8, or `max_n` is 0.
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_suggestions(
+    word: *const c_char,
+    max_n: usize,
+) -> *mut KhamSpellList {
+    if word.is_null() || max_n == 0 {
+        return std::ptr::null_mut();
+    }
+    let w = match unsafe { CStr::from_ptr(word) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let suggestions = SpellChecker::builtin().suggestions(w, max_n);
+    let mut c_suggs: Vec<KhamSpellSuggestion> = suggestions
+        .into_iter()
+        .map(|s| KhamSpellSuggestion {
+            word: CString::new(s.word).unwrap_or_default().into_raw(),
+            edit_distance: s.edit_distance,
+            soundex_match: s.soundex_match,
+            freq_score: s.freq_score,
+        })
+        .collect();
+
+    let len = c_suggs.len();
+    let ptr = c_suggs.as_mut_ptr();
+    std::mem::forget(c_suggs);
+
+    Box::into_raw(Box::new(KhamSpellList {
+        suggestions: ptr,
+        len,
+    }))
+}
+
+/// Free a [`KhamSpellList`] returned by [`kham_spell_suggestions`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_spell_suggestions`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_list_free(list: *mut KhamSpellList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let suggs = unsafe { Vec::from_raw_parts(list.suggestions, list.len, list.len) };
+    for s in suggs {
+        if !s.word.is_null() {
+            drop(unsafe { CString::from_raw(s.word) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Keyword extraction
+// ---------------------------------------------------------------------------
+
+/// A single keyword with relevance score and occurrence count.
+///
+/// Owned by the enclosing [`KhamKeywordList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamKeyword {
+    /// Null-terminated UTF-8 keyword text.
+    pub word: *mut c_char,
+    /// TF × IDF_proxy relevance score. Higher means more document-distinctive.
+    pub score: f32,
+    /// Raw occurrence count of this word in the document.
+    pub count: usize,
+}
+
+/// Heap-allocated array of [`KhamKeyword`] values.
+///
+/// Must be freed with [`kham_keyword_list_free`].
+#[repr(C)]
+pub struct KhamKeywordList {
+    /// Pointer to an array of `len` [`KhamKeyword`] values.
+    pub keywords: *mut KhamKeyword,
+    /// Number of keywords.
+    pub len: usize,
+}
+
+/// Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
+///
+/// Stopwords and single-character tokens are excluded. Returns `NULL` when
+/// `text` is null or `max_n` is 0.
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_keyword_list_free`].
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_keywords(
+    text: *const c_char,
+    max_n: usize,
+) -> *mut KhamKeywordList {
+    if text.is_null() || max_n == 0 {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let keywords = KeyExtractor::builtin().extract(s, max_n);
+    let mut c_kws: Vec<KhamKeyword> = keywords
+        .into_iter()
+        .map(|k| KhamKeyword {
+            word: CString::new(k.word).unwrap_or_default().into_raw(),
+            score: k.score,
+            count: k.count,
+        })
+        .collect();
+
+    let len = c_kws.len();
+    let ptr = c_kws.as_mut_ptr();
+    std::mem::forget(c_kws);
+
+    Box::into_raw(Box::new(KhamKeywordList {
+        keywords: ptr,
+        len,
+    }))
+}
+
+/// Free a [`KhamKeywordList`] returned by [`kham_keywords`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_keywords`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_keyword_list_free(list: *mut KhamKeywordList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let kws = unsafe { Vec::from_raw_parts(list.keywords, list.len, list.len) };
+    for k in kws {
+        if !k.word.is_null() {
+            drop(unsafe { CString::from_raw(k.word) });
+        }
     }
 }
 

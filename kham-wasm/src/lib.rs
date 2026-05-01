@@ -38,6 +38,7 @@
 
 use kham_core::{
     fts::FtsTokenizer,
+    keyword::KeyExtractor,
     number::{
         parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
         thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
@@ -50,6 +51,7 @@ use kham_core::{
         sounds_like_cross_lang as core_sounds_like_cross,
         thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
+    spell::SpellChecker,
     TokenKind, Tokenizer,
 };
 use wasm_bindgen::prelude::*;
@@ -546,6 +548,116 @@ pub fn parse_baht_text(text: &str) -> BahtResult {
             valid: false,
         },
     }
+}
+
+// ---------------------------------------------------------------------------
+// SpellSuggestion
+// ---------------------------------------------------------------------------
+
+/// A spelling suggestion returned by [`spell_suggestions`].
+#[wasm_bindgen]
+pub struct SpellSuggestion {
+    word: String,
+    edit_distance: u8,
+    soundex_match: bool,
+    freq_score: u32,
+}
+
+#[wasm_bindgen]
+impl SpellSuggestion {
+    /// The candidate word from the built-in dictionary.
+    #[wasm_bindgen(getter)]
+    pub fn word(&self) -> String {
+        self.word.clone()
+    }
+
+    /// Levenshtein edit distance between the input and this candidate (0–2).
+    #[wasm_bindgen(getter)]
+    pub fn edit_distance(&self) -> u8 {
+        self.edit_distance
+    }
+
+    /// `true` if the lk82 phonetic codes of the input and candidate match.
+    #[wasm_bindgen(getter)]
+    pub fn soundex_match(&self) -> bool {
+        self.soundex_match
+    }
+
+    /// TNC corpus frequency score; `0` if the word is not in the frequency table.
+    #[wasm_bindgen(getter)]
+    pub fn freq_score(&self) -> u32 {
+        self.freq_score
+    }
+}
+
+/// Return up to `max_n` spelling suggestions for `word`.
+///
+/// Only candidates with Levenshtein edit distance ≤ 2 are returned.
+/// Results are sorted by phonetic match (lk82), then edit distance, then
+/// TNC corpus frequency. Returns an empty array for empty input or `max_n = 0`.
+#[wasm_bindgen]
+pub fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
+    SpellChecker::builtin()
+        .suggestions(word, max_n)
+        .into_iter()
+        .map(|s| SpellSuggestion {
+            word: s.word,
+            edit_distance: s.edit_distance,
+            soundex_match: s.soundex_match,
+            freq_score: s.freq_score,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Keyword
+// ---------------------------------------------------------------------------
+
+/// A keyword extracted from a document, returned by [`extract_keywords`].
+#[wasm_bindgen]
+pub struct Keyword {
+    word: String,
+    score: f32,
+    count: usize,
+}
+
+#[wasm_bindgen]
+impl Keyword {
+    /// The keyword text.
+    #[wasm_bindgen(getter)]
+    pub fn word(&self) -> String {
+        self.word.clone()
+    }
+
+    /// TF × IDF_proxy relevance score. Higher means more document-distinctive.
+    #[wasm_bindgen(getter)]
+    pub fn score(&self) -> f32 {
+        self.score
+    }
+
+    /// Raw occurrence count of this word in the document.
+    #[wasm_bindgen(getter)]
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+/// Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
+///
+/// Stopwords and single-character tokens are excluded. Words rare in the TNC
+/// corpus score higher than common function words. Returns an empty array
+/// for empty text or `max_n = 0`.
+#[wasm_bindgen]
+pub fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
 }
 
 // ---------------------------------------------------------------------------

@@ -245,6 +245,82 @@ typedef struct KhamBahtAmount {
 } KhamBahtAmount;
 
 /**
+ * A single spelling suggestion.
+ *
+ * Owned by the enclosing [`KhamSpellList`]; do not free fields directly.
+ */
+typedef struct KhamSpellSuggestion {
+  /**
+   * Null-terminated UTF-8 candidate word.
+   */
+  char *word;
+  /**
+   * Levenshtein edit distance from the input (0–2).
+   */
+  uint8_t edit_distance;
+  /**
+   * `true` if the lk82 phonetic codes of input and candidate match.
+   */
+  bool soundex_match;
+  /**
+   * TNC corpus frequency score; `0` if not in the table.
+   */
+  uint32_t freq_score;
+} KhamSpellSuggestion;
+
+/**
+ * Heap-allocated array of [`KhamSpellSuggestion`] values.
+ *
+ * Must be freed with [`kham_spell_list_free`].
+ */
+typedef struct KhamSpellList {
+  /**
+   * Pointer to an array of `len` [`KhamSpellSuggestion`] values.
+   */
+  struct KhamSpellSuggestion *suggestions;
+  /**
+   * Number of suggestions.
+   */
+  uintptr_t len;
+} KhamSpellList;
+
+/**
+ * A single keyword with relevance score and occurrence count.
+ *
+ * Owned by the enclosing [`KhamKeywordList`]; do not free fields directly.
+ */
+typedef struct KhamKeyword {
+  /**
+   * Null-terminated UTF-8 keyword text.
+   */
+  char *word;
+  /**
+   * TF × IDF_proxy relevance score. Higher means more document-distinctive.
+   */
+  float score;
+  /**
+   * Raw occurrence count of this word in the document.
+   */
+  uintptr_t count;
+} KhamKeyword;
+
+/**
+ * Heap-allocated array of [`KhamKeyword`] values.
+ *
+ * Must be freed with [`kham_keyword_list_free`].
+ */
+typedef struct KhamKeywordList {
+  /**
+   * Pointer to an array of `len` [`KhamKeyword`] values.
+   */
+  struct KhamKeyword *keywords;
+  /**
+   * Number of keywords.
+   */
+  uintptr_t len;
+} KhamKeywordList;
+
+/**
  * Segment `text` into Thai tokens, returning an array of token strings.
  *
  * # Safety
@@ -538,5 +614,55 @@ struct KhamBahtAmount *kham_parse_baht_text(const char *text);
  * * Passing `NULL` is safe (no-op).
  */
 void kham_baht_amount_free(struct KhamBahtAmount *amt);
+
+/**
+ * Return up to `max_n` spelling suggestions for `word`.
+ *
+ * Only candidates within Levenshtein edit distance ≤ 2 are returned, sorted
+ * by phonetic match (lk82), then edit distance, then TNC corpus frequency.
+ *
+ * # Safety
+ *
+ * * `word` must be a valid null-terminated UTF-8 string.
+ * * The returned pointer must be freed with [`kham_spell_list_free`].
+ * * Returns `NULL` if `word` is null, contains invalid UTF-8, or `max_n` is 0.
+ */
+struct KhamSpellList *kham_spell_suggestions(const char *word, uintptr_t max_n);
+
+/**
+ * Free a [`KhamSpellList`] returned by [`kham_spell_suggestions`].
+ *
+ * # Safety
+ *
+ * * `list` must have been allocated by [`kham_spell_suggestions`].
+ * * Must not be called more than once on the same pointer.
+ * * Passing `NULL` is safe (no-op).
+ */
+void kham_spell_list_free(struct KhamSpellList *list);
+
+/**
+ * Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
+ *
+ * Stopwords and single-character tokens are excluded. Returns `NULL` when
+ * `text` is null or `max_n` is 0.
+ *
+ * # Safety
+ *
+ * * `text` must be a valid null-terminated UTF-8 string.
+ * * The returned pointer must be freed with [`kham_keyword_list_free`].
+ * * Returns `NULL` if `text` is null or contains invalid UTF-8.
+ */
+struct KhamKeywordList *kham_keywords(const char *text, uintptr_t max_n);
+
+/**
+ * Free a [`KhamKeywordList`] returned by [`kham_keywords`].
+ *
+ * # Safety
+ *
+ * * `list` must have been allocated by [`kham_keywords`].
+ * * Must not be called more than once on the same pointer.
+ * * Passing `NULL` is safe (no-op).
+ */
+void kham_keyword_list_free(struct KhamKeywordList *list);
 
 #endif  /* KHAM_H */
