@@ -109,6 +109,15 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
   - `normalization.txt` — asserts normalize() then segments correctly (~9 cases)
   - To expand: `python scripts/compare_pythainlp.py --export-testdata --agreed` generates additional high-confidence cases for review
 - **Accuracy gate**: `cargo run -p kham-bench-accuracy -- --threshold 0.95` — CI must pass; raises F1 threshold to block regressions
+- **External accuracy** (kham vs independent tokenizer reference):
+  ```bash
+  # Built-in 39-sentence set
+  python scripts/compare_pythainlp.py
+  # Against testdata inputs (larger, more representative — current baseline F1 ≈ 0.978)
+  grep -v '^#' kham-core/testdata/basic.txt | grep '|' | cut -d'|' -f1 > /tmp/sentences.txt
+  python scripts/compare_pythainlp.py --sentences /tmp/sentences.txt
+  ```
+  Disagreements are not automatically wrong — review each diff before changing testdata or the dictionary.
 - Python binding tests: `kham-python/tests/test_kham.py` — run after every `maturin develop`
 - kham-pg regress: `make -C kham-pg regress` — Docker (PG 17); expected output in `kham-pg/regress/expected/`
 - kham-sqlite smoke test: `cargo build -p kham-sqlite --release && sqlite3 ':memory:' "SELECT load_extension('./target/release/libkham_sqlite');" ...` — requires Homebrew sqlite3 on macOS (system sqlite3 disables `load_extension`)
