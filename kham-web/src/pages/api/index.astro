@@ -13,12 +13,14 @@ const modules = [
   { id: 'number',     label: 'number',            path: 'kham_core::number',                       desc: 'Thai numeral utilities: parse Thai digit strings, word-to-number, baht text.' },
   { id: 'sentence',   label: 'sentence',          path: 'kham_core::sentence',                     desc: 'Sentence boundary detection — split a paragraph into sentence spans.' },
   { id: 'soundex',    label: 'soundex',           path: 'kham_core::soundex',                      desc: 'Phonetic codes: lk82, udom83, MetaSound, and cross-language Thai–English.' },
+  { id: 'spell',      label: 'SpellChecker',      path: 'kham_core::spell::SpellChecker',          desc: 'Spell correction: Levenshtein ≤ 2 candidates ranked by lk82 soundex + TNC frequency.' },
+  { id: 'keyword',    label: 'KeyExtractor',      path: 'kham_core::keyword::KeyExtractor',        desc: 'Keyword extraction: TF × inverse-corpus-frequency, stopwords excluded.' },
 ];
 ---
 
 <Layout
   title="API Reference — kham"
-  description="kham v0.5.0 API reference for Rust, Python, WASM, and C — Tokenizer, FtsTokenizer, soundex, number, sentence, romanizer, normalizer."
+  description="kham v0.6.0 API reference for Rust, Python, WASM, and C — Tokenizer, FtsTokenizer, SpellChecker, KeyExtractor, soundex, number, sentence, romanizer, normalizer."
   lang="en"
 >
   <div class="max-w-6xl mx-auto px-6 py-16">
@@ -27,7 +29,7 @@ const modules = [
     <div class="mb-10">
       <div class="flex items-center gap-3 mb-2">
         <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100">API Reference</h1>
-        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.5.0</span>
+        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.6.0</span>
       </div>
       <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mb-3">
         Public API of <code class="text-sm bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">kham-core</code> —
@@ -1113,6 +1115,222 @@ kham_string_free(eng);
 kham_string_free(tha);
 
 bool cross = kham_sounds_like_cross_lang("สมชาย", "Somchai");  // true`,
+            },
+          ]}
+        />
+      </section>
+
+      <!-- ── SpellChecker ── -->
+      <section id="spell" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">SpellChecker</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/spell/struct.SpellChecker.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
+          Spelling correction over the built-in 62k-word dictionary.
+          Candidates within Levenshtein edit distance ≤ 2 are returned, ranked by
+          lk82 phonetic similarity, then edit distance, then TNC corpus frequency.
+          Accepts single Thai words — segment first for multi-word input.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::spell::SpellChecker;
+
+// Reuse the checker — builtin() loads the TNC frequency map once
+let checker = SpellChecker::builtin();
+
+let suggs = checker.suggestions("กีนข้าว", 5);
+for s in &suggs {
+    println!("{:12} edit={} soundex={} freq={}",
+        s.word, s.edit_distance, s.soundex_match, s.freq_score);
+}
+// กินข้าว  edit=1  soundex=true  freq=…
+
+// Correctly spelled words appear with edit_distance = 0
+let exact = checker.suggestions("กิน", 1);
+assert_eq!(exact[0].word, "กิน");
+assert_eq!(exact[0].edit_distance, 0);
+
+// Suggestion fields:
+// s.word          — String   candidate word from the dictionary
+// s.edit_distance — u8       Levenshtein distance (0–2)
+// s.soundex_match — bool     lk82 codes match
+// s.freq_score    — u32      TNC corpus frequency (0 if not in table)`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# spell_suggestions(word, max_n) → list[SpellSuggestion]
+suggs = kham.spell_suggestions("กีนข้าว", 5)
+for s in suggs:
+    print(f"{s.word:12} edit={s.edit_distance} soundex={s.soundex_match} freq={s.freq_score}")
+# กินข้าว  edit=1  soundex=True  freq=…
+
+# SpellSuggestion fields:
+# s.word          — str   candidate word
+# s.edit_distance — int   Levenshtein distance (0–2)
+# s.soundex_match — bool  lk82 codes match
+# s.freq_score    — int   TNC corpus frequency (0 if absent)
+
+# Correct word → edit_distance 0
+top = kham.spell_suggestions("กิน", 1)
+assert top[0].word == "กิน" and top[0].edit_distance == 0`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { spell_suggestions } from '/wasm/kham_wasm.js';
+await init();
+
+// spell_suggestions(word, maxN) → SpellSuggestion[]
+const suggs = spell_suggestions("กีนข้าว", 5);
+for (const s of suggs) {
+  console.log(s.word, 'edit:', s.edit_distance,
+              'soundex:', s.soundex_match, 'freq:', s.freq_score);
+}
+// กินข้าว  edit: 1  soundex: true  freq: …
+
+// SpellSuggestion properties:
+// s.word          — string   candidate word
+// s.edit_distance — number   Levenshtein distance (0–2)
+// s.soundex_match — boolean  lk82 codes match
+// s.freq_score    — number   TNC corpus frequency`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// kham_spell_suggestions(word, max_n) → KhamSpellList*
+// Free with kham_spell_list_free()
+
+KhamSpellList *list = kham_spell_suggestions("กีนข้าว", 5);
+for (size_t i = 0; i < list->len; i++) {
+    KhamSpellSuggestion *s = &list->suggestions[i];
+    printf("%-12s  edit=%u  soundex=%d  freq=%u\\n",
+           s->word, s->edit_distance, s->soundex_match, s->freq_score);
+}
+kham_spell_list_free(list);
+
+// KhamSpellSuggestion fields:
+//   word          — char*   candidate word (heap-allocated)
+//   edit_distance — uint8_t Levenshtein distance (0–2)
+//   soundex_match — bool    lk82 codes match
+//   freq_score    — uint32_t TNC corpus frequency`,
+            },
+          ]}
+        />
+        <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
+          <strong>Note:</strong> SpellChecker expects a single word. For text with multiple words, segment first with
+          <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">Tokenizer::segment()</code> and
+          check each Thai token individually.
+        </div>
+      </section>
+
+      <!-- ── KeyExtractor ── -->
+      <section id="keyword" class="scroll-mt-24">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 font-mono">KeyExtractor</h2>
+          <a href="https://docs.rs/kham-core/latest/kham_core/keyword/struct.KeyExtractor.html" target="_blank" rel="noopener noreferrer"
+             class="shrink-0 text-xs text-slate-500 hover:text-blue-600 transition-colors mt-1.5">docs.rs ↗</a>
+        </div>
+        <p class="text-slate-600 dark:text-slate-400 mb-4">
+          Unsupervised keyword extraction using TF × inverse-corpus-frequency scoring.
+          Words rare in the TNC corpus score higher than common function words.
+          Stopwords and single-character tokens are always excluded.
+          Results are sorted by score descending.
+        </p>
+        <CodeBlock
+          tabs={[
+            {
+              label: 'Rust',
+              lang: 'rust',
+              code: `use kham_core::keyword::KeyExtractor;
+
+// Reuse the extractor — builtin() loads TNC freq + stopwords once
+let extractor = KeyExtractor::builtin();
+
+let text = "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ \
+             ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย";
+
+let keywords = extractor.extract(text, 5);
+for kw in &keywords {
+    println!("{:12} score={:.4} count={}", kw.word, kw.score, kw.count);
+}
+
+// Keyword fields:
+// kw.word  — String  the keyword text
+// kw.score — f32     TF × (max_freq+1) / (corpus_freq+1)
+// kw.count — usize   raw occurrence count in the document`,
+            },
+            {
+              label: 'Python',
+              lang: 'python',
+              code: `import kham
+
+# extract_keywords(text, max_n) → list[Keyword]
+text = ("นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ "
+        "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย")
+
+keywords = kham.extract_keywords(text, 5)
+for kw in keywords:
+    print(f"{kw.word:12} score={kw.score:.4f} count={kw.count}")
+
+# Keyword fields:
+# kw.word  — str    the keyword text
+# kw.score — float  relevance score (TF × IDF_proxy)
+# kw.count — int    raw occurrence count`,
+            },
+            {
+              label: 'WASM',
+              lang: 'js',
+              code: `import init, { extract_keywords } from '/wasm/kham_wasm.js';
+await init();
+
+// extract_keywords(text, maxN) → Keyword[]
+const text = "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ " +
+             "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย";
+
+const keywords = extract_keywords(text, 5);
+for (const kw of keywords) {
+  console.log(kw.word, 'score:', kw.score.toFixed(4), 'count:', kw.count);
+}
+
+// Keyword properties:
+// kw.word  — string  the keyword text
+// kw.score — number  relevance score (TF × IDF_proxy)
+// kw.count — number  raw occurrence count`,
+            },
+            {
+              label: 'C',
+              lang: 'c',
+              code: `#include "kham.h"
+
+// kham_keywords(text, max_n) → KhamKeywordList*
+// Free with kham_keyword_list_free()
+
+const char *text =
+    "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ "
+    "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย";
+
+KhamKeywordList *list = kham_keywords(text, 5);
+for (size_t i = 0; i < list->len; i++) {
+    KhamKeyword *kw = &list->keywords[i];
+    printf("%-12s  score=%.4f  count=%zu\\n",
+           kw->word, kw->score, kw->count);
+}
+kham_keyword_list_free(list);
+
+// KhamKeyword fields:
+//   word  — char*   keyword text (heap-allocated)
+//   score — float   TF × IDF_proxy relevance score
+//   count — size_t  raw occurrence count`,
             },
           ]}
         />

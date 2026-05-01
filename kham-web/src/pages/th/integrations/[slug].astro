@@ -119,6 +119,38 @@ SELECT snippet(docs, 1, '<b>', '</b>', '…', 10)
 FROM docs WHERE docs MATCH 'กรุงเทพ';`,
         lang: 'sql', label: 'sqlite3',
       },
+      {
+        heading: 'argument ของ tokenize',
+        body: 'ทุก argument เป็น optional และไม่ขึ้นกับลำดับ path ของไฟล์ต้องใส่ single quote ภายใน tokenize directive (FTS5 bareword รองรับเฉพาะ A–Z, 0–9 และ _) และ escape สำหรับ SQL ด้วย \'\' (single quote สองตัว)',
+        code: `-- lk82 soundex (default) — คำที่ออกเสียงใกล้เคียงจะมีรหัสเดียวกัน
+CREATE VIRTUAL TABLE t1 USING fts5(body, tokenize='kham');
+
+-- udom83 soundex (แยกแยะ sibilant/liquid ละเอียดกว่า)
+CREATE VIRTUAL TABLE t2 USING fts5(body, tokenize='kham soundex udom83');
+
+-- ปิด soundex
+CREATE VIRTUAL TABLE t3 USING fts5(body, tokenize='kham soundex none');
+
+-- ไม่ index stopword
+CREATE VIRTUAL TABLE t4 USING fts5(body, tokenize='kham stopwords on');
+
+-- bigram สำหรับ OOV/unknown token (default: trigram; 0 = ปิด)
+CREATE VIRTUAL TABLE t5 USING fts5(body, tokenize='kham ngram_size 2');
+
+-- custom synonym map (path ต้องใส่ single quote)
+CREATE VIRTUAL TABLE t6 USING fts5(body,
+  tokenize='kham synonyms ''/etc/kham/synonyms.tsv''');
+
+-- custom word list (overlay บน built-in dictionary ไม่ rebuild trie)
+CREATE VIRTUAL TABLE t7 USING fts5(body,
+  tokenize='kham dict ''/etc/kham/domain_words.txt''');
+
+-- รวมทุก option
+CREATE VIRTUAL TABLE t8 USING fts5(body,
+  tokenize='kham soundex lk82 stopwords on ngram_size 2
+            dict ''/words.txt'' synonyms ''/syns.tsv''');`,
+        lang: 'sql', label: 'sqlite3',
+      },
     ],
   },
 
@@ -166,6 +198,35 @@ tok.byte_start  # int  — byte offset UTF-8 เริ่มต้น
 tok.byte_end    # int  — byte offset UTF-8 สิ้นสุด`,
         lang: 'python', label: 'reference',
       },
+      {
+        heading: 'ตรวจสอบคำสะกด',
+        body: 'spell_suggestions() ค้นหาคำใน dictionary ที่มี edit distance ≤ 2 จัดอันดับด้วย lk82 phonetic และ TNC frequency รับคำเดียว — หากมีหลายคำให้ segment ก่อน',
+        code: `import kham
+
+# spell_suggestions(word, max_n) → list[SpellSuggestion]
+suggs = kham.spell_suggestions("กีนข้าว", 5)
+for s in suggs:
+    print(f"{s.word:12} edit={s.edit_distance} soundex={s.soundex_match} freq={s.freq_score}")
+# กินข้าว  edit=1  soundex=True  freq=…
+
+# SpellSuggestion: .word  .edit_distance  .soundex_match  .freq_score`,
+        lang: 'python', label: 'spell.py',
+      },
+      {
+        heading: 'สกัดคำสำคัญ',
+        body: 'extract_keywords() คืนคำที่โดดเด่นที่สุดในเอกสาร คำนวณด้วย TF × inverse-corpus-frequency ตัด stopword ออกโดยอัตโนมัติ',
+        code: `import kham
+
+text = ("นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ "
+        "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย")
+
+keywords = kham.extract_keywords(text, 5)
+for kw in keywords:
+    print(f"{kw.word:12} score={kw.score:.4f} count={kw.count}")
+
+# Keyword: .word  .score  .count`,
+        lang: 'python', label: 'keywords.py',
+      },
     ],
   },
 
@@ -207,6 +268,41 @@ async function getKham() {
 // โหลดล่วงหน้าในพื้นหลัง
 getKham().catch(console.error);`,
         lang: 'typescript', label: 'lazy.ts',
+      },
+      {
+        heading: 'ตรวจสอบคำสะกด',
+        body: 'spell_suggestions(word, maxN) ค้นหา candidate ใน dictionary ที่มี edit distance ≤ 2 จัดอันดับด้วย lk82 phonetic similarity และ TNC corpus frequency',
+        code: `import init, { spell_suggestions } from 'kham-wasm';
+await init();
+
+// spell_suggestions(word, maxN) → SpellSuggestion[]
+const suggs = spell_suggestions("กีนข้าว", 5);
+for (const s of suggs) {
+  console.log(s.word, 'edit:', s.edit_distance,
+              'soundex:', s.soundex_match, 'freq:', s.freq_score);
+}
+// กินข้าว  edit: 1  soundex: true  freq: …
+
+// SpellSuggestion: .word  .edit_distance  .soundex_match  .freq_score`,
+        lang: 'typescript', label: 'spell.ts',
+      },
+      {
+        heading: 'สกัดคำสำคัญ',
+        body: 'extract_keywords(text, maxN) คืนคำที่โดดเด่นที่สุด คะแนน TF × inverse-corpus-frequency ตัด stopword ออกโดยอัตโนมัติ',
+        code: `import init, { extract_keywords } from 'kham-wasm';
+await init();
+
+// extract_keywords(text, maxN) → Keyword[]
+const text = "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ " +
+             "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย";
+
+const keywords = extract_keywords(text, 5);
+for (const kw of keywords) {
+  console.log(kw.word, 'score:', kw.score.toFixed(4), 'count:', kw.count);
+}
+
+// Keyword: .word  .score  .count`,
+        lang: 'typescript', label: 'keywords.ts',
       },
     ],
   },

@@ -31,6 +31,7 @@
 //!   reachable at the current state.
 
 use alloc::collections::VecDeque;
+use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -253,6 +254,9 @@ fn find_base(check: &[i32], children: &[u8], bitmap: &FreeBitmap, min_free: usiz
 pub struct Dict {
     base: Vec<i32>,
     check: Vec<i32>,
+    /// Extra words added via [`Dict::with_overlay`], sorted alphabetically for
+    /// O(log k) `contains` lookup. Scanned linearly in `prefixes`.
+    overlay: Vec<String>,
 }
 
 impl Dict {
@@ -366,7 +370,11 @@ impl Dict {
             .map(|c| i32::from_le_bytes([c[0], c[1], c[2], c[3]]))
             .collect();
 
-        Self { base, check }
+        Self {
+            base,
+            check,
+            overlay: Vec::new(),
+        }
     }
 
     fn from_trie(nodes: Vec<TrieNode>) -> Self {
@@ -438,7 +446,11 @@ impl Dict {
         base.truncate(last + 1);
         check.truncate(last + 1);
 
-        Self { base, check }
+        Self {
+            base,
+            check,
+            overlay: Vec::new(),
+        }
     }
 
     // ── Lookup primitives ────────────────────────────────────────────────────
@@ -461,9 +473,42 @@ impl Dict {
 
     // ── Public API ───────────────────────────────────────────────────────────
 
-    /// Returns `true` if `word` is present in the dictionary.
+    /// Extend this dictionary with additional words without rebuilding the trie.
     ///
-    /// Lookup is O(n) where n is `word.len()` in bytes.
+    /// Custom words are stored in a sorted overlay and checked alongside the
+    /// pre-compiled trie in [`contains`](Dict::contains) and
+    /// [`prefixes`](Dict::prefixes). This is O(k log k) in the number of
+    /// extra words — much cheaper than a full trie rebuild via
+    /// [`from_word_list`](Dict::from_word_list).
+    ///
+    /// Lines starting with `#` and blank lines are skipped.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::dict::builtin_dict;
+    ///
+    /// let dict = builtin_dict().with_overlay("ปัญญาประดิษฐ์\nโปรแกรมเมอร์\n");
+    /// assert!(dict.contains("กิน"));           // built-in word
+    /// assert!(dict.contains("ปัญญาประดิษฐ์")); // overlay word
+    /// ```
+    pub fn with_overlay(mut self, words: &str) -> Self {
+        for line in words.lines() {
+            let w = line.trim();
+            if w.is_empty() || w.starts_with('#') {
+                continue;
+            }
+            if let Err(pos) = self.overlay.binary_search_by(|e| e.as_str().cmp(w)) {
+                self.overlay.insert(pos, String::from(w));
+            }
+        }
+        self
+    }
+
+    /// Returns `true` if `word` is present in the dictionary or the overlay.
+    ///
+    /// Lookup is O(n + log k) where n is `word.len()` in bytes and k is the
+    /// overlay size.
     ///
     /// # Example
     ///
@@ -479,6 +524,14 @@ impl Dict {
     pub fn contains(&self, word: &str) -> bool {
         if word.is_empty() {
             return false;
+        }
+        // Check overlay first (sorted Vec — O(log k))
+        if self
+            .overlay
+            .binary_search_by(|e| e.as_str().cmp(word))
+            .is_ok()
+        {
+            return true;
         }
         let mut state = 0usize;
         for b in word.bytes() {
@@ -530,6 +583,16 @@ impl Dict {
 
         // Reverse so the longest match comes first.
         result.reverse();
+
+        // Add any overlay words that are prefixes of text.
+        for w in &self.overlay {
+            if text.starts_with(w.as_str()) && !result.contains(&&text[..w.len()]) {
+                result.push(&text[..w.len()]);
+            }
+        }
+
+        // Re-sort by length descending so overlay insertions maintain the convention.
+        result.sort_unstable_by_key(|s| core::cmp::Reverse(s.len()));
         result
     }
 

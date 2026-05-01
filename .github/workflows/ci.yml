@@ -65,13 +65,15 @@ jobs:
           key: ${{ matrix.toolchain }}
       - name: Install SQLite headers
         run: sudo apt-get install -y libsqlite3-dev
-      - name: Build
+      - name: Build workspace
         run: >
           cargo build
           --workspace
           --exclude kham-python
           --exclude kham-wasm
           --exclude kham-pg
+      - name: Build kham-sqlite cdylib (required by integration tests)
+        run: cargo build -p kham-sqlite
       - name: Unit + integration tests
         run: >
           cargo test
@@ -142,6 +144,8 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: "latest"
+      - name: Unit tests (native, cargo test)
+        run: cargo test -p kham-wasm
       - name: wasm-pack build
         run: wasm-pack build kham-wasm --target web --release
 
@@ -161,9 +165,14 @@ jobs:
           python-version: "3.${{ matrix.minor }}"
       - run: pip install maturin virtualenv
       - run: python -m virtualenv .venv
-      - run: maturin develop -m kham-python/Cargo.toml
+      - name: Build Python wheel (maturin develop)
+        run: maturin develop -m kham-python/Cargo.toml
         env:
           VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      - name: Install pytest into venv
+        run: .venv/bin/pip install pytest
+      - name: Run pytest
+        run: .venv/bin/pytest kham-python/tests/ -v
 
   # macOS smoke-test — same code, different OS; informational until
   # we're confident the matrix is worth the runner cost.
@@ -175,6 +184,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      - name: Build kham-sqlite cdylib (required by integration tests)
+        run: cargo build -p kham-sqlite
       - run: >
           cargo test
           --workspace

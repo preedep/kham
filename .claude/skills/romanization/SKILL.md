@@ -9,7 +9,7 @@ metadata:
 
 # Thai Romanization — kham-core
 
-Specialist for `kham-core/src/romanizer` — table-driven RTGS transliteration of segmented Thai words.
+Specialist for `kham-core/src/romanizer` — RTGS transliteration of segmented Thai words, with table lookup (415 entries) and a rule-based fallback engine for OOV words.
 
 ## Standard: RTGS (1999)
 
@@ -144,25 +144,43 @@ let map = RomanizationMap::builtin();
 // Custom table (domain-specific overrides)
 let map = RomanizationMap::from_tsv("กิน\tkin\nข้าว\tkhao\n");
 
-// Lookup a single pre-segmented word
-map.romanize("กิน")           // → Some("kin")
-map.romanize("xyz")           // → None
-map.romanize_or_raw("กิน")   // → "kin"
-map.romanize_or_raw("xyz")   // → "xyz"
+// Lookup a single pre-segmented word (table only)
+map.romanize("กิน")             // → Some("kin")
+map.romanize("เปปซี่")          // → None  (not in table)
+map.romanize("xyz")             // → None
 
-// Romanize a full token list (output aligned 1:1 with input)
+// Table → raw passthrough for misses (no rule engine)
+map.romanize_or_raw("กิน")     // → "kin"
+map.romanize_or_raw("เปปซี่")  // → "เปปซี่"  (raw passthrough)
+
+// Table → rule engine → raw passthrough (preferred for OOV Thai)
+map.romanize_or_rule("กิน")    // → "kin"
+map.romanize_or_rule("เปปซี่") // → "pepsi"  (rule-based approximation)
+map.romanize_or_rule("xyz")    // → "xyz"
+
+// Table → rule engine; None for non-Thai
+map.romanize_owned("กิน")      // → Some("kin")
+map.romanize_owned("เปปซี่")   // → Some("pepsi")
+map.romanize_owned("xyz")      // → None
+
+// Romanize a full token list (table only; OOV → raw passthrough)
 let tokens = vec!["กิน", "ข้าว", "ปลา"];
-map.romanize_tokens(&tokens)  // → ["kin", "khao", "pla"]
+map.romanize_tokens(&tokens)   // → ["kin", "khao", "pla"]
+
+// Rule engine (public, usable standalone):
+use kham_core::romanizer::romanize_word;
+romanize_word("เปปซี่")        // → "pepsi" (approximate)
 ```
 
 ## Implementation Rules
 
 - `no_std` / `alloc`-only — no `std` imports; follow same pattern as `SynonymMap`
 - Backed by `BTreeMap<String, String>` — consistent with `SynonymMap`
-- `romanize()` returns `Option<&str>` borrowing from map internals — zero-copy for hits
+- `romanize()` returns `Option<&str>` borrowing from map internals — zero-copy for table hits
 - `from_tsv()` parser: skip `#` lines and blank lines; split on first `\t`; last duplicate wins
-- Do NOT implement a rule-based phonetic engine — table lookup only
-- Rule-based RTGS engine is a future `#[cfg(feature = "phonetic")]` extension
+- Rule engine (`romanize_word`) is now implemented in `romanizer.rs` — handles leading vowels (เ แ โ ใ ไ), above/below diacritics, following vowels, initial/final consonant tables
+- `romanize_or_rule` is the preferred method when OOV Thai words should produce Latin output
+- For high-accuracy words, add them to `romanization_th.tsv` — the table always takes priority
 
 ## Integration with FtsTokenizer
 
@@ -226,15 +244,16 @@ fn test_from_tsv_last_duplicate_wins() {
 | ร at word-final maps to `n` not `r` | Final position consonant rules differ from initial |
 | อ as vowel carrier is silent | No RTGS output for silent อ |
 | Romanizing spelling instead of pronunciation | ทราบ = `sap`, ศรี = `si` — always use spoken form |
-| Building rule-based engine instead of table | Start with table; gate rule engine behind feature flag |
+| Calling `romanize_or_raw` expecting rule fallback | Use `romanize_or_rule` instead — `romanize_or_raw` is table-only |
 
 ## Implementation Checklist
 
-- [x] Create `kham-core/data/romanization_th.tsv` with ~200 high-frequency words
-- [x] Implement `kham-core/src/romanizer.rs` (`RomanizationMap` struct, `from_tsv`, `builtin`, `romanize`, `romanize_or_raw`, `romanize_tokens`)
+- [x] Create `kham-core/data/romanization_th.tsv` with ~415 high-frequency words
+- [x] Implement `kham-core/src/romanizer.rs` (`RomanizationMap` struct, `from_tsv`, `builtin`, `romanize`, `romanize_or_raw`, `romanize_or_rule`, `romanize_owned`, `romanize_tokens`)
+- [x] `romanize_word(word) -> String` rule engine — leading vowels, above/below diacritics, following vowels, initial/final consonant tables
 - [x] Register module in `kham-core/src/lib.rs` (`pub mod romanizer`)
-- [x] Unit tests in `romanizer.rs`
+- [x] Unit tests + rule engine tests in `romanizer.rs`
 - [x] Integration tests in `kham-core/tests/romanization.rs`
 - [x] Doc comments with Thai+English examples on all public APIs
-- [ ] Update `Architecture` section in README
+- [x] Update `Architecture` section in README and CLAUDE.md
 - [ ] Add `romanization` to `FtsTokenizer::builder()` (optional, can be Phase 2)

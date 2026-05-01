@@ -15,6 +15,18 @@ const sentenceSamples = [
   'คุณชอบอาหารไทยไหม? ผมชอบต้มยำกุ้งมากที่สุด! อาหารไทยมีรสชาติเผ็ดและหอมมาก',
   'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ\nดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย\nทีมนักวิจัยกำลังศึกษาข้อมูลเพิ่มเติม',
 ];
+
+const spellSamples = [
+  'กีนข้าว',
+  'ประเทส',
+  'สวัสดื',
+  'กรุงเทบ',
+];
+
+const keywordSamples = [
+  'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย ทีมนักวิจัยกำลังศึกษาข้อมูลเพิ่มเติมเกี่ยวกับดาวดวงนี้',
+  'อาหารไทยมีชื่อเสียงไปทั่วโลก ต้มยำกุ้งและผัดไทยเป็นอาหารที่คนต่างชาติชื่นชอบ รสชาติเผ็ดและหอมของสมุนไพรไทยทำให้อาหารไทยแตกต่างจากอาหารชาติอื่น',
+];
 ---
 
 <div class="live-demo-root font-sans" data-compact={compact.toString()}>
@@ -75,6 +87,30 @@ const sentenceSamples = [
         {s.length > 18 ? s.slice(0, 18) + '…' : s}
       </button>
     ))}
+    {!compact && spellSamples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample hidden text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[160px]"
+        data-text={s}
+        data-mode="spell"
+        title={s}
+        aria-label={`Use spell sample: ${s}`}
+      >
+        {s}
+      </button>
+    ))}
+    {!compact && keywordSamples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample hidden text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[200px]"
+        data-text={s}
+        data-mode="keywords"
+        title={s}
+        aria-label={`Use keyword sample`}
+      >
+        {s.length > 18 ? s.slice(0, 18) + '…' : s}
+      </button>
+    ))}
   </div>
 
   <!-- Controls row -->
@@ -94,11 +130,13 @@ const sentenceSamples = [
     </button>
 
     {!compact && (
-      <!-- 3-way mode toggle: Segment | FTS | Sentences -->
+      <!-- 5-way mode toggle: Segment | FTS | Sentences | Spell | Keywords -->
       <div class="inline-flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-1 gap-0.5" role="group" aria-label="Analysis mode">
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="seg"       aria-pressed="true">Segment</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="fts"       aria-pressed="false">FTS</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="sentences" aria-pressed="false">Sentences</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="spell"     aria-pressed="false">Spell</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="keywords"  aria-pressed="false">Keywords</button>
       </div>
     )}
 
@@ -243,7 +281,7 @@ const sentenceSamples = [
   let wasmMod      = null;
   let lastTokens   = [];
   let activeFilter = 'All';
-  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences'
+  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences' | 'spell' | 'keywords'
   let showRoman    = false;
 
   // ── wasm ──────────────────────────────────────────────────────────────────
@@ -349,6 +387,81 @@ const sentenceSamples = [
       <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.char_start}–${t.char_end}</td>
       <td class="px-4 py-2.5 font-mono text-xs text-slate-500">${t.byte_start}–${t.byte_end}</td>
     </tr>`;
+  }
+
+  // ── render spell suggestions ──────────────────────────────────────────────
+  function renderSpellResults(suggestions) {
+    const pills     = document.getElementById('demo-pills');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    const filterRow = document.getElementById('demo-filter-row');
+    const sentHint  = document.getElementById('demo-sent-hint');
+
+    if (tableWrap) tableWrap.classList.add('hidden');
+    if (filterRow) filterRow.classList.add('hidden');
+    if (sentHint)  sentHint.classList.add('hidden');
+
+    pills.className = 'flex flex-col gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'list');
+    pills.setAttribute('aria-label', 'Spell suggestions');
+
+    if (!suggestions.length) {
+      pills.innerHTML = '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No suggestions — word may already be correct.</p>';
+      return;
+    }
+
+    pills.innerHTML = suggestions.map((s, i) => {
+      const editColor = s.edit_distance === 0
+        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+        : s.edit_distance === 1
+          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+      const soundexBadge = s.soundex_match
+        ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">soundex ✓</span>'
+        : '';
+      return `<div class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors" role="listitem">
+        <span class="flex-none w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 text-xs font-bold flex items-center justify-center">${i + 1}</span>
+        <span class="text-base font-semibold text-slate-900 dark:text-slate-100 flex-1">${s.word}</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${editColor}">edit ${s.edit_distance}</span>
+        ${soundexBadge}
+        <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">freq ${s.freq_score}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // ── render keyword extraction ─────────────────────────────────────────────
+  function renderKeywordResults(keywords) {
+    const pills     = document.getElementById('demo-pills');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    const filterRow = document.getElementById('demo-filter-row');
+    const sentHint  = document.getElementById('demo-sent-hint');
+
+    if (tableWrap) tableWrap.classList.add('hidden');
+    if (filterRow) filterRow.classList.add('hidden');
+    if (sentHint)  sentHint.classList.add('hidden');
+
+    pills.className = 'flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'list');
+    pills.setAttribute('aria-label', 'Keywords');
+
+    if (!keywords.length) {
+      pills.innerHTML = '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No keywords extracted.</p>';
+      return;
+    }
+
+    const maxScore = keywords[0].score || 1;
+    pills.innerHTML = keywords.map((k, i) => {
+      const pct = Math.round((k.score / maxScore) * 100);
+      const intensity = pct > 70
+        ? 'bg-blue-600 text-white dark:bg-blue-500'
+        : pct > 40
+          ? 'bg-blue-200 text-blue-800 dark:bg-blue-800/60 dark:text-blue-200'
+          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+      const sizeClass = i === 0 ? 'text-base px-4 py-2' : i < 3 ? 'text-sm px-3 py-1.5' : 'text-xs px-2.5 py-1';
+      return `<span class="inline-flex flex-col items-center gap-0.5 rounded-lg font-medium transition-colors ${intensity} ${sizeClass}" role="listitem" title="score ${k.score.toFixed(4)}, count ${k.count}">
+        <span>${k.word}</span>
+        <span class="text-[10px] opacity-70">×${k.count}</span>
+      </span>`;
+    }).join('');
   }
 
   // ── render token pills + table ────────────────────────────────────────────
@@ -466,25 +579,28 @@ const sentenceSamples = [
     const tableWrap  = document.getElementById('demo-table-wrap');
     const sentHint   = document.getElementById('demo-sent-hint');
     const inputHint  = document.getElementById('demo-input-hint');
+    const tokenOnlyMode = mode === 'sentences' || mode === 'spell' || mode === 'keywords';
     if (romanBtn)  romanBtn.classList.toggle('hidden', mode !== 'fts');
-    if (filterRow) filterRow.classList.toggle('hidden', mode === 'sentences');
-    if (tableWrap) tableWrap.classList.toggle('hidden', mode === 'sentences');
+    if (filterRow) filterRow.classList.toggle('hidden', tokenOnlyMode);
+    if (tableWrap) tableWrap.classList.toggle('hidden', tokenOnlyMode);
     if (sentHint)  sentHint.classList.toggle('hidden', mode !== 'sentences');
     if (inputHint) inputHint.classList.toggle('hidden', mode !== 'sentences');
 
-    // Swap sample buttons
+    // Swap sample buttons — each mode shows only its own samples
     document.querySelectorAll('.demo-sample').forEach(btn => {
       const btnMode = btn.dataset.mode || 'seg';
-      if (mode === 'sentences') {
-        btn.classList.toggle('hidden', btnMode !== 'sentences');
+      // seg samples show for seg and fts
+      if (btnMode === 'seg') {
+        btn.classList.toggle('hidden', mode !== 'seg' && mode !== 'fts');
       } else {
-        btn.classList.toggle('hidden', btnMode === 'sentences');
+        btn.classList.toggle('hidden', btnMode !== mode);
       }
     });
 
     // Update run button label
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
     const label = document.getElementById('demo-btn-label');
-    if (label) label.textContent = mode === 'sentences' ? 'Split' : 'Segment';
+    if (label) label.textContent = labelMap[mode] || 'Segment';
   }
 
   function updateFilterButtons() {
@@ -520,7 +636,8 @@ const sentenceSamples = [
     btn.disabled = loading;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
     spinner.classList.toggle('hidden', !loading);
-    label.textContent = loading ? 'Loading…' : (mode === 'sentences' ? 'Split' : 'Segment');
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
+    label.textContent = loading ? 'Loading…' : (labelMap[mode] || 'Segment');
     if (status) { status.classList.toggle('hidden', !loading); status.textContent = loading ? 'Initialising WebAssembly…' : ''; }
   }
 
@@ -601,8 +718,80 @@ const sentenceSamples = [
     }
   }
 
+  async function runSpell() {
+    const text = document.getElementById('demo-input').value.trim();
+    if (!text) return;
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const t0 = performance.now();
+      const suggestions = mod.spell_suggestions(text, 8);
+      const elapsed = performance.now() - t0;
+
+      renderSpellResults(suggestions);
+
+      const stats = document.getElementById('demo-stats');
+      if (stats) stats.innerHTML = suggestions.length
+        ? `<span>Input: <strong>${text}</strong></span><span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span><span>Suggestions: <strong>${suggestions.length}</strong></span>`
+        : `<span>No suggestions for <strong>${text}</strong></span>`;
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''}`;
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runKeywords() {
+    const text = document.getElementById('demo-input').value.trim();
+    if (!text) return;
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const t0 = performance.now();
+      const keywords = mod.extract_keywords(text, 10);
+      const elapsed = performance.now() - t0;
+
+      renderKeywordResults(keywords);
+
+      const stats = document.getElementById('demo-stats');
+      if (stats) stats.innerHTML = `<span>Keywords extracted: <strong>${keywords.length}</strong></span>`;
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''}`;
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   function run() {
     if (mode === 'sentences') runSentences();
+    else if (mode === 'spell') runSpell();
+    else if (mode === 'keywords') runKeywords();
     else runTokens();
   }
 
@@ -629,7 +818,13 @@ const sentenceSamples = [
         mode = btn.dataset.mode;
         updateModeButtons();
         updateRomanToggle();
-        if (lastTokens.length > 0 || mode === 'sentences') run();
+
+        // Load first sample for this mode into the textarea
+        const sampleMode = (mode === 'fts') ? 'seg' : mode;
+        const firstSample = document.querySelector(`.demo-sample[data-mode="${sampleMode}"]`);
+        if (firstSample) document.getElementById('demo-input').value = firstSample.dataset.text;
+
+        run();
       });
     });
 

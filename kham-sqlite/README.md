@@ -58,6 +58,11 @@ Arguments are passed as space-separated key/value pairs in the `tokenize=` optio
 | `soundex` | `lk82`, `udom83`, `metasound`, `none` | `lk82` | Phonetic soundex algorithm |
 | `stopwords` | `on`, `off` | `off` | Suppress stopword tokens at index time |
 | `ngram_size` | integer ≥ 0 | `3` | N-gram size for Unknown/OOV tokens; 0 disables n-grams |
+| `synonyms` | `'<path>'` | — | TSV synonym map: `canonical TAB syn1 TAB syn2 …` |
+| `dict` | `'<path>'` | — | Newline-separated word list overlaid on the built-in dictionary |
+
+> **Path quoting:** `/`, `.`, and `-` are not FTS5 bareword characters. File paths must be single-quoted inside the tokenize directive and SQL-escaped with `''`:
+> `tokenize='kham synonyms ''/path/to/file.tsv'''`
 
 ```sql
 -- udom83 soundex (finer sibilant/liquid distinctions)
@@ -69,9 +74,17 @@ CREATE VIRTUAL TABLE t2 USING fts5(body, tokenize='kham soundex none');
 -- Suppress stopwords + bigrams for OOV
 CREATE VIRTUAL TABLE t3 USING fts5(body, tokenize='kham stopwords on ngram_size 2');
 
--- All three arguments together
+-- Custom synonym map
 CREATE VIRTUAL TABLE t4 USING fts5(body,
-    tokenize='kham soundex udom83 stopwords on ngram_size 4');
+    tokenize='kham synonyms ''/etc/kham/synonyms.tsv''');
+
+-- Custom domain dictionary (overlaid on built-in words)
+CREATE VIRTUAL TABLE t5 USING fts5(body,
+    tokenize='kham dict ''/etc/kham/domain_words.txt''');
+
+-- All options combined
+CREATE VIRTUAL TABLE t6 USING fts5(body,
+    tokenize='kham soundex lk82 stopwords on ngram_size 2 dict ''/words.txt'' synonyms ''/syns.tsv''');
 ```
 
 ## Snippet highlighting

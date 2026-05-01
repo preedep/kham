@@ -38,6 +38,7 @@
 
 use kham_core::{
     fts::FtsTokenizer,
+    keyword::KeyExtractor,
     number::{
         parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
         thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
@@ -50,6 +51,7 @@ use kham_core::{
         sounds_like_cross_lang as core_sounds_like_cross,
         thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
+    spell::SpellChecker,
     TokenKind, Tokenizer,
 };
 use wasm_bindgen::prelude::*;
@@ -545,5 +547,315 @@ pub fn parse_baht_text(text: &str) -> BahtResult {
             satang: 0,
             valid: false,
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SpellSuggestion
+// ---------------------------------------------------------------------------
+
+/// A spelling suggestion returned by [`spell_suggestions`].
+#[wasm_bindgen]
+pub struct SpellSuggestion {
+    word: String,
+    edit_distance: u8,
+    soundex_match: bool,
+    freq_score: u32,
+}
+
+#[wasm_bindgen]
+impl SpellSuggestion {
+    /// The candidate word from the built-in dictionary.
+    #[wasm_bindgen(getter)]
+    pub fn word(&self) -> String {
+        self.word.clone()
+    }
+
+    /// Levenshtein edit distance between the input and this candidate (0–2).
+    #[wasm_bindgen(getter)]
+    pub fn edit_distance(&self) -> u8 {
+        self.edit_distance
+    }
+
+    /// `true` if the lk82 phonetic codes of the input and candidate match.
+    #[wasm_bindgen(getter)]
+    pub fn soundex_match(&self) -> bool {
+        self.soundex_match
+    }
+
+    /// TNC corpus frequency score; `0` if the word is not in the frequency table.
+    #[wasm_bindgen(getter)]
+    pub fn freq_score(&self) -> u32 {
+        self.freq_score
+    }
+}
+
+/// Return up to `max_n` spelling suggestions for `word`.
+///
+/// Only candidates with Levenshtein edit distance ≤ 2 are returned.
+/// Results are sorted by phonetic match (lk82), then edit distance, then
+/// TNC corpus frequency. Returns an empty array for empty input or `max_n = 0`.
+#[wasm_bindgen]
+pub fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
+    SpellChecker::builtin()
+        .suggestions(word, max_n)
+        .into_iter()
+        .map(|s| SpellSuggestion {
+            word: s.word,
+            edit_distance: s.edit_distance,
+            soundex_match: s.soundex_match,
+            freq_score: s.freq_score,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Keyword
+// ---------------------------------------------------------------------------
+
+/// A keyword extracted from a document, returned by [`extract_keywords`].
+#[wasm_bindgen]
+pub struct Keyword {
+    word: String,
+    score: f32,
+    count: usize,
+}
+
+#[wasm_bindgen]
+impl Keyword {
+    /// The keyword text.
+    #[wasm_bindgen(getter)]
+    pub fn word(&self) -> String {
+        self.word.clone()
+    }
+
+    /// TF × IDF_proxy relevance score. Higher means more document-distinctive.
+    #[wasm_bindgen(getter)]
+    pub fn score(&self) -> f32 {
+        self.score
+    }
+
+    /// Raw occurrence count of this word in the document.
+    #[wasm_bindgen(getter)]
+    pub fn count(&self) -> usize {
+        self.count
+    }
+}
+
+/// Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
+///
+/// Stopwords and single-character tokens are excluded. Words rare in the TNC
+/// corpus score higher than common function words. Returns an empty array
+/// for empty text or `max_n = 0`.
+#[wasm_bindgen]
+pub fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Tests (native only — skip on wasm32 where std tests don't run)
+// ---------------------------------------------------------------------------
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    // --- normalize ---
+
+    #[test]
+    fn normalize_unchanged_when_already_normal() {
+        assert_eq!(normalize("กินข้าว"), "กินข้าว");
+    }
+
+    // --- soundex_word ---
+
+    #[test]
+    fn soundex_word_lk82_is_four_chars() {
+        assert_eq!(soundex_word("กาน", "lk82").len(), 4);
+    }
+
+    #[test]
+    fn soundex_word_udom83_is_four_chars() {
+        assert_eq!(soundex_word("กาน", "udom83").len(), 4);
+    }
+
+    #[test]
+    fn soundex_word_unknown_algo_falls_back_to_lk82() {
+        assert_eq!(soundex_word("กาน", "lk82"), soundex_word("กาน", "unknown"));
+    }
+
+    // --- sounds_like ---
+
+    #[test]
+    fn sounds_like_homophones() {
+        assert!(sounds_like("กาน", "ขาน", "lk82"));
+    }
+
+    #[test]
+    fn sounds_like_different_initial_groups() {
+        assert!(!sounds_like("กิน", "มิน", "lk82"));
+    }
+
+    // --- thai_english_soundex / sounds_like_cross_lang ---
+
+    #[test]
+    fn thai_english_soundex_returns_non_empty() {
+        assert!(!thai_english_soundex("กิน").is_empty());
+    }
+
+    #[test]
+    fn sounds_like_cross_lang_identical_words() {
+        assert!(sounds_like_cross_lang("กิน", "กิน"));
+    }
+
+    // --- thai_digits_to_ascii ---
+
+    #[test]
+    fn thai_digits_to_ascii_converts_all() {
+        assert_eq!(thai_digits_to_ascii("๑๒๓"), "123");
+    }
+
+    #[test]
+    fn thai_digits_to_ascii_mixed_passes_through_ascii() {
+        assert_eq!(thai_digits_to_ascii("1๒3"), "123");
+    }
+
+    // --- number_to_thai_word / thai_word_to_number ---
+
+    #[test]
+    fn number_to_thai_word_zero() {
+        assert_eq!(number_to_thai_word(0), "ศูนย์");
+    }
+
+    #[test]
+    fn thai_word_to_number_roundtrip() {
+        let word = number_to_thai_word(100);
+        assert_eq!(thai_word_to_number(&word), "100");
+    }
+
+    #[test]
+    fn thai_word_to_number_invalid_returns_empty() {
+        assert_eq!(thai_word_to_number("กินข้าว"), "");
+    }
+
+    // --- number_to_baht_text / parse_baht_text ---
+
+    #[test]
+    fn parse_baht_text_roundtrip() {
+        let text = number_to_baht_text(100, 0);
+        let result = parse_baht_text(&text);
+        assert!(result.valid());
+        assert_eq!(result.baht(), 100);
+        assert_eq!(result.satang(), 0);
+    }
+
+    #[test]
+    fn parse_baht_text_invalid_input() {
+        assert!(!parse_baht_text("กินข้าว").valid());
+    }
+
+    // --- segment_tokens ---
+
+    #[test]
+    fn segment_tokens_basic_thai() {
+        let tokens = segment_tokens("กินข้าว");
+        assert!(!tokens.is_empty());
+        for t in &tokens {
+            assert!(!t.text().is_empty());
+            assert_eq!(t.kind(), "Thai");
+            assert!(t.byte_end() > t.byte_start());
+            assert!(t.char_end() > t.char_start());
+        }
+    }
+
+    #[test]
+    fn segment_tokens_mixed_script_has_number_kind() {
+        let tokens = segment_tokens("ธนาคาร100แห่ง");
+        let kinds: Vec<String> = tokens.iter().map(|t| t.kind()).collect();
+        assert!(kinds.contains(&"Thai".to_string()));
+        assert!(kinds.contains(&"Number".to_string()));
+    }
+
+    #[test]
+    fn segment_tokens_byte_span_matches_text() {
+        let src = "กินข้าว";
+        let tokens = segment_tokens(src);
+        for t in &tokens {
+            let sliced = &src.as_bytes()[t.byte_start()..t.byte_end()];
+            assert_eq!(std::str::from_utf8(sliced).unwrap(), t.text());
+        }
+    }
+
+    // --- romanize ---
+
+    #[test]
+    fn romanize_produces_kin_for_gin_token() {
+        let tokens = romanize("กิน");
+        assert!(
+            tokens.iter().any(|t| t.roman() == "kin"),
+            "expected roman='kin' in {tokens:?}",
+            tokens = tokens.iter().map(|t| t.roman()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn romanize_text_field_joins_to_original() {
+        let tokens = romanize("กินข้าว");
+        let joined: String = tokens.iter().map(|t| t.text()).collect();
+        assert_eq!(joined, "กินข้าว");
+    }
+
+    // --- split_sentences ---
+
+    #[test]
+    fn split_sentences_on_newline_yields_two_sentences() {
+        let sents = split_sentences("กินข้าว\nดื่มน้ำ");
+        assert!(
+            sents.len() >= 2,
+            "expected >= 2 sentences, got {}",
+            sents.len()
+        );
+        for s in &sents {
+            assert!(!s.text().is_empty());
+            assert!(s.char_end() > s.char_start());
+        }
+    }
+
+    // --- segment_fts ---
+
+    #[test]
+    fn segment_fts_position_is_sequential() {
+        let tokens = segment_fts("กินข้าวกับปลา");
+        for (i, t) in tokens.iter().enumerate() {
+            assert_eq!(t.position(), i, "position mismatch at index {i}");
+        }
+    }
+
+    #[test]
+    fn segment_fts_all_tokens_have_kind_and_roman() {
+        let tokens = segment_fts("กินข้าว");
+        assert!(!tokens.is_empty());
+        for t in &tokens {
+            assert!(!t.kind().is_empty(), "kind must not be empty");
+            assert!(!t.roman().is_empty(), "roman must not be empty");
+        }
+    }
+
+    #[test]
+    fn segment_fts_stopword_flagged() {
+        // "กับ" is a Thai conjunction and a built-in stopword
+        let tokens = segment_fts("กินข้าวกับปลา");
+        assert!(
+            tokens.iter().any(|t| t.is_stop()),
+            "expected at least one stopword token"
+        );
     }
 }

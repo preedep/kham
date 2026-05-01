@@ -16,11 +16,14 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Compound-first DP scoring** — minimises token count before maximising dictionary matches, then uses TNC frequency as tiebreaker; 94.9% sentence-level agreement with PyThaiNLP newmm (F1 0.975)
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only)
-- **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time
+- **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; `dict_merge()` overlay adds custom words without a full trie rebuild
 - **Thai FTS pipeline** — `FtsTokenizer` adds stopword filtering, POS tagging, NER, RTGS romanization, phonetic soundex, abbreviation expansion, and OOV n-gram fallback
 - **Named entity recognition** — gazetteer-based NER (~36,600 entries): provinces, countries, Wikipedia places/orgs, person and family names
 - **Part-of-speech tagging** — 13-category lookup table (~9,000 entries)
 - **Phonetic encoding** — lk82, udom83, MetaSound, and Thai–English cross-language Soundex
+- **Spell correction** — `SpellChecker::suggestions(word, n)`: Levenshtein ≤ 2 over the built-in dictionary, re-ranked by lk82 phonetic similarity and TNC frequency
+- **Keyword extraction** — `KeyExtractor::extract(text, n)`: TF × inverse-corpus-frequency scoring; stopwords and single-char tokens excluded
+- **RTGS romanization** — table lookup (415 entries) with rule-based fallback for OOV Thai words; `romanize_or_rule()` covers any Thai input
 - **Number normalization** — Thai digits ↔ ASCII, spelled-out number words ↔ integer, Thai Baht currency text
 - **Abbreviation expansion** — 118-entry built-in TSV (months, era markers, ranks, agencies)
 - **Date parsing** — 7 input formats, Buddhist Era and Gregorian, round-trips to ISO 8601 and Thai text

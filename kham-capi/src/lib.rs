@@ -30,6 +30,7 @@ use std::os::raw::c_char;
 
 use kham_core::{
     fts::FtsTokenizer,
+    keyword::KeyExtractor,
     normalizer::normalize as core_normalize,
     number::{
         parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
@@ -43,6 +44,7 @@ use kham_core::{
         sounds_like_cross_lang as core_sounds_like_cross,
         thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
+    spell::SpellChecker,
     TokenKind, Tokenizer,
 };
 
@@ -919,5 +921,508 @@ pub unsafe extern "C" fn kham_parse_baht_text(text: *const c_char) -> *mut KhamB
 pub unsafe extern "C" fn kham_baht_amount_free(amt: *mut KhamBahtAmount) {
     if !amt.is_null() {
         drop(unsafe { Box::from_raw(amt) });
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Spell checking
+// ---------------------------------------------------------------------------
+
+/// A single spelling suggestion.
+///
+/// Owned by the enclosing [`KhamSpellList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamSpellSuggestion {
+    /// Null-terminated UTF-8 candidate word.
+    pub word: *mut c_char,
+    /// Levenshtein edit distance from the input (0–2).
+    pub edit_distance: u8,
+    /// `true` if the lk82 phonetic codes of input and candidate match.
+    pub soundex_match: bool,
+    /// TNC corpus frequency score; `0` if not in the table.
+    pub freq_score: u32,
+}
+
+/// Heap-allocated array of [`KhamSpellSuggestion`] values.
+///
+/// Must be freed with [`kham_spell_list_free`].
+#[repr(C)]
+pub struct KhamSpellList {
+    /// Pointer to an array of `len` [`KhamSpellSuggestion`] values.
+    pub suggestions: *mut KhamSpellSuggestion,
+    /// Number of suggestions.
+    pub len: usize,
+}
+
+/// Return up to `max_n` spelling suggestions for `word`.
+///
+/// Only candidates within Levenshtein edit distance ≤ 2 are returned, sorted
+/// by phonetic match (lk82), then edit distance, then TNC corpus frequency.
+///
+/// # Safety
+///
+/// * `word` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_spell_list_free`].
+/// * Returns `NULL` if `word` is null, contains invalid UTF-8, or `max_n` is 0.
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_suggestions(
+    word: *const c_char,
+    max_n: usize,
+) -> *mut KhamSpellList {
+    if word.is_null() || max_n == 0 {
+        return std::ptr::null_mut();
+    }
+    let w = match unsafe { CStr::from_ptr(word) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let suggestions = SpellChecker::builtin().suggestions(w, max_n);
+    let mut c_suggs: Vec<KhamSpellSuggestion> = suggestions
+        .into_iter()
+        .map(|s| KhamSpellSuggestion {
+            word: CString::new(s.word).unwrap_or_default().into_raw(),
+            edit_distance: s.edit_distance,
+            soundex_match: s.soundex_match,
+            freq_score: s.freq_score,
+        })
+        .collect();
+
+    let len = c_suggs.len();
+    let ptr = c_suggs.as_mut_ptr();
+    std::mem::forget(c_suggs);
+
+    Box::into_raw(Box::new(KhamSpellList {
+        suggestions: ptr,
+        len,
+    }))
+}
+
+/// Free a [`KhamSpellList`] returned by [`kham_spell_suggestions`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_spell_suggestions`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_list_free(list: *mut KhamSpellList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let suggs = unsafe { Vec::from_raw_parts(list.suggestions, list.len, list.len) };
+    for s in suggs {
+        if !s.word.is_null() {
+            drop(unsafe { CString::from_raw(s.word) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Keyword extraction
+// ---------------------------------------------------------------------------
+
+/// A single keyword with relevance score and occurrence count.
+///
+/// Owned by the enclosing [`KhamKeywordList`]; do not free fields directly.
+#[repr(C)]
+pub struct KhamKeyword {
+    /// Null-terminated UTF-8 keyword text.
+    pub word: *mut c_char,
+    /// TF × IDF_proxy relevance score. Higher means more document-distinctive.
+    pub score: f32,
+    /// Raw occurrence count of this word in the document.
+    pub count: usize,
+}
+
+/// Heap-allocated array of [`KhamKeyword`] values.
+///
+/// Must be freed with [`kham_keyword_list_free`].
+#[repr(C)]
+pub struct KhamKeywordList {
+    /// Pointer to an array of `len` [`KhamKeyword`] values.
+    pub keywords: *mut KhamKeyword,
+    /// Number of keywords.
+    pub len: usize,
+}
+
+/// Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
+///
+/// Stopwords and single-character tokens are excluded. Returns `NULL` when
+/// `text` is null or `max_n` is 0.
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_keyword_list_free`].
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_keywords(text: *const c_char, max_n: usize) -> *mut KhamKeywordList {
+    if text.is_null() || max_n == 0 {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let keywords = KeyExtractor::builtin().extract(s, max_n);
+    let mut c_kws: Vec<KhamKeyword> = keywords
+        .into_iter()
+        .map(|k| KhamKeyword {
+            word: CString::new(k.word).unwrap_or_default().into_raw(),
+            score: k.score,
+            count: k.count,
+        })
+        .collect();
+
+    let len = c_kws.len();
+    let ptr = c_kws.as_mut_ptr();
+    std::mem::forget(c_kws);
+
+    Box::into_raw(Box::new(KhamKeywordList { keywords: ptr, len }))
+}
+
+/// Free a [`KhamKeywordList`] returned by [`kham_keywords`].
+///
+/// # Safety
+///
+/// * `list` must have been allocated by [`kham_keywords`].
+/// * Must not be called more than once on the same pointer.
+/// * Passing `NULL` is safe (no-op).
+#[no_mangle]
+pub unsafe extern "C" fn kham_keyword_list_free(list: *mut KhamKeywordList) {
+    if list.is_null() {
+        return;
+    }
+    let list = unsafe { Box::from_raw(list) };
+    let kws = unsafe { Vec::from_raw_parts(list.keywords, list.len, list.len) };
+    for k in kws {
+        if !k.word.is_null() {
+            drop(unsafe { CString::from_raw(k.word) });
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    unsafe fn ptr_to_str<'a>(ptr: *const c_char) -> &'a str {
+        CStr::from_ptr(ptr).to_str().expect("valid UTF-8")
+    }
+
+    // --- kham_segment ---
+
+    #[test]
+    fn segment_null_returns_null() {
+        assert!(unsafe { kham_segment(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn segment_basic_returns_tokens() {
+        let input = CString::new("กินข้าวกับปลา").unwrap();
+        let result = unsafe { kham_segment(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len >= 2, "expected multiple tokens, got {}", list.len);
+        for i in 0..list.len {
+            assert!(!unsafe { ptr_to_str(*list.words.add(i)) }.is_empty());
+        }
+        unsafe { kham_tokens_free(result) };
+    }
+
+    #[test]
+    fn tokens_free_null_is_safe() {
+        unsafe { kham_tokens_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_segment_tokens ---
+
+    #[test]
+    fn segment_tokens_null_returns_null() {
+        assert!(unsafe { kham_segment_tokens(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn segment_tokens_spans_are_consistent() {
+        let src = "ธนาคาร100แห่ง";
+        let input = CString::new(src).unwrap();
+        let result = unsafe { kham_segment_tokens(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            let text = unsafe { ptr_to_str(t.text) };
+            assert_eq!(
+                text.len(),
+                t.byte_end - t.byte_start,
+                "byte span mismatch for token {text:?}"
+            );
+            assert!(t.char_start <= t.char_end);
+        }
+        unsafe { kham_token_list_free(result) };
+    }
+
+    #[test]
+    fn token_list_free_null_is_safe() {
+        unsafe { kham_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_fts_segment ---
+
+    #[test]
+    fn fts_segment_null_returns_null() {
+        assert!(unsafe { kham_fts_segment(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn fts_segment_returns_kind_and_roman() {
+        let input = CString::new("กินข้าว").unwrap();
+        let result = unsafe { kham_fts_segment(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len > 0);
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            assert!(!t.text.is_null(), "text must not be null");
+            assert!(!t.kind.is_null(), "kind must not be null");
+            assert!(!t.roman.is_null(), "roman must not be null");
+        }
+        unsafe { kham_fts_token_list_free(result) };
+    }
+
+    #[test]
+    fn fts_token_list_free_null_is_safe() {
+        unsafe { kham_fts_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_fts_lexemes ---
+
+    #[test]
+    fn fts_lexemes_null_returns_null() {
+        let mut len: usize = 0;
+        assert!(unsafe { kham_fts_lexemes(std::ptr::null(), &mut len) }.is_null());
+    }
+
+    #[test]
+    fn fts_lexemes_returns_non_empty_for_thai() {
+        let input = CString::new("กินข้าว").unwrap();
+        let mut len: usize = 0;
+        let result = unsafe { kham_fts_lexemes(input.as_ptr(), &mut len) };
+        assert!(!result.is_null());
+        assert!(len > 0);
+        for i in 0..len {
+            assert!(!unsafe { *result.add(i) }.is_null());
+        }
+        unsafe { kham_fts_lexemes_free(result, len) };
+    }
+
+    // --- kham_string_free ---
+
+    #[test]
+    fn string_free_null_is_safe() {
+        unsafe { kham_string_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_normalize ---
+
+    #[test]
+    fn normalize_null_returns_null() {
+        assert!(unsafe { kham_normalize(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn normalize_already_normal_is_unchanged() {
+        let input = CString::new("กินข้าว").unwrap();
+        let result = unsafe { kham_normalize(input.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "กินข้าว");
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_soundex / kham_sounds_like ---
+
+    #[test]
+    fn soundex_null_word_returns_null() {
+        assert!(unsafe { kham_soundex(std::ptr::null(), std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn soundex_lk82_is_four_chars() {
+        let word = CString::new("กาน").unwrap();
+        let result = unsafe { kham_soundex(word.as_ptr(), std::ptr::null()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }.len(), 4);
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn soundex_udom83_is_four_chars() {
+        let word = CString::new("กาน").unwrap();
+        let algo = CString::new("udom83").unwrap();
+        let result = unsafe { kham_soundex(word.as_ptr(), algo.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }.len(), 4);
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn sounds_like_null_returns_false() {
+        let a = CString::new("กาน").unwrap();
+        assert!(!unsafe { kham_sounds_like(std::ptr::null(), a.as_ptr(), std::ptr::null()) });
+        assert!(!unsafe { kham_sounds_like(a.as_ptr(), std::ptr::null(), std::ptr::null()) });
+    }
+
+    #[test]
+    fn sounds_like_homophones_true() {
+        let a = CString::new("กาน").unwrap();
+        let b = CString::new("ขาน").unwrap();
+        assert!(unsafe { kham_sounds_like(a.as_ptr(), b.as_ptr(), std::ptr::null()) });
+    }
+
+    // --- kham_thai_english_soundex / kham_sounds_like_cross_lang ---
+
+    #[test]
+    fn thai_english_soundex_null_returns_null() {
+        assert!(unsafe { kham_thai_english_soundex(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn thai_english_soundex_returns_non_empty() {
+        let word = CString::new("กิน").unwrap();
+        let result = unsafe { kham_thai_english_soundex(word.as_ptr()) };
+        assert!(!result.is_null());
+        assert!(!unsafe { ptr_to_str(result) }.is_empty());
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn sounds_like_cross_lang_null_returns_false() {
+        let a = CString::new("กิน").unwrap();
+        assert!(!unsafe { kham_sounds_like_cross_lang(std::ptr::null(), a.as_ptr()) });
+        assert!(!unsafe { kham_sounds_like_cross_lang(a.as_ptr(), std::ptr::null()) });
+    }
+
+    // --- kham_thai_digits_to_ascii ---
+
+    #[test]
+    fn thai_digits_to_ascii_null_returns_null() {
+        assert!(unsafe { kham_thai_digits_to_ascii(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn thai_digits_to_ascii_converts_thai_digits() {
+        let input = CString::new("๑๒๓").unwrap();
+        let result = unsafe { kham_thai_digits_to_ascii(input.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "123");
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_number_to_thai_word / kham_thai_word_to_number ---
+
+    #[test]
+    fn number_to_thai_word_zero() {
+        let result = kham_number_to_thai_word(0);
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "ศูนย์");
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn thai_word_to_number_roundtrip() {
+        let input = CString::new("หนึ่งร้อย").unwrap();
+        let mut n: u64 = 0;
+        assert!(unsafe { kham_thai_word_to_number(input.as_ptr(), &mut n) });
+        assert_eq!(n, 100);
+    }
+
+    #[test]
+    fn thai_word_to_number_null_out_returns_false() {
+        let input = CString::new("หนึ่ง").unwrap();
+        assert!(!unsafe { kham_thai_word_to_number(input.as_ptr(), std::ptr::null_mut()) });
+    }
+
+    #[test]
+    fn thai_word_to_number_invalid_returns_false() {
+        let input = CString::new("กินข้าว").unwrap();
+        let mut n: u64 = 0;
+        assert!(!unsafe { kham_thai_word_to_number(input.as_ptr(), &mut n) });
+    }
+
+    // --- kham_number_to_baht_text / kham_parse_baht_text / kham_baht_amount_free ---
+
+    #[test]
+    fn baht_text_roundtrip_100_baht() {
+        let text_ptr = kham_number_to_baht_text(100, 0);
+        assert!(!text_ptr.is_null());
+        let parsed = unsafe { kham_parse_baht_text(text_ptr as *const c_char) };
+        unsafe { kham_string_free(text_ptr) };
+        assert!(!parsed.is_null());
+        let amt = unsafe { &*parsed };
+        assert_eq!(amt.baht, 100);
+        assert_eq!(amt.satang, 0);
+        unsafe { kham_baht_amount_free(parsed) };
+    }
+
+    #[test]
+    fn baht_amount_free_null_is_safe() {
+        unsafe { kham_baht_amount_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_romanize ---
+
+    #[test]
+    fn romanize_null_returns_null() {
+        assert!(unsafe { kham_romanize(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn romanize_returns_text_and_roman_fields() {
+        let input = CString::new("กิน").unwrap();
+        let result = unsafe { kham_romanize(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len > 0);
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            assert!(!t.text.is_null());
+            assert!(!t.roman.is_null());
+        }
+        unsafe { kham_roman_token_list_free(result) };
+    }
+
+    #[test]
+    fn roman_token_list_free_null_is_safe() {
+        unsafe { kham_roman_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_split_sentences ---
+
+    #[test]
+    fn split_sentences_null_returns_null() {
+        assert!(unsafe { kham_split_sentences(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn split_sentences_on_newline() {
+        let input = CString::new("กินข้าว\nดื่มน้ำ").unwrap();
+        let result = unsafe { kham_split_sentences(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len >= 2, "expected >= 2 sentences, got {}", list.len);
+        unsafe { kham_sentence_list_free(result) };
+    }
+
+    #[test]
+    fn sentence_list_free_null_is_safe() {
+        unsafe { kham_sentence_list_free(std::ptr::null_mut()) };
     }
 }

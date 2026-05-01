@@ -49,6 +49,7 @@
 
 use kham_core::{
     fts::FtsTokenizer,
+    keyword::KeyExtractor,
     number::{
         parse_thai_baht as core_parse_baht, parse_thai_word as core_parse_thai_word,
         thai_digits_to_ascii as core_thai_digits_to_ascii, to_thai_baht_text as core_to_baht_text,
@@ -61,6 +62,7 @@ use kham_core::{
         sounds_like_cross_lang as core_sounds_like_cross,
         thai_english_soundex as core_thai_english_soundex, SoundexAlgorithm,
     },
+    spell::SpellChecker,
     TokenKind, Tokenizer,
 };
 use pyo3::prelude::*;
@@ -608,6 +610,130 @@ fn parse_baht_text(text: &str) -> Option<BahtAmount> {
 }
 
 // ---------------------------------------------------------------------------
+// SpellSuggestion
+// ---------------------------------------------------------------------------
+
+/// A spelling suggestion returned by :func:`spell_suggestions`.
+///
+/// Attributes:
+///     word (str): Candidate word from the built-in dictionary.
+///     edit_distance (int): Levenshtein distance from the input (0–2).
+///     soundex_match (bool): ``True`` if the lk82 phonetic codes match.
+///     freq_score (int): TNC corpus frequency; ``0`` if not in the table.
+#[pyclass(frozen)]
+pub struct SpellSuggestion {
+    #[pyo3(get)]
+    pub word: String,
+    #[pyo3(get)]
+    pub edit_distance: u8,
+    #[pyo3(get)]
+    pub soundex_match: bool,
+    #[pyo3(get)]
+    pub freq_score: u32,
+}
+
+#[pymethods]
+impl SpellSuggestion {
+    fn __repr__(&self) -> String {
+        format!(
+            "SpellSuggestion(word={:?}, edit_distance={}, soundex_match={}, freq_score={})",
+            self.word, self.edit_distance, self.soundex_match, self.freq_score,
+        )
+    }
+}
+
+/// Return up to ``max_n`` spelling suggestions for ``word``.
+///
+/// Only candidates with Levenshtein edit distance ≤ 2 are returned. Results
+/// are sorted by phonetic match (lk82), then edit distance, then TNC corpus
+/// frequency. Returns an empty list for empty input or ``max_n = 0``.
+///
+/// Args:
+///     word (str): Potentially misspelled Thai word.
+///     max_n (int): Maximum number of suggestions to return.
+///
+/// Returns:
+///     list[SpellSuggestion]
+///
+/// Example:
+///     >>> suggs = kham.spell_suggestions("กานข้าว", 5)
+///     >>> [(s.word, s.edit_distance) for s in suggs]
+///     [('กินข้าว', 1), ...]
+#[pyfunction]
+fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
+    SpellChecker::builtin()
+        .suggestions(word, max_n)
+        .into_iter()
+        .map(|s| SpellSuggestion {
+            word: s.word,
+            edit_distance: s.edit_distance,
+            soundex_match: s.soundex_match,
+            freq_score: s.freq_score,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
+// Keyword
+// ---------------------------------------------------------------------------
+
+/// A keyword extracted from a document, returned by :func:`extract_keywords`.
+///
+/// Attributes:
+///     word (str): Keyword text.
+///     score (float): TF × IDF_proxy relevance score. Higher = more distinctive.
+///     count (int): Raw occurrence count in the document.
+#[pyclass(frozen)]
+pub struct Keyword {
+    #[pyo3(get)]
+    pub word: String,
+    #[pyo3(get)]
+    pub score: f32,
+    #[pyo3(get)]
+    pub count: usize,
+}
+
+#[pymethods]
+impl Keyword {
+    fn __repr__(&self) -> String {
+        format!(
+            "Keyword(word={:?}, score={:.4}, count={})",
+            self.word, self.score, self.count,
+        )
+    }
+}
+
+/// Extract up to ``max_n`` keywords from ``text``, ranked by TF × IDF_proxy.
+///
+/// Stopwords and single-character tokens are excluded. Words rare in the TNC
+/// corpus receive a higher score than common function words. Returns an empty
+/// list for empty text or ``max_n = 0``.
+///
+/// Args:
+///     text (str): Input document text.
+///     max_n (int): Maximum number of keywords to return.
+///
+/// Returns:
+///     list[Keyword]
+///
+/// Example:
+///     >>> kws = kham.extract_keywords("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล", 5)
+///     >>> [k.word for k in kws]
+///     ['ซอฟต์แวร์', 'ดิจิทัล', ...]
+#[pyfunction]
+fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
+// ---------------------------------------------------------------------------
 // Module
 // ---------------------------------------------------------------------------
 
@@ -620,6 +746,8 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<RomanToken>()?;
     m.add_class::<Sentence>()?;
     m.add_class::<BahtAmount>()?;
+    m.add_class::<SpellSuggestion>()?;
+    m.add_class::<Keyword>()?;
 
     // Segmentation
     m.add_function(wrap_pyfunction!(segment, m)?)?;
@@ -647,6 +775,12 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(thai_word_to_number, m)?)?;
     m.add_function(wrap_pyfunction!(number_to_baht_text, m)?)?;
     m.add_function(wrap_pyfunction!(parse_baht_text, m)?)?;
+
+    // Spell checking
+    m.add_function(wrap_pyfunction!(spell_suggestions, m)?)?;
+
+    // Keyword extraction
+    m.add_function(wrap_pyfunction!(extract_keywords, m)?)?;
 
     Ok(())
 }

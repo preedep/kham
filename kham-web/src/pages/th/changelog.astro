@@ -16,6 +16,56 @@ import Layout from '../../layouts/Layout.astro';
 
     <div class="space-y-16">
 
+      <!-- v0.6.0 -->
+      <section>
+        <div class="flex items-center gap-4 mb-6">
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.6.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-05-01</span>
+          <a href="https://github.com/preedep/kham/releases/tag/v0.6.0" target="_blank" rel="noopener noreferrer"
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
+        </div>
+        <div class="space-y-6 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>เพิ่มเติม — kham-core
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">SpellChecker</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">SpellChecker::builtin().suggestions(word, n)</code> คืนค่า candidates ที่จัดอันดับแล้ว (Levenshtein ≤ 2, lk82 soundex match, คะแนนความถี่ TNC)</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">KeyExtractor</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">KeyExtractor::builtin().extract(text, n)</code> คืนคำสำคัญ top-N โดยคะแนน TF × IDF-proxy ตัด stopword ออกอัตโนมัติ</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizerBuilder::dict_merge()</code></strong> — method builder ใหม่สำหรับเพิ่มคำพิเศษตอนสร้าง <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer</code> (fast overlay ไม่ rebuild trie)</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>เพิ่มเติม — bindings (WASM / Python / C FFI)
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">spell_suggestions / kham_spell_suggestions</strong> — เปิดใช้งานใน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-wasm</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-python</code> และ <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-capi</code> พร้อม result type <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">SpellSuggestion</code> / <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">KhamSpellList</code></li>
+              <li><strong class="text-slate-800 dark:text-slate-200">extract_keywords / kham_keywords</strong> — เปิดใช้งานในทุก binding พร้อม <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">Keyword</code> / <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">KhamKeywordList</code></li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Live demo — แท็บ Spell &amp; Keywords</strong> — demo แบบ interactive ในเบราว์เซอร์สำหรับตรวจสอบคำสะกดและสกัดคำสำคัญ ขับเคลื่อนด้วย WASM</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>เพิ่มเติม — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom synonym map</strong> — argument <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">synonyms '&lt;path&gt;'</code> โหลดไฟล์ TSV คำพ้องความหมายตอนสร้างตาราง ส่ง synonym เป็น <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FTS5_TOKEN_COLOCATED</code></li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom dictionary overlay</strong> — argument <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">dict '&lt;path&gt;'</code> เพิ่มคำเฉพาะทางไว้บนพจนานุกรมในตัว โดยไม่ต้อง rebuild trie ใหม่</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Integration test suite</strong> — 31 tests ครอบคลุม MATCH พื้นฐาน, RTGS, lk82 soundex, snippet/highlight, stopword, mixed script, NE, config ทั้งหมด</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>แก้ไข — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Trigrams ไม่ถูกส่งออก</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsToken::trigrams</code> สำหรับ Unknown token ถูก populate โดย FTS pipeline แต่ไม่ได้ส่งไปยัง SQLite เป็น colocated token การค้นหา OOV n-gram จึงใช้งานได้ถูกต้องแล้ว</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- v0.5.1 -->
       <section>
         <div class="flex items-center gap-4 mb-6">

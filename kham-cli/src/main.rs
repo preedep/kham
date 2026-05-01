@@ -375,3 +375,52 @@ fn process_fts_line(fts: &FtsTokenizer, text: &str) {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use kham_core::{token::NamedEntityKind, TokenKind};
+
+    #[test]
+    fn kind_str_all_variants() {
+        assert_eq!(kind_str(TokenKind::Thai), "Thai");
+        assert_eq!(kind_str(TokenKind::Latin), "Latin");
+        assert_eq!(kind_str(TokenKind::Number), "Number");
+        assert_eq!(kind_str(TokenKind::Punctuation), "Punctuation");
+        assert_eq!(kind_str(TokenKind::Emoji), "Emoji");
+        assert_eq!(kind_str(TokenKind::Whitespace), "Whitespace");
+        assert_eq!(kind_str(TokenKind::Unknown), "Unknown");
+        assert_eq!(
+            kind_str(TokenKind::Named(NamedEntityKind::Person)),
+            "Person"
+        );
+        assert_eq!(kind_str(TokenKind::Named(NamedEntityKind::Place)), "Place");
+        assert_eq!(kind_str(TokenKind::Named(NamedEntityKind::Org)), "Org");
+    }
+
+    #[test]
+    fn parse_soundex_algo_valid_inputs() {
+        assert!(matches!(parse_soundex_algo("lk82"), SoundexAlgorithm::Lk82));
+        assert!(matches!(parse_soundex_algo("LK82"), SoundexAlgorithm::Lk82));
+        assert!(matches!(
+            parse_soundex_algo("udom83"),
+            SoundexAlgorithm::Udom83
+        ));
+        assert!(matches!(
+            parse_soundex_algo("UDOM83"),
+            SoundexAlgorithm::Udom83
+        ));
+        assert!(matches!(
+            parse_soundex_algo("metasound"),
+            SoundexAlgorithm::MetaSound
+        ));
+        assert!(matches!(
+            parse_soundex_algo("METASOUND"),
+            SoundexAlgorithm::MetaSound
+        ));
+    }
+}

@@ -49,6 +49,26 @@ impl FreqMap {
     pub fn get(&self, word: &str) -> u32 {
         self.0.get(word).copied().unwrap_or(0)
     }
+
+    /// Return the maximum frequency value in the table, or 0 if the table is empty.
+    ///
+    /// Used by [`KeyExtractor`](crate::keyword::KeyExtractor) to compute the
+    /// IDF numerator for TF-IDF scoring.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use kham_core::freq::FreqMap;
+    ///
+    /// let m = FreqMap::from_tsv("กิน\t100\nข้าว\t500\nที่\t9999\n");
+    /// assert_eq!(m.max_freq(), 9999);
+    ///
+    /// let empty = FreqMap::from_tsv("");
+    /// assert_eq!(empty.max_freq(), 0);
+    /// ```
+    pub fn max_freq(&self) -> u32 {
+        self.0.values().copied().max().unwrap_or(0)
+    }
 }
 
 // ---------------------------------------------------------------------------

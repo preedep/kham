@@ -388,6 +388,7 @@ impl Default for Tokenizer {
 #[derive(Debug, Default)]
 pub struct TokenizerBuilder {
     dict_words: Option<alloc::string::String>,
+    dict_merge: Option<alloc::string::String>,
     keep_whitespace: bool,
 }
 
@@ -429,6 +430,51 @@ impl TokenizerBuilder {
     ///     assert_eq!(w[0].span.end, w[1].span.start);
     /// }
     /// ```
+    /// Add extra words via a lightweight overlay — no trie rebuild.
+    ///
+    /// Words are stored in a sorted list alongside the pre-compiled trie.
+    /// This is O(k log k) in the number of custom words and avoids the O(N)
+    /// full trie rebuild that [`dict_words`](Self::dict_words) performs.
+    ///
+    /// Prefer `dict_merge` over `dict_words` when adding a small custom
+    /// vocabulary (e.g. domain-specific terms, product names).
+    ///
+    /// If both `dict_merge` and `dict_words` are called, `dict_words` takes
+    /// precedence (it performs a full rebuild that subsumes any overlay).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::{Tokenizer, TokenKind};
+    ///
+    /// let tok = Tokenizer::builder()
+    ///     .dict_merge("ปัญญาประดิษฐ์\nโปรแกรมเมอร์\n")
+    ///     .build();
+    /// let tokens = tok.segment("ปัญญาประดิษฐ์คือ");
+    /// assert!(tokens.iter().any(|t| t.text == "ปัญญาประดิษฐ์" && t.kind == TokenKind::Thai));
+    /// ```
+    pub fn dict_merge(mut self, words: &str) -> Self {
+        self.dict_merge = Some(alloc::string::String::from(words));
+        self
+    }
+
+    /// Configure whether whitespace tokens are included in the output.
+    ///
+    /// Default: `false` (whitespace is discarded).
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::{Tokenizer, TokenKind};
+    ///
+    /// let tok = Tokenizer::builder().keep_whitespace(true).build();
+    /// let tokens = tok.segment("กิน ข้าว");
+    /// assert!(tokens.iter().any(|t| t.kind == TokenKind::Whitespace));
+    /// // Byte spans are contiguous when whitespace is kept
+    /// for w in tokens.windows(2) {
+    ///     assert_eq!(w[0].span.end, w[1].span.start);
+    /// }
+    /// ```
     pub fn keep_whitespace(mut self, keep: bool) -> Self {
         self.keep_whitespace = keep;
         self
@@ -437,11 +483,14 @@ impl TokenizerBuilder {
     /// Consume the builder and return a configured [`Tokenizer`].
     pub fn build(self) -> Tokenizer {
         let dict = if let Some(extra) = &self.dict_words {
-            // Custom words: merge with built-in word list and rebuild.
+            // Full rebuild path: merges BUILTIN_WORDS + custom words into a new trie.
             let mut combined = alloc::string::String::from(BUILTIN_WORDS);
             combined.push('\n');
             combined.push_str(extra);
             Dict::from_word_list(&combined)
+        } else if let Some(overlay) = &self.dict_merge {
+            // Fast overlay path: load pre-compiled binary, attach small sorted list.
+            builtin_dict().with_overlay(overlay)
         } else {
             // Default path: load from pre-compiled binary — O(S) copy.
             builtin_dict()
