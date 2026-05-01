@@ -106,6 +106,7 @@ FtsTokenizer::builder()
     .pos_tagger(PosTagger)
     .ne_tagger(NeTagger)
     .romanization(RomanizationMap)     // adds RTGS forms to synonyms
+    .dict_merge(words: &str)           // overlay extra words on the built-in dict (fast, no trie rebuild)
     .build()
 
 fts.segment_for_fts(text) -> Vec<FtsToken>   // all non-whitespace tokens with metadata

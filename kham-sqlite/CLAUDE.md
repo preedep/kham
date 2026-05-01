@@ -115,10 +115,17 @@ CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex none');       
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham stopwords on');                           -- suppress stopwords
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 2');                           -- bigrams for unknown tokens
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham ngram_size 0');                           -- disable n-grams
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham synonyms ''/etc/kham/syns.tsv''');        -- custom synonym map
+CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham dict ''/etc/kham/words.txt''');           -- custom word list overlay
 CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham soundex lk82 stopwords on ngram_size 4'); -- all options
 ```
 
-Custom synonym maps are not yet exposed via `xCreate` arguments.
+> **Path quoting:** FTS5 `sqlite3Fts5IsBareword()` only accepts `[A-Za-z0-9_]` and bytes >0x7F as bareword
+> characters. File paths containing `/`, `.`, or `-` must be single-quoted inside the directive.
+> SQL escaping uses `''` to represent a literal single quote inside a single-quoted string:
+> `tokenize='kham synonyms ''/path/to/file.tsv'''`
+
+Custom synonym maps are loaded via the `synonyms <path>` `xCreate` argument (see Synonym expansion section below). Custom word lists are loaded via the `dict <path>` argument.
 
 ## Build Requirements
 
@@ -215,11 +222,13 @@ sqlite3 ':memory:' \
   "SELECT * FROM t WHERE t MATCH 'kin';"
 ```
 
-## v3 Roadmap
+## Roadmap
 
-- Accept `synonyms=<path>` argument in `xCreate` to load a custom synonym TSV at table-creation time
-- [x] **Stopword suppression** — `stopwords on` argument in `xCreate`; stopword tokens skipped in `xTokenize`
-- [x] **N-gram size** — `ngram_size N` argument in `xCreate`; controls char n-gram size for Unknown tokens (default 3; 0 = disabled)
+- [x] **Stopword suppression** — `stopwords on` argument; stopword tokens skipped in `xTokenize`
+- [x] **N-gram size** — `ngram_size N` argument; controls char n-gram size for Unknown tokens (default 3; 0 = disabled)
+- [x] **Custom synonym map** — `synonyms '<path>'` argument; loads TSV at table-creation time
+- [x] **Custom dictionary overlay** — `dict '<path>'` argument; overlays domain words on the built-in dictionary (fast, no trie rebuild)
+- [ ] **Tokenizer config inspection** — pragma/metadata to query which options a table was created with
 
 ## unsafe policy
 
