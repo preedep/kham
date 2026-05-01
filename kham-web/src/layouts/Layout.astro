@@ -8,22 +8,46 @@ interface Props {
   title: string;
   description?: string;
   lang?: Lang;
+  keywords?: string;
+  jsonLd?: object | object[];
+  noindex?: boolean;
 }
 
 const {
   title,
   description = 'kham — Fast Thai word segmentation in Rust. Zero-dependency, no_std core. Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS.',
   lang = 'en',
+  keywords,
+  jsonLd,
+  noindex = false,
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, 'https://kham.io').href;
 const ogImage = 'https://kham.io/og.png';
+const ogImageAlt = 'kham — Fast Thai word segmentation library for Rust, Python, WASM, and more';
 const thPath = lang === 'en'
   ? `/th${Astro.url.pathname === '/' ? '/' : Astro.url.pathname}`
   : Astro.url.pathname;
 const enPath = lang === 'th'
   ? (Astro.url.pathname.replace(/^\/th/, '') || '/')
   : Astro.url.pathname;
+
+// Base WebSite JSON-LD — included on every page
+const websiteSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'WebSite',
+  name: 'kham',
+  url: 'https://kham.io',
+  description: 'Fast Thai word segmentation library for Rust, Python, WebAssembly, and more',
+  inLanguage: ['en', 'th'],
+  potentialAction: {
+    '@type': 'SearchAction',
+    target: { '@type': 'EntryPoint', urlTemplate: 'https://kham.io/demo?q={search_term_string}' },
+    'query-input': 'required name=search_term_string',
+  },
+};
+
+const allSchemas = [websiteSchema, ...(jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [])];
 ---
 
 <!doctype html>
@@ -32,8 +56,13 @@ const enPath = lang === 'th'
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
+    {keywords && <meta name="keywords" content={keywords} />}
+    <meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow'} />
+    <meta name="author" content="kham contributors" />
+    <meta name="theme-color" content="#0f172a" />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="sitemap" href="/sitemap-index.xml" />
 
     <!-- Open Graph -->
@@ -45,18 +74,24 @@ const enPath = lang === 'th'
     <meta property="og:image" content={ogImage} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={ogImageAlt} />
     <meta property="og:locale" content={lang === 'th' ? 'th_TH' : 'en_US'} />
+    <meta property="og:locale:alternate" content={lang === 'th' ? 'en_US' : 'th_TH'} />
 
     <!-- Twitter / X card -->
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />
+    <meta name="twitter:image:alt" content={ogImageAlt} />
 
     <!-- hreflang alternates -->
     <link rel="alternate" hreflang="en" href={new URL(enPath, 'https://kham.io').href} />
     <link rel="alternate" hreflang="th" href={new URL(thPath, 'https://kham.io').href} />
     <link rel="alternate" hreflang="x-default" href={new URL(enPath, 'https://kham.io').href} />
+
+    <!-- JSON-LD structured data -->
+    <script type="application/ld+json" set:html={JSON.stringify(allSchemas)} />
 
     <title>{title}</title>
     <!-- Theme init: runs before paint to prevent flash -->

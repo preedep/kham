@@ -18,10 +18,29 @@ const codeSnippet = `use kham_core::Tokenizer;
 let tok = Tokenizer::new();
 let tokens = tok.segment("กินข้าวกับปลา");
 // ["กิน", "ข้าว", "กับ", "ปลา"]`;
+
+const softwareSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'kham',
+  url: 'https://kham.io',
+  downloadUrl: 'https://crates.io/crates/kham-core',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Linux, macOS, Windows, Android, WebAssembly',
+  softwareVersion: '0.6.0',
+  programmingLanguage: ['Rust', 'Python', 'JavaScript', 'TypeScript', 'C', 'SQL'],
+  description: 'ไลบรารีตัดคำภาษาไทยความเร็วสูงสำหรับ Rust, Python, WebAssembly, C FFI, CLI, PostgreSQL FTS และ SQLite FTS5',
+  license: 'https://opensource.org/licenses/MIT',
+  codeRepository: 'https://github.com/preedep/kham',
+  author: { '@type': 'Person', name: 'Preedee Ponchevin' },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
 ---
 
 <Layout title="kham — ตัดคำภาษาไทยความเร็วสูงด้วย Rust" lang="th"
-  description="kham ไลบรารีตัดคำภาษาไทย no_std รองรับ Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS">
+  description="kham ไลบรารีตัดคำภาษาไทย no_std รองรับ Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS"
+  keywords="ตัดคำภาษาไทย, NLP ภาษาไทย, Thai word segmentation, kham, Rust NLP, ไลบรารีภาษาไทย, tokenizer ภาษาไทย"
+  jsonLd={softwareSchema}>
 
   <!-- Hero -->
   <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white">

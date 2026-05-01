@@ -18,6 +18,227 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # ---------------------------------------------------------------------------
+  # Build kham-cli + kham-sqlite binaries for each platform
+  #
+  # kham-sqlite build.rs supports macOS (xcrun/brew) and Linux (pkg-config).
+  # Windows has no SQLite header path wired up, so sqlite is skipped there.
+  # ---------------------------------------------------------------------------
+  build_binaries:
+    name: Binaries / ${{ matrix.target }}
+    needs: ci_check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: so
+          - os: macos-13
+            target: x86_64-apple-darwin
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: dylib
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            sqlite: true
+            archive: zip
+            exe: .exe
+            lib_prefix: ""
+            lib_ext: dll
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install SQLite headers (Linux)
+        if: matrix.sqlite && runner.os == 'Linux'
+        run: sudo apt-get install -y libsqlite3-dev
+      - name: Install SQLite headers (Windows via vcpkg)
+        if: matrix.sqlite && runner.os == 'Windows'
+        run: vcpkg install sqlite3:x64-windows
+      - name: Build kham-cli
+        run: cargo build -p kham-cli --release
+      - name: Build kham-sqlite
+        if: matrix.sqlite
+        run: cargo build -p kham-sqlite --release
+      - name: Package artifacts
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          TARGET="${{ matrix.target }}"
+          EXE="${{ matrix.exe }}"
+          LIB_PREFIX="${{ matrix.lib_prefix }}"
+          LIB_EXT="${{ matrix.lib_ext }}"
+          ARCHIVE="${{ matrix.archive }}"
+
+          mkdir -p dist
+
+          # --- kham-cli ---
+          CLI_BIN="target/release/kham${EXE}"
+          CLI_NAME="kham-cli-${VERSION}-${TARGET}"
+          cp "$CLI_BIN" dist/
+
+          if [ "$ARCHIVE" = "zip" ]; then
+            (cd dist && zip "${CLI_NAME}.zip" "kham${EXE}" && rm "kham${EXE}")
+          else
+            (cd dist && tar czf "${CLI_NAME}.tar.gz" "kham${EXE}" && rm "kham${EXE}")
+          fi
+
+          # --- kham-sqlite ---
+          if [ "${{ matrix.sqlite }}" = "true" ]; then
+            SQLITE_LIB="target/release/${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
+            SQLITE_NAME="kham-sqlite-${VERSION}-${TARGET}"
+            cp "$SQLITE_LIB" dist/
+            LIB_FILE="${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
+            if [ "$ARCHIVE" = "zip" ]; then
+              (cd dist && zip "${SQLITE_NAME}.zip" "$LIB_FILE" && rm "$LIB_FILE")
+            else
+              (cd dist && tar czf "${SQLITE_NAME}.tar.gz" "$LIB_FILE" && rm "$LIB_FILE")
+            fi
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
+  # Build kham-sqlite for Android (4 ABIs via Android NDK)
+  #
+  # The built-in Android SQLite has load_extension disabled; users must link
+  # against sqlite-android (or SQLCipher) which re-enables it.
+  # sqlite3ext.h is not in the NDK sysroot, so we download the SQLite
+  # amalgamation and set SQLITE_INCLUDE_DIR to that directory.
+  # ---------------------------------------------------------------------------
+  build_android:
+    name: kham-sqlite / Android / ${{ matrix.abi }}
+    needs: ci_check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+            ndk_triple: aarch64-linux-android
+            api: 21
+          - abi: armeabi-v7a
+            target: armv7-linux-androideabi
+            ndk_triple: armv7a-linux-androideabi
+            api: 21
+          - abi: x86_64
+            target: x86_64-linux-android
+            ndk_triple: x86_64-linux-android
+            api: 21
+          - abi: x86
+            target: i686-linux-android
+            ndk_triple: i686-linux-android
+            api: 21
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ matrix.target }}
+      - name: Download SQLite amalgamation (provides sqlite3ext.h)
+        run: |
+          curl -fsSL https://www.sqlite.org/2024/sqlite-amalgamation-3470200.zip -o sqlite-amal.zip
+          unzip -q sqlite-amal.zip
+          echo "SQLITE_INCLUDE_DIR=$PWD/sqlite-amalgamation-3470200" >> $GITHUB_ENV
+      - name: Set up NDK toolchain environment
+        run: |
+          NDK_BIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          CLANG="${NDK_BIN}/${{ matrix.ndk_triple }}${{ matrix.api }}-clang"
+          TARGET="${{ matrix.target }}"
+          TARGET_UPPER=$(echo "$TARGET" | tr '[:lower:]-' '[:upper:]_')
+          TARGET_UNDER=$(echo "$TARGET" | tr '-' '_')
+          echo "CARGO_TARGET_${TARGET_UPPER}_LINKER=$CLANG" >> $GITHUB_ENV
+          echo "CC_${TARGET_UNDER}=$CLANG"                  >> $GITHUB_ENV
+          echo "AR_${TARGET_UNDER}=${NDK_BIN}/llvm-ar"      >> $GITHUB_ENV
+      - name: Build kham-sqlite
+        run: cargo build -p kham-sqlite --release --target ${{ matrix.target }}
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ABI="${{ matrix.abi }}"
+          TARGET="${{ matrix.target }}"
+          mkdir -p dist
+          cp "target/$TARGET/release/libkham_sqlite.so" dist/
+          (cd dist && zip "kham-sqlite-${VERSION}-android-${ABI}.zip" libkham_sqlite.so \
+            && rm libkham_sqlite.so)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.abi }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
+  # Build kham-pg for Linux x86_64 against PostgreSQL 16 and 17
+  #
+  # The .so must match the major PG version it will be loaded into, so we
+  # build once per version and ship both. macOS/Windows are not supported
+  # because pg_config availability is not guaranteed on those runners.
+  # ---------------------------------------------------------------------------
+  build_pg:
+    name: kham-pg / PG ${{ matrix.pg }} / Linux x86_64
+    needs: ci_check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [16, 17]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: pg${{ matrix.pg }}
+      - name: Add PostgreSQL apt repository
+        run: |
+          sudo apt-get install -y curl ca-certificates gnupg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+            https://apt.postgresql.org/pub/repos/apt \
+            $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+      - name: Install postgresql-server-dev-${{ matrix.pg }}
+        run: sudo apt-get install -y postgresql-server-dev-${{ matrix.pg }}
+      - name: Build kham-pg
+        run: cargo build -p kham-pg --release
+        env:
+          PG_CONFIG: /usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PG="${{ matrix.pg }}"
+          mkdir -p dist
+          cp target/release/libkham_pg.so dist/
+          (cd dist && tar czf "kham-pg-${VERSION}-pg${PG}-x86_64-unknown-linux-gnu.tar.gz" \
+            libkham_pg.so && rm libkham_pg.so)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kham-pg-pg${{ matrix.pg }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
   # Publish kham-core then kham-cli to crates.io
   # ---------------------------------------------------------------------------
   publish_crates:
@@ -143,11 +364,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # GitHub Release — auto-generate notes and attach wheel artifacts
+  # GitHub Release — auto-generate notes and attach all artifacts as assets
   # ---------------------------------------------------------------------------
   github_release:
     name: GitHub Release
-    needs: [publish_crates, publish_pypi, publish_npm]
+    needs: [publish_crates, publish_pypi, publish_npm, build_binaries, build_pg, build_android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,6 +379,21 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kham-pg-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: android-*
           merge-multiple: true
           path: dist
       - uses: softprops/action-gh-release@v2

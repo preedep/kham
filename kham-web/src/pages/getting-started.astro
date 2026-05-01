@@ -165,6 +165,15 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
   title="Getting Started — kham Thai Segmenter"
   description="Quickstart guides for kham — Rust, Python, WebAssembly, CLI, PostgreSQL FTS, and SQLite FTS5."
   lang="en"
+  keywords="kham install, Thai NLP quickstart, Thai tokenizer Rust, kham Python, kham WASM, kham CLI, kham PostgreSQL, kham SQLite"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+      { '@type': 'ListItem', position: 2, name: 'Getting Started', item: 'https://kham.io/getting-started' },
+    ],
+  }}
 >
   <div class="max-w-5xl mx-auto px-6 py-16">
     <!-- Header -->
@@ -184,6 +193,52 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
           </a>
         ))}
       </nav>
+    </div>
+
+    <!-- Pre-built binaries callout -->
+    <div class="mb-12 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 p-6">
+      <div class="flex items-start gap-3">
+        <span class="text-2xl">📦</span>
+        <div class="flex-1 min-w-0">
+          <h2 class="text-base font-semibold text-slate-900 dark:text-slate-100 mb-1">
+            Pre-built binaries available
+          </h2>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-4">
+            Download ready-to-use binaries from the
+            <a href="https://github.com/preedep/kham/releases" target="_blank" rel="noopener noreferrer"
+               class="text-blue-600 dark:text-blue-400 hover:underline font-medium">GitHub Releases page</a>
+            — no Rust toolchain required.
+          </p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="text-left text-slate-500 dark:text-slate-400 border-b border-blue-200 dark:border-blue-800">
+                  <th class="pb-2 pr-6 font-medium">Package</th>
+                  <th class="pb-2 pr-6 font-medium">Platforms</th>
+                  <th class="pb-2 font-medium">File</th>
+                </tr>
+              </thead>
+              <tbody class="text-slate-700 dark:text-slate-300">
+                <tr class="border-b border-blue-100 dark:border-blue-900/50">
+                  <td class="py-2 pr-6 font-mono text-xs">kham-cli</td>
+                  <td class="py-2 pr-6">macOS arm64 / x86_64 · Linux x86_64 · Windows x86_64</td>
+                  <td class="py-2 font-mono text-xs">kham-cli-&lt;version&gt;-&lt;target&gt;.tar.gz / .zip</td>
+                </tr>
+                <tr class="border-b border-blue-100 dark:border-blue-900/50">
+                  <td class="py-2 pr-6 font-mono text-xs">kham-sqlite</td>
+                  <td class="py-2 pr-6">macOS · Linux · Windows · Android (arm64-v8a, armeabi-v7a, x86_64, x86)</td>
+                  <td class="py-2 font-mono text-xs">libkham_sqlite.dylib / .so / .dll</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-6 font-mono text-xs">kham-pg</td>
+                  <td class="py-2 pr-6">Linux x86_64 · PostgreSQL 16 &amp; 17</td>
+                  <td class="py-2 font-mono text-xs">kham-pg-&lt;version&gt;-pg16/17-x86_64-unknown-linux-gnu.tar.gz</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Sections -->

@@ -114,6 +114,33 @@ for s in kham.split_sentences("กินข้าวแล้ว! ดื่ม�
 
 ---
 
+### Spell checking
+
+#### `spell_suggestions(word: str, max_n: int = 5) → list[SpellSuggestion]`
+
+Return up to `max_n` spelling suggestions for `word`, ranked by edit distance then phonetic similarity then corpus frequency.
+
+```python
+for s in kham.spell_suggestions("กีนข้าว"):
+    print(s.word, s.edit_distance, s.soundex_match, s.freq_score)
+# กินข้าว  1  True  1342
+```
+
+---
+
+### Keyword extraction
+
+#### `extract_keywords(text: str, max_n: int = 10) → list[Keyword]`
+
+Extract the top `max_n` keywords from `text` by TF × IDF-proxy score. Stopwords and single-character tokens are excluded.
+
+```python
+for kw in kham.extract_keywords("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจ", 5):
+    print(kw.word, kw.score, kw.count)
+```
+
+---
+
 ### Soundex (phonetic encoding)
 
 #### `soundex_word(word: str, algo: str = "lk82") → str`
@@ -255,6 +282,23 @@ if amt:
 |---|---|---|
 | `baht` | `int` | Whole baht amount |
 | `satang` | `int` | Satang (0–99) |
+
+### `SpellSuggestion`
+
+| Attribute | Type | Description |
+|---|---|---|
+| `word` | `str` | Suggested word |
+| `edit_distance` | `int` | Levenshtein distance from the input (1 or 2) |
+| `soundex_match` | `bool` | `True` if the lk82 soundex code matches the input |
+| `freq_score` | `int` | TNC corpus frequency (higher = more common) |
+
+### `Keyword`
+
+| Attribute | Type | Description |
+|---|---|---|
+| `word` | `str` | Keyword text |
+| `score` | `float` | TF × IDF-proxy score |
+| `count` | `int` | Occurrence count in the input text |
 
 ---
 

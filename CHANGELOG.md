@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-05-01
+
+### Added
+
+**kham-core**
+- `SpellChecker` — `SpellChecker::builtin().suggestions(word, max_n)`: Levenshtein edit distance ≤ 2 over the built-in dictionary, re-ranked by lk82 phonetic similarity and TNC frequency
+- `KeyExtractor` — `KeyExtractor::builtin().extract(text, max_n)`: TF × IDF-proxy keyword extraction; stopwords and single-char tokens excluded
+- `FtsTokenizerBuilder::dict_merge()` — overlays extra words on the built-in FTS dictionary without a full trie rebuild
+
+**Bindings — Python / WASM / C FFI**
+- `spell_suggestions(word, max_n)` exposed in all three bindings; returns `SpellSuggestion` / `KhamSpellList` rich result types
+- `extract_keywords(text, max_n)` exposed in all three bindings; returns `Keyword` / `KhamKeywordList` rich result types
+
+**kham-sqlite**
+- Custom synonym map — `synonyms '<path>'` tokenize argument loads a TSV file at table-creation time; synonyms emitted as `FTS5_TOKEN_COLOCATED`
+- Custom dictionary overlay — `dict '<path>'` tokenize argument overlays domain words without a full trie rebuild
+- 31-test integration suite covering basic MATCH, RTGS, lk82 soundex, `snippet()`/`highlight()`, stopword filtering, mixed script, NE, all config options, custom synonyms and dict
+- Windows build support via vcpkg (`SQLITE_INCLUDE_DIR` override; `build.rs` Windows detection)
+- Android NDK build support — 4 ABIs (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86`) via CI release workflow
+
+**CI**
+- `python` job now runs `pytest kham-python/tests/ -v` after `maturin develop` (was build-only)
+- `wasm` job now runs `cargo test -p kham-wasm` before `wasm-pack build` (native `#[test]` suite)
+
+### Fixed
+
+**kham-sqlite**
+- Trigrams not emitted — `FtsToken::trigrams` for Unknown tokens was populated but never forwarded to SQLite as colocated tokens; OOV n-gram search now works
+
+---
+
 ## [0.5.1] - 2026-04-26
 
 ### Added
@@ -291,6 +322,7 @@ Callers who relied on the previous splitting behaviour will see different token 
 - 30-case pytest suite for Python bindings covering `char_span` round-trip, UTF-8 byte spans, kind labels, and contiguity
 - Criterion benchmark suite: dict construction, trie lookup, prefix matching, FreqMap, end-to-end segmentation (short/medium/long), mixed-script scenarios
 
+[0.6.0]: https://github.com/preedep/kham/releases/tag/v0.6.0
 [0.5.1]: https://github.com/preedep/kham/releases/tag/v0.5.1
 [0.5.0]: https://github.com/preedep/kham/releases/tag/v0.5.0
 [0.4.0]: https://github.com/preedep/kham/releases/tag/v0.4.0

@@ -119,6 +119,35 @@ for (const s of split_sentences("กินข้าวแล้ว! ดื่ม
 
 ---
 
+### Spell checking
+
+#### `spell_suggestions(word: string, max_n?: number) → SpellSuggestion[]`
+
+Return up to `max_n` spelling suggestions for `word`, ranked by edit distance then phonetic similarity then corpus frequency.
+
+```js
+for (const s of spell_suggestions("กีนข้าว")) {
+    console.log(s.word, s.edit_distance, s.soundex_match, s.freq_score);
+}
+// กินข้าว  1  true  1342
+```
+
+---
+
+### Keyword extraction
+
+#### `extract_keywords(text: string, max_n?: number) → Keyword[]`
+
+Extract the top `max_n` keywords from `text` by TF × IDF-proxy score. Stopwords and single-character tokens are excluded.
+
+```js
+for (const kw of extract_keywords("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจ", 5)) {
+    console.log(kw.word, kw.score, kw.count);
+}
+```
+
+---
+
 ### Soundex (phonetic encoding)
 
 #### `soundex_word(word: string, algo?: string) → string`
@@ -263,6 +292,23 @@ if (r.valid) {
 | `valid` | `boolean` | `true` if the input was a valid Baht string |
 | `baht` | `bigint` | Whole baht amount (only meaningful when `valid` is `true`) |
 | `satang` | `number` | Satang 0–99 (only meaningful when `valid` is `true`) |
+
+### `SpellSuggestion`
+
+| Field | Type | Description |
+|---|---|---|
+| `word` | `string` | Suggested word |
+| `edit_distance` | `number` | Levenshtein distance from the input (1 or 2) |
+| `soundex_match` | `boolean` | `true` if the lk82 soundex code matches the input |
+| `freq_score` | `number` | TNC corpus frequency (higher = more common) |
+
+### `Keyword`
+
+| Field | Type | Description |
+|---|---|---|
+| `word` | `string` | Keyword text |
+| `score` | `number` | TF × IDF-proxy score |
+| `count` | `number` | Occurrence count in the input text |
 
 ---
 
