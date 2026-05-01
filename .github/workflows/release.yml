@@ -38,7 +38,7 @@ jobs:
             exe: ""
             lib_prefix: lib
             lib_ext: so
-          - os: macos-13
+          - os: macos-latest
             target: x86_64-apple-darwin
             sqlite: true
             archive: tar.gz
@@ -62,6 +62,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
@@ -72,10 +74,10 @@ jobs:
         if: matrix.sqlite && runner.os == 'Windows'
         run: vcpkg install sqlite3:x64-windows
       - name: Build kham-cli
-        run: cargo build -p kham-cli --release
+        run: cargo build -p kham-cli --release --target ${{ matrix.target }}
       - name: Build kham-sqlite
         if: matrix.sqlite
-        run: cargo build -p kham-sqlite --release
+        run: cargo build -p kham-sqlite --release --target ${{ matrix.target }}
       - name: Package artifacts
         shell: bash
         run: |
@@ -89,7 +91,7 @@ jobs:
           mkdir -p dist
 
           # --- kham-cli ---
-          CLI_BIN="target/release/kham${EXE}"
+          CLI_BIN="target/${TARGET}/release/kham${EXE}"
           CLI_NAME="kham-cli-${VERSION}-${TARGET}"
           cp "$CLI_BIN" dist/
 
@@ -101,7 +103,7 @@ jobs:
 
           # --- kham-sqlite ---
           if [ "${{ matrix.sqlite }}" = "true" ]; then
-            SQLITE_LIB="target/release/${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
+            SQLITE_LIB="target/${TARGET}/release/${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
             SQLITE_NAME="kham-sqlite-${VERSION}-${TARGET}"
             cp "$SQLITE_LIB" dist/
             LIB_FILE="${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
@@ -280,8 +282,8 @@ jobs:
           - os: ubuntu-latest
             target: aarch64
             manylinux: auto
-          # macOS x86_64 (Intel runner)
-          - os: macos-13
+          # macOS x86_64 — cross-compiled on macos-latest (arm64)
+          - os: macos-latest
             target: x86_64
             manylinux: ""
           # macOS arm64 (M1/M2 runner)
