@@ -67,7 +67,8 @@ bench:
 	$(DOCKER_COMPOSE) -f bench/docker-compose.yml up \
 	    --build \
 	    --exit-code-from bench \
-	    --abort-on-container-exit
+	    --abort-on-container-exit \
+	    --remove-orphans
 
 # ── dist — PGXN distribution zip ─────────────────────────────────────────────
 #

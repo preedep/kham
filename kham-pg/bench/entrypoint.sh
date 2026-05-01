@@ -25,6 +25,7 @@ PGUSER=postgres
 PGLOG=/tmp/pg_kham_bench.log
 
 # ── Prepare directories ───────────────────────────────────────────────────────
+rm -rf "$PGDATA"
 mkdir -p "$PGDATA" "$PGSOCKET"
 chown postgres:postgres "$PGDATA" "$PGSOCKET"
 chmod 700 "$PGDATA"
