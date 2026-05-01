@@ -90,7 +90,8 @@ $RUNAS "$PG_REGRESS" \
     kham_fts \
     kham_thai \
     kham_operators \
-    kham_ranking
+    kham_ranking \
+    kham_advanced
 STATUS=$?
 
 if [ $STATUS -ne 0 ]; then
