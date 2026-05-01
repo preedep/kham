@@ -94,7 +94,7 @@ jobs:
           cp "$CLI_BIN" dist/
 
           if [ "$ARCHIVE" = "zip" ]; then
-            (cd dist && zip "${CLI_NAME}.zip" "kham${EXE}" && rm "kham${EXE}")
+            (cd dist && 7z a "${CLI_NAME}.zip" "kham${EXE}" > /dev/null && rm "kham${EXE}")
           else
             (cd dist && tar czf "${CLI_NAME}.tar.gz" "kham${EXE}" && rm "kham${EXE}")
           fi
@@ -106,7 +106,7 @@ jobs:
             cp "$SQLITE_LIB" dist/
             LIB_FILE="${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
             if [ "$ARCHIVE" = "zip" ]; then
-              (cd dist && zip "${SQLITE_NAME}.zip" "$LIB_FILE" && rm "$LIB_FILE")
+              (cd dist && 7z a "${SQLITE_NAME}.zip" "$LIB_FILE" > /dev/null && rm "$LIB_FILE")
             else
               (cd dist && tar czf "${SQLITE_NAME}.tar.gz" "$LIB_FILE" && rm "$LIB_FILE")
             fi
