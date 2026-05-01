@@ -104,7 +104,7 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 
 - Unit tests co-located in each module
 - Integration tests in `kham-core/tests/`; test data in `kham-core/testdata/` (format: `input|tok1|tok2|…`)
-  - `basic.txt` — pure Thai, all tokens `TokenKind::Thai` (~49 cases; target ≥ 200)
+  - `basic.txt` — pure Thai, all tokens `TokenKind::Thai` (~75 cases; target ≥ 200)
   - `mixed_script.txt` — Thai + Latin + Number (~16 cases)
   - `normalization.txt` — asserts normalize() then segments correctly (~9 cases)
   - To expand: `python scripts/compare_pythainlp.py --export-testdata --agreed` generates additional high-confidence cases for review
