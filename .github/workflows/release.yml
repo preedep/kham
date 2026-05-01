@@ -54,7 +54,7 @@ jobs:
             lib_ext: dylib
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            sqlite: false
+            sqlite: true
             archive: zip
             exe: .exe
             lib_prefix: ""
@@ -68,6 +68,9 @@ jobs:
       - name: Install SQLite headers (Linux)
         if: matrix.sqlite && runner.os == 'Linux'
         run: sudo apt-get install -y libsqlite3-dev
+      - name: Install SQLite headers (Windows via vcpkg)
+        if: matrix.sqlite && runner.os == 'Windows'
+        run: vcpkg install sqlite3:x64-windows
       - name: Build kham-cli
         run: cargo build -p kham-cli --release
       - name: Build kham-sqlite
@@ -96,13 +99,17 @@ jobs:
             (cd dist && tar czf "${CLI_NAME}.tar.gz" "kham${EXE}" && rm "kham${EXE}")
           fi
 
-          # --- kham-sqlite (Unix only) ---
+          # --- kham-sqlite ---
           if [ "${{ matrix.sqlite }}" = "true" ]; then
             SQLITE_LIB="target/release/${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
             SQLITE_NAME="kham-sqlite-${VERSION}-${TARGET}"
             cp "$SQLITE_LIB" dist/
             LIB_FILE="${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
-            (cd dist && tar czf "${SQLITE_NAME}.tar.gz" "$LIB_FILE" && rm "$LIB_FILE")
+            if [ "$ARCHIVE" = "zip" ]; then
+              (cd dist && zip "${SQLITE_NAME}.zip" "$LIB_FILE" && rm "$LIB_FILE")
+            else
+              (cd dist && tar czf "${SQLITE_NAME}.tar.gz" "$LIB_FILE" && rm "$LIB_FILE")
+            fi
           fi
 
       - uses: actions/upload-artifact@v4

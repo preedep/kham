@@ -8,11 +8,10 @@ fn main() {
     build.file("src/shim.c").flag("-Wno-unused-parameter");
 
     // Locate SQLite headers. Priority:
-    // 1. SQLITE_INCLUDE_DIR env var (user override)
-    // 2. macOS: Xcode/CLT SDK via xcrun
-    // 3. Homebrew sqlite (macOS)
-    // 4. pkg-config (Linux)
-    // 5. /usr/include (Linux fallback)
+    // 1. SQLITE_INCLUDE_DIR env var (user override — works on all platforms)
+    // 2. macOS: Xcode/CLT SDK via xcrun, then Homebrew sqlite
+    // 3. Windows: vcpkg (VCPKG_ROOT env, then C:/vcpkg default)
+    // 4. Linux: pkg-config sqlite3, then /usr/include
     if let Ok(dir) = std::env::var("SQLITE_INCLUDE_DIR") {
         build.include(&dir);
     } else {
@@ -32,7 +31,16 @@ fn main() {
             }
         }
 
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(target_os = "windows")]
+        {
+            // vcpkg is the standard way to get SQLite headers on Windows.
+            // GitHub Actions runners have vcpkg at C:/vcpkg by default.
+            let vcpkg_root = std::env::var("VCPKG_ROOT")
+                .unwrap_or_else(|_| "C:/vcpkg".to_string());
+            build.include(format!("{vcpkg_root}/installed/x64-windows/include"));
+        }
+
+        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
         {
             // Try pkg-config first, fall back to /usr/include
             let pkg_flags = Command::new("pkg-config")
