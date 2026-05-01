@@ -3,7 +3,7 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="Benchmarks — kham" lang="en"
-  description="kham segmentation throughput and accuracy F1 (0.975, 94.9% sentence agreement with PyThaiNLP newmm). Measured on Apple M-series with Rust 1.85+."
+  description="kham segmentation throughput 33–34 MiB/s, accuracy F1 1.000 on 228 test cases (94.9% sentence agreement with PyThaiNLP newmm). Measured on Apple M-series with Rust 1.85+."
   keywords="Thai NLP benchmark, Thai tokenizer accuracy, kham vs PyThaiNLP, Rust NLP performance, F1 score Thai segmentation">
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
@@ -25,7 +25,7 @@ import Layout from '../layouts/Layout.astro';
               ['OS', 'macOS'],
               ['Rust', '1.85+ stable, LTO enabled'],
               ['Profile', 'release'],
-              ['Built-in dictionary', '62,102 words · 669,387 DARTS states · 5.1 MiB'],
+              ['Built-in dictionary', '62,102 words · 670,460 DARTS states · 5.1 MiB'],
               ['TNC frequency table', '106,125 entries'],
             ].map(([k, v]) => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
@@ -52,7 +52,7 @@ import Layout from '../layouts/Layout.astro';
 
       <div class="grid sm:grid-cols-3 gap-6 mb-8">
         {[
-          { label: 'Micro F1', value: '0.975', sub: 'vs CC0 gold corpus' },
+          { label: 'Micro F1', value: '1.000', sub: 'vs CC0 gold corpus (228 test cases)' },
           { label: 'Sentence agreement', value: '94.9%', sub: '37/39 vs PyThaiNLP newmm' },
           { label: 'Genuine diffs', value: '0', sub: '2 remaining are confirmed PyThaiNLP errors' },
         ].map(({ label, value, sub }) => (
@@ -87,9 +87,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['short', '37 B', '879 ns', '42.3 MiB/s'],
-              ['medium', '182 B', '3.80 µs', '45.1 MiB/s'],
-              ['long', '546 B', '10.9 µs', '47.1 MiB/s'],
+              ['short', '39 B', '1.12 µs', '33.2 MiB/s'],
+              ['medium', '180 B', '5.09 µs', '33.7 MiB/s'],
+              ['long', '540 B', '14.95 µs', '34.4 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -112,9 +112,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['sparse (ธนาคาร100แห่ง)', '26 B', '744 ns', '42.3 MiB/s'],
-              ['medium (multi-boundary)', '74 B', '1.73 µs', '43.5 MiB/s'],
-              ['dense (alternating script)', '29 B', '535 ns', '55.3 MiB/s'],
+              ['sparse (ธนาคาร100แห่ง)', '33 B', '948 ns', '33.2 MiB/s'],
+              ['medium (multi-boundary)', '79 B', '2.23 µs', '33.8 MiB/s'],
+              ['dense (alternating script)', '31 B', '770 ns', '38.4 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -142,9 +142,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['short', '37 B', '79.9 ns', '465 MiB/s'],
-              ['medium', '182 B', '199 ns', '864 MiB/s'],
-              ['long', '546 B', '507 ns', '1.0 GiB/s'],
+              ['short', '39 B', '107.6 ns', '345 MiB/s'],
+              ['medium', '180 B', '285.9 ns', '600 MiB/s'],
+              ['long', '540 B', '743.7 ns', '692 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -171,10 +171,11 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['builtin_dict() — binary blob load', '78 µs', 'pay-once startup cost'],
-              ['Dict::from_word_list — 62k words', '980 ms', 'only when merging a custom dict'],
-              ['Dict::from_word_list — 8-word list', '3.72 µs', 'small custom dict'],
-              ['dict/file/read_and_build — disk + build', '1.01 s', 'kham --dict <file> startup'],
+              ['builtin_dict() — binary blob load', '92.9 µs', 'pay-once startup cost'],
+              ['Tokenizer::new() — full startup', '33.4 ms', 'dict + freq + NE + POS tables'],
+              ['FtsTokenizer::new()', '46.7 ms', 'adds synonym + RTGS + soundex tables'],
+              ['Dict::from_word_list — 62k words', '1.63 s', 'only when merging a custom dict'],
+              ['Dict::from_word_list — 8-word list', '5.0 µs', 'small custom dict'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -184,7 +185,7 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
         </table>
       </div>
       <p class="text-sm text-slate-600 dark:text-slate-400 mb-8">
-        <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">builtin_dict()</code> is <strong class="text-slate-800 dark:text-slate-200">~12,500×</strong> faster than
+        <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">builtin_dict()</code> is <strong class="text-slate-800 dark:text-slate-200">~17,500×</strong> faster than
         <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">Dict::from_word_list</code> because the DARTS trie is pre-compiled
         by <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">build.rs</code> at compile time; runtime cost is a single O(S) binary decode pass.
       </p>
@@ -201,12 +202,12 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['contains — hit (3-byte word กิน)', '7.1 ns', '1.18 GiB/s'],
-              ['contains — hit (12-byte word สวัสดี)', '18.3 ns', '940 MiB/s'],
-              ['contains — miss (ASCII non-word)', '744 ps', '7.5–8.8 GiB/s'],
-              ['prefixes — short anchor (7 B)', '42.3 ns', '473 MiB/s'],
-              ['prefixes — medium anchor (60 B)', '36.7 ns', '1.52 GiB/s'],
-              ['prefixes — long anchor (97 B)', '74.5 ns', '1.24 GiB/s'],
+              ['contains — hit (9-byte word กิน)', '11.1 ns', '770 MiB/s'],
+              ['contains — hit (18-byte word สวัสดี)', '29.2 ns', '587 MiB/s'],
+              ['contains — miss (ASCII non-word)', '1.22 ns', '~4.5 GiB/s'],
+              ['prefixes — short anchor (21 B)', '63.8 ns', '314 MiB/s'],
+              ['prefixes — medium anchor (60 B)', '55.9 ns', '1.0 GiB/s'],
+              ['prefixes — long anchor (99 B)', '100.0 ns', '944 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -237,13 +238,13 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['index/single/short', 'กินข้าวกับปลา', '21 B', '15.5 µs', '2.47 MiB/s'],
-              ['index/single/medium', '~63 B Thai prose', '63 B', '41.8 µs', '4.14 MiB/s'],
-              ['index/single/long', '3× medium', '189 B', '94.3 µs', '5.46 MiB/s'],
-              ['index/single/mixed', 'Thai + Latin + Number', '37 B', '32.4 µs', '2.32 MiB/s'],
-              ['index/batch_100/short', '100 × short', '2.1 KB', '640 µs (6.4 µs/doc)', '6.0 MiB/s'],
-              ['index/batch_100/medium', '100 × medium', '6.3 KB', '2.54 ms (25.4 µs/doc)', '7.1 MiB/s'],
-              ['index/batch_100/long', '100 × long', '18.9 KB', '6.75 ms (67.5 µs/doc)', '7.6 MiB/s'],
+              ['index/single/short', 'กินข้าวกับปลา', '39 B', '20.2 µs', '1.84 MiB/s'],
+              ['index/single/medium', 'Thai prose ~60 chars', '180 B', '64.8 µs', '2.65 MiB/s'],
+              ['index/single/long', '3× medium', '540 B', '122.3 µs', '4.21 MiB/s'],
+              ['index/single/mixed', 'Thai + Latin + Number', '79 B', '41.8 µs', '1.80 MiB/s'],
+              ['index/batch_100/short', '100 × short', '3.9 KB', '813 µs (8.1 µs/doc)', '4.57 MiB/s'],
+              ['index/batch_100/medium', '100 × medium', '18.0 KB', '3.67 ms (36.7 µs/doc)', '4.68 MiB/s'],
+              ['index/batch_100/long', '100 × long', '54.0 KB', '8.84 ms (88.4 µs/doc)', '5.82 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300 text-xs">{cell}</td>)}
@@ -266,11 +267,11 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['query/single_word/thai_common', 'ข้าว', '1,000', '88.3 µs'],
-              ['query/single_word/thai_rare', 'ปลา', '1,000', '88.9 µs'],
-              ['query/single_word/number', '100', '0', '1.4 µs'],
-              ['query/single_word/latin', 'hello', '0', '1.5 µs'],
-              ['query/snippet', 'ข้าว (top 10 snippets)', '10', '417 µs'],
+              ['query/single_word/thai_common', 'ข้าว', '1,000', '4.28 µs'],
+              ['query/single_word/thai_rare', 'ปลา', '1,000', '139.7 µs'],
+              ['query/single_word/number', '100', '0', '2.00 µs'],
+              ['query/single_word/latin', 'hello', '0', '2.10 µs'],
+              ['query/snippet', 'ข้าว (LIMIT 10 snippets)', '10', '4.24 µs'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}

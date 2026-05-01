@@ -3,7 +3,7 @@ import Layout from '../../layouts/Layout.astro';
 ---
 
 <Layout title="ประสิทธิภาพ — kham" lang="th"
-  description="ตัวเลข throughput การตัดคำและความแม่นยำ F1 (0.975, ตรงกับ PyThaiNLP newmm 94.9%) ของ kham วัดบน Apple M-series"
+  description="kham throughput การตัดคำ 33–34 MiB/s, ความแม่นยำ F1 1.000 บน 228 test cases (ตรงกับ PyThaiNLP newmm 94.9%) วัดบน Apple M-series"
   keywords="benchmark ตัดคำภาษาไทย, ความแม่นยำ NLP ไทย, kham vs PyThaiNLP, ประสิทธิภาพ Rust NLP, F1 score">
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
@@ -25,7 +25,7 @@ import Layout from '../../layouts/Layout.astro';
               ['OS', 'macOS'],
               ['Rust', '1.85+ stable, LTO เปิดใช้งาน'],
               ['Profile', 'release'],
-              ['dictionary ในตัว', '62,102 คำ · 669,387 DARTS states · 5.1 MiB'],
+              ['dictionary ในตัว', '62,102 คำ · 670,460 DARTS states · 5.1 MiB'],
               ['ตาราง TNC frequency', '106,125 รายการ'],
             ].map(([k, v]) => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
@@ -52,7 +52,7 @@ import Layout from '../../layouts/Layout.astro';
 
       <div class="grid sm:grid-cols-3 gap-6 mb-8">
         {[
-          { label: 'Micro F1', value: '0.975', sub: 'เทียบกับ CC0 gold corpus' },
+          { label: 'Micro F1', value: '1.000', sub: 'เทียบกับ CC0 gold corpus (228 test cases)' },
           { label: 'ประโยคที่ตรงกัน', value: '94.9%', sub: '37/39 เทียบกับ PyThaiNLP newmm' },
           { label: 'ความต่างที่แท้จริง', value: '0', sub: '2 รายการที่เหลือเป็นข้อผิดพลาดของ PyThaiNLP' },
         ].map(({ label, value, sub }) => (
@@ -87,9 +87,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['สั้น (short)', '37 B', '879 ns', '42.3 MiB/s'],
-              ['กลาง (medium)', '182 B', '3.80 µs', '45.1 MiB/s'],
-              ['ยาว (long)', '546 B', '10.9 µs', '47.1 MiB/s'],
+              ['สั้น (short)', '39 B', '1.12 µs', '33.2 MiB/s'],
+              ['กลาง (medium)', '180 B', '5.09 µs', '33.7 MiB/s'],
+              ['ยาว (long)', '540 B', '14.95 µs', '34.4 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -112,9 +112,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['sparse (ธนาคาร100แห่ง)', '26 B', '744 ns', '42.3 MiB/s'],
-              ['medium (หลาย boundary)', '74 B', '1.73 µs', '43.5 MiB/s'],
-              ['dense (สลับภาษา)', '29 B', '535 ns', '55.3 MiB/s'],
+              ['sparse (ธนาคาร100แห่ง)', '33 B', '948 ns', '33.2 MiB/s'],
+              ['medium (หลาย boundary)', '79 B', '2.23 µs', '33.8 MiB/s'],
+              ['dense (สลับภาษา)', '31 B', '770 ns', '38.4 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -142,9 +142,9 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['สั้น', '37 B', '79.9 ns', '465 MiB/s'],
-              ['กลาง', '182 B', '199 ns', '864 MiB/s'],
-              ['ยาว', '546 B', '507 ns', '1.0 GiB/s'],
+              ['สั้น', '39 B', '107.6 ns', '345 MiB/s'],
+              ['กลาง', '180 B', '285.9 ns', '600 MiB/s'],
+              ['ยาว', '540 B', '743.7 ns', '692 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
@@ -175,12 +175,12 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['index/single/short', 'กินข้าวกับปลา', '21 B', '15.5 µs', '2.47 MiB/s'],
-              ['index/single/medium', 'ข้อความภาษาไทย ~63 B', '63 B', '41.8 µs', '4.14 MiB/s'],
-              ['index/single/long', '3× medium', '189 B', '94.3 µs', '5.46 MiB/s'],
-              ['index/batch_100/short', '100 × short', '2.1 KB', '640 µs (6.4 µs/doc)', '6.0 MiB/s'],
-              ['index/batch_100/medium', '100 × medium', '6.3 KB', '2.54 ms (25.4 µs/doc)', '7.1 MiB/s'],
-              ['index/batch_100/long', '100 × long', '18.9 KB', '6.75 ms (67.5 µs/doc)', '7.6 MiB/s'],
+              ['index/single/short', 'กินข้าวกับปลา', '39 B', '20.2 µs', '1.84 MiB/s'],
+              ['index/single/medium', 'ข้อความภาษาไทย ~60 chars', '180 B', '64.8 µs', '2.65 MiB/s'],
+              ['index/single/long', '3× medium', '540 B', '122.3 µs', '4.21 MiB/s'],
+              ['index/batch_100/short', '100 × short', '3.9 KB', '813 µs (8.1 µs/doc)', '4.57 MiB/s'],
+              ['index/batch_100/medium', '100 × medium', '18.0 KB', '3.67 ms (36.7 µs/doc)', '4.68 MiB/s'],
+              ['index/batch_100/long', '100 × long', '54.0 KB', '8.84 ms (88.4 µs/doc)', '5.82 MiB/s'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300 text-xs">{cell}</td>)}
@@ -203,11 +203,11 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
           </thead>
           <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
             {[
-              ['query/single_word/thai_common', 'ข้าว', '1,000', '88.3 µs'],
-              ['query/single_word/thai_rare', 'ปลา', '1,000', '88.9 µs'],
-              ['query/single_word/number', '100', '0', '1.4 µs'],
-              ['query/single_word/latin', 'hello', '0', '1.5 µs'],
-              ['query/snippet', 'ข้าว (top 10)', '10', '417 µs'],
+              ['query/single_word/thai_common', 'ข้าว', '1,000', '4.28 µs'],
+              ['query/single_word/thai_rare', 'ปลา', '1,000', '139.7 µs'],
+              ['query/single_word/number', '100', '0', '2.00 µs'],
+              ['query/single_word/latin', 'hello', '0', '2.10 µs'],
+              ['query/snippet', 'ข้าว (LIMIT 10)', '10', '4.24 µs'],
             ].map(row => (
               <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
                 {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
