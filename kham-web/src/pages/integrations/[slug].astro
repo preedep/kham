@@ -263,6 +263,41 @@ tok.byte_end    # int  — UTF-8 byte end offset`,
         label: 'reference',
       },
       {
+        heading: 'Spell checking',
+        body: 'spell_suggestions() finds dictionary words within edit distance 2, ranked by phonetic similarity (lk82) then TNC corpus frequency. Pass a single word — segment first for multi-word text.',
+        code: `import kham
+
+# Single misspelled word → ranked suggestions
+suggs = kham.spell_suggestions("กีนข้าว", 5)
+for s in suggs:
+    print(f"{s.word:12} edit={s.edit_distance} soundex={s.soundex_match} freq={s.freq_score}")
+# กินข้าว  edit=1  soundex=True  freq=…
+
+# Correct word → edit_distance 0
+top = kham.spell_suggestions("กิน", 1)
+print(top[0].word, top[0].edit_distance)  # กิน  0
+
+# SpellSuggestion: .word  .edit_distance  .soundex_match  .freq_score`,
+        lang: 'python',
+        label: 'spell.py',
+      },
+      {
+        heading: 'Keyword extraction',
+        body: 'extract_keywords() returns the most distinctive words in a document, scored by TF × inverse-corpus-frequency. Stopwords and single-character tokens are excluded.',
+        code: `import kham
+
+text = ("นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ "
+        "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย")
+
+keywords = kham.extract_keywords(text, 5)
+for kw in keywords:
+    print(f"{kw.word:12} score={kw.score:.4f} count={kw.count}")
+
+# Keyword: .word  .score  .count`,
+        lang: 'python',
+        label: 'keywords.py',
+      },
+      {
         heading: 'Build from source (optional)',
         code: `# Requires Rust toolchain + maturin
 pip install maturin
@@ -341,6 +376,41 @@ tok.byte_start  // number — UTF-8 byte start offset
 tok.byte_end    // number — UTF-8 byte end offset`,
         lang: 'typescript',
         label: 'types.ts',
+      },
+      {
+        heading: 'Spell checking',
+        body: 'spell_suggestions(word, maxN) returns dictionary candidates within edit distance 2, ranked by lk82 phonetic similarity and TNC corpus frequency.',
+        code: `import init, { spell_suggestions } from 'kham-wasm';
+await init();
+
+const suggs = spell_suggestions("กีนข้าว", 5);
+for (const s of suggs) {
+  console.log(s.word, 'edit:', s.edit_distance,
+              'soundex:', s.soundex_match, 'freq:', s.freq_score);
+}
+// กินข้าว  edit: 1  soundex: true  freq: …
+
+// SpellSuggestion: .word  .edit_distance  .soundex_match  .freq_score`,
+        lang: 'typescript',
+        label: 'spell.ts',
+      },
+      {
+        heading: 'Keyword extraction',
+        body: 'extract_keywords(text, maxN) returns the most distinctive words scored by TF × inverse-corpus-frequency. Stopwords are excluded.',
+        code: `import init, { extract_keywords } from 'kham-wasm';
+await init();
+
+const text = "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ " +
+             "ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย";
+
+const keywords = extract_keywords(text, 5);
+for (const kw of keywords) {
+  console.log(kw.word, 'score:', kw.score.toFixed(4), 'count:', kw.count);
+}
+
+// Keyword: .word  .score  .count`,
+        lang: 'typescript',
+        label: 'keywords.ts',
       },
       {
         heading: 'Build from source',
