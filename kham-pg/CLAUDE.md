@@ -154,7 +154,6 @@ Reports `ops/s`/`µs/op` (fast operations) or `queries/s`/`ms/query` (scan opera
 | `to_tsvector` large (~6.3 KB) | 500 |
 | `plainto_tsquery` single word | 50 000 |
 | `plainto_tsquery` 3 words | 50 000 |
-| `@@` sequential scan — 10k rows | 20 full scans |
 | `@@` GIN-indexed scan — 100k rows | 200 queries |
 | `ts_rank` top-10 (GIN + rank) | 100 queries |
 | `ts_rank` setweight A top-10 | 100 queries |

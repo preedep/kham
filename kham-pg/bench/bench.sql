@@ -148,47 +148,9 @@ SELECT
     END
 FROM generate_series(1, 10000) i;
 
-DO $$
-DECLARE
-    t0    timestamptz;
-    e     float8;
-    dummy bigint;
-    n_seq int := 20;   -- full-table scans (to_tsvector on each row is expensive)
-BEGIN
-    -- warmup
-    SELECT count(*) INTO dummy
-    FROM kham_bench_docs
-    WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
-
-    RAISE NOTICE '%', format('%-42s %12s %10s', 'operation', 'scans/s', 'ms/scan');
-    RAISE NOTICE '%', repeat('-', 67);
-
-    t0 := clock_timestamp();
-    FOR i IN 1..n_seq LOOP
-        SELECT count(*) INTO dummy
-        FROM kham_bench_docs
-        WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        '@@ seq scan 10k rows (ปลา)',
-        to_char((n_seq / e)::numeric,         'FM9,999,990.00'),
-        to_char((e * 1000 / n_seq)::numeric,   'FM99990.0'));
-
-    t0 := clock_timestamp();
-    FOR i IN 1..n_seq LOOP
-        SELECT count(*) INTO dummy
-        FROM kham_bench_docs
-        WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'Python นักพัฒนา');
-    END LOOP;
-    e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%', format('%-42s %12s %10s',
-        '@@ seq scan 10k rows (mixed script)',
-        to_char((n_seq / e)::numeric,         'FM9,999,990.00'),
-        to_char((e * 1000 / n_seq)::numeric,   'FM99990.0'));
-
-    RAISE NOTICE '';
-END $$;
+-- Sequential scan (to_tsvector on every row) is intentionally omitted:
+-- at ~50–200 µs/call × 10k rows it takes 30+ seconds per scan in Docker,
+-- and is not a realistic production pattern (use a GIN index instead).
 
 -- ── GIN-indexed scan on 100k rows ─────────────────────────────────────────────
 
