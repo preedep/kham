@@ -144,6 +144,8 @@ jobs:
         uses: jetli/wasm-pack-action@v0.4.0
         with:
           version: "latest"
+      - name: Unit tests (native, cargo test)
+        run: cargo test -p kham-wasm
       - name: wasm-pack build
         run: wasm-pack build kham-wasm --target web --release
 
@@ -163,9 +165,14 @@ jobs:
           python-version: "3.${{ matrix.minor }}"
       - run: pip install maturin virtualenv
       - run: python -m virtualenv .venv
-      - run: maturin develop -m kham-python/Cargo.toml
+      - name: Build Python wheel (maturin develop)
+        run: maturin develop -m kham-python/Cargo.toml
         env:
           VIRTUAL_ENV: ${{ github.workspace }}/.venv
+      - name: Install pytest into venv
+        run: .venv/bin/pip install pytest
+      - name: Run pytest
+        run: .venv/bin/pytest kham-python/tests/ -v
 
   # macOS smoke-test — same code, different OS; informational until
   # we're confident the matrix is worth the runner cost.
