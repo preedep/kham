@@ -75,6 +75,8 @@ pub struct FtsTokenizerBuilder {
     /// `None` means "use default (true)".
     number_normalize: Option<bool>,
     soundex: Option<SoundexAlgorithm>,
+    /// Extra words to overlay on top of the built-in dictionary (fast path).
+    dict_merge: Option<String>,
 }
 
 impl FtsTokenizerBuilder {
@@ -309,6 +311,31 @@ impl FtsTokenizerBuilder {
         self
     }
 
+    /// Overlay extra words on the built-in dictionary without a full trie rebuild.
+    ///
+    /// Words are stored in a sorted list alongside the pre-compiled trie.
+    /// Prefer this over a full rebuild when adding a small domain-specific
+    /// vocabulary (e.g. product names, technical terms).
+    ///
+    /// Newline-separated; `#` lines are ignored.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    /// use kham_core::TokenKind;
+    ///
+    /// let fts = FtsTokenizer::builder()
+    ///     .dict_merge("โปรแกรมเมอร์\nปัญญาประดิษฐ์\n")
+    ///     .build();
+    /// let tokens = fts.segment_for_fts("โปรแกรมเมอร์ไทย");
+    /// assert!(tokens.iter().any(|t| t.text == "โปรแกรมเมอร์" && t.kind == TokenKind::Thai));
+    /// ```
+    pub fn dict_merge(mut self, words: &str) -> Self {
+        self.dict_merge = Some(String::from(words));
+        self
+    }
+
     /// Consume the builder and return a configured [`FtsTokenizer`].
     ///
     /// # Example
@@ -325,8 +352,13 @@ impl FtsTokenizerBuilder {
     /// assert!(!fts.segment_for_fts("กินข้าว").is_empty());
     /// ```
     pub fn build(self) -> FtsTokenizer {
+        let tokenizer = if let Some(ref words) = self.dict_merge {
+            Tokenizer::builder().dict_merge(words).build()
+        } else {
+            Tokenizer::new()
+        };
         FtsTokenizer {
-            tokenizer: Tokenizer::new(),
+            tokenizer,
             stopwords: self.stopwords.unwrap_or_else(StopwordSet::builtin),
             synonyms: self.synonyms.unwrap_or_else(SynonymMap::empty),
             ngram_size: self.ngram_size.unwrap_or(3),

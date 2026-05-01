@@ -1,0 +1,5 @@
+# Test custom word list for kham-sqlite integration tests.
+# Format: one word per line; # lines are ignored.
+โปรแกรมเมอร์
+ปัญญาประดิษฐ์
+แมชชีนเลิร์นนิง

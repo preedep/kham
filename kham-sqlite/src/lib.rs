@@ -287,6 +287,43 @@ fn parse_synonyms_path(az_arg: *const *const c_char, n_arg: c_int) -> Option<Str
     None
 }
 
+/// Parse a file path from the `dict <path>` argument pair in `az_arg`.
+///
+/// Returns the path string when the keyword `"dict"` is found followed by a
+/// non-null argument.  Returns `None` when the keyword is absent.
+///
+/// Usage: `tokenize='kham dict ''/path/to/words.txt'''`
+fn parse_dict_path(az_arg: *const *const c_char, n_arg: c_int) -> Option<String> {
+    let n = n_arg as usize;
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "dict" {
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return None;
+            }
+            return unsafe { std::ffi::CStr::from_ptr(val_ptr) }
+                .to_str()
+                .ok()
+                .map(|p| p.to_string());
+        }
+    }
+    None
+}
+
 /// Parse n-gram size from the `xCreate` argument list.
 ///
 /// Scans for the keyword `"ngram_size"` and parses the next argument as a
@@ -339,6 +376,9 @@ fn parse_ngram_size_arg(az_arg: *const *const c_char, n_arg: c_int) -> usize {
 ///   **the path must be single-quoted** because `/`, `.`, and `-` are not FTS5
 ///   bareword characters — use `''` to escape quotes inside a SQL string:
 ///   `tokenize='kham synonyms ''/path/to/synonyms.tsv'''`
+/// - `dict <path>` — path to a newline-separated word list to overlay on the
+///   built-in dictionary; same quoting rules apply:
+///   `tokenize='kham dict ''/etc/kham/domain_words.txt'''`
 ///
 /// Examples:
 /// - `tokenize='kham'`
@@ -346,6 +386,7 @@ fn parse_ngram_size_arg(az_arg: *const *const c_char, n_arg: c_int) -> usize {
 /// - `tokenize='kham stopwords on'`
 /// - `tokenize='kham ngram_size 2'`
 /// - `tokenize='kham synonyms ''/etc/kham/synonyms.tsv'''`
+/// - `tokenize='kham dict ''/etc/kham/domain_words.txt'''`
 /// - `tokenize='kham soundex lk82 stopwords on ngram_size 4'`
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
@@ -368,6 +409,12 @@ unsafe extern "C" fn kham_fts5_create(
     if let Some(path) = parse_synonyms_path(az_arg, n_arg) {
         match std::fs::read_to_string(&path) {
             Ok(data) => builder = builder.synonyms(SynonymMap::from_tsv(&data)),
+            Err(_) => return SQLITE_ERROR,
+        }
+    }
+    if let Some(path) = parse_dict_path(az_arg, n_arg) {
+        match std::fs::read_to_string(&path) {
+            Ok(data) => builder = builder.dict_merge(&data),
             Err(_) => return SQLITE_ERROR,
         }
     }

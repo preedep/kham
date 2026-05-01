@@ -514,3 +514,105 @@ fn custom_synonyms_missing_file_returns_error() {
         "missing synonyms file should cause table creation to fail"
     );
 }
+
+// ---------------------------------------------------------------------------
+// 10. Custom dictionary (dict=<path>)
+// ---------------------------------------------------------------------------
+
+/// Open a db with a custom word list file properly quoted for the FTS5 tokenize directive.
+fn open_db_with_dict(path: &std::path::Path) -> Connection {
+    let path_str = path.display().to_string();
+    let sql =
+        format!("CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham dict ''{path_str}''');");
+    let conn = Connection::open_in_memory().expect("open :memory:");
+    unsafe {
+        let _guard = LoadExtensionGuard::new(&conn).expect("load_extension guard");
+        conn.load_extension(ext_path(), Some("sqlite3_kham_init"))
+            .expect("load kham extension");
+    }
+    conn.execute_batch(&sql).expect("create fts5 table");
+    conn
+}
+
+#[test]
+fn custom_dict_domain_word_is_indexed() {
+    let dict_path = fixtures_dir().join("custom_words.txt");
+    let conn = open_db_with_dict(&dict_path);
+
+    // โปรแกรมเมอร์ is in custom_words.txt but not in the built-in dictionary
+    // With the custom dict loaded it should be recognized as a single Thai token.
+    insert(&conn, "โปรแกรมเมอร์ไทย");
+    assert!(
+        matches(&conn, "โปรแกรมเมอร์"),
+        "custom word โปรแกรมเมอร์ should be recognized and indexed"
+    );
+}
+
+#[test]
+fn custom_dict_builtin_words_still_work() {
+    let dict_path = fixtures_dir().join("custom_words.txt");
+    let conn = open_db_with_dict(&dict_path);
+
+    // Built-in words must remain functional
+    insert(&conn, "กินข้าวกับปลา");
+    assert!(
+        matches(&conn, "ปลา"),
+        "built-in word ปลา should still match"
+    );
+    assert!(
+        matches(&conn, "กินข้าว"),
+        "built-in compound กินข้าว should still match"
+    );
+}
+
+#[test]
+fn custom_dict_missing_file_returns_error() {
+    let bad_path = fixtures_dir().join("nonexistent_words.txt");
+
+    let conn = Connection::open_in_memory().expect("open :memory:");
+    unsafe {
+        let _guard = LoadExtensionGuard::new(&conn).expect("load_extension guard");
+        conn.load_extension(ext_path(), Some("sqlite3_kham_init"))
+            .expect("load kham extension");
+    }
+
+    let path_str = bad_path.display().to_string();
+    let result = conn.execute_batch(&format!(
+        "CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham dict ''{path_str}''');"
+    ));
+    assert!(
+        result.is_err(),
+        "missing dict file should cause table creation to fail"
+    );
+}
+
+#[test]
+fn custom_dict_combined_with_synonyms() {
+    let dict_path = fixtures_dir().join("custom_words.txt");
+    let syn_path = fixtures_dir().join("synonyms.tsv");
+
+    let dict_str = dict_path.display().to_string();
+    let syn_str = syn_path.display().to_string();
+    let sql = format!(
+        "CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham dict ''{dict_str}'' synonyms ''{syn_str}''');"
+    );
+
+    let conn = Connection::open_in_memory().expect("open :memory:");
+    unsafe {
+        let _guard = LoadExtensionGuard::new(&conn).expect("load_extension guard");
+        conn.load_extension(ext_path(), Some("sqlite3_kham_init"))
+            .expect("load kham extension");
+    }
+    conn.execute_batch(&sql).expect("create fts5 table");
+
+    insert(&conn, "กินโปรแกรมเมอร์");
+    assert!(
+        matches(&conn, "โปรแกรมเมอร์"),
+        "custom word should be indexed"
+    );
+    // synonyms.tsv maps กิน → ทาน
+    assert!(
+        matches(&conn, "ทาน"),
+        "synonyms should still work alongside custom dict"
+    );
+}
