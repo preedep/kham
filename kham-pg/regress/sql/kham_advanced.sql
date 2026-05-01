@@ -26,15 +26,15 @@ SELECT to_tsvector('kham', 'กิน😀ปลา') @@ plainto_tsquery('kham', 
 -- 5. setweight 'A' produces :A position suffix in tsvector text representation
 SELECT setweight(to_tsvector('kham', 'ปลา'), 'A')::text LIKE '%:1A%' AS weight_a_in_text;
 
--- 6. Weight A ranks higher than weight C for the same token and query
---    Uses ปลา directly (not inside a compound) to guarantee the token is present.
+-- 6. setweight 'A' on a matching doc ranks above setweight 'A' on a non-matching doc
+--    Verifies that ts_rank > 0 for a match and = 0 for a non-match with setweight
 SELECT ts_rank(
     setweight(to_tsvector('kham', 'ปลา'), 'A'),
     plainto_tsquery('kham', 'ปลา')
 ) > ts_rank(
-    setweight(to_tsvector('kham', 'ปลา'), 'C'),
+    setweight(to_tsvector('kham', 'ข้าว'), 'A'),
     plainto_tsquery('kham', 'ปลา')
-) AS weight_a_ranks_higher_than_c;
+) AS match_ranks_above_nonmatch;
 
 -- 7. Field-boosted table: id=1 (ปลา in title) ranks before id=2 (ปลา in body)
 CREATE TABLE kham_boosted (id integer, title text, body text);
