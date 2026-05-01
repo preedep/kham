@@ -118,6 +118,77 @@ jobs:
           path: dist/
 
   # ---------------------------------------------------------------------------
+  # Build kham-sqlite for Android (4 ABIs via Android NDK)
+  #
+  # The built-in Android SQLite has load_extension disabled; users must link
+  # against sqlite-android (or SQLCipher) which re-enables it.
+  # sqlite3ext.h is not in the NDK sysroot, so we download the SQLite
+  # amalgamation and set SQLITE_INCLUDE_DIR to that directory.
+  # ---------------------------------------------------------------------------
+  build_android:
+    name: kham-sqlite / Android / ${{ matrix.abi }}
+    needs: ci_check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+            ndk_triple: aarch64-linux-android
+            api: 21
+          - abi: armeabi-v7a
+            target: armv7-linux-androideabi
+            ndk_triple: armv7a-linux-androideabi
+            api: 21
+          - abi: x86_64
+            target: x86_64-linux-android
+            ndk_triple: x86_64-linux-android
+            api: 21
+          - abi: x86
+            target: i686-linux-android
+            ndk_triple: i686-linux-android
+            api: 21
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: android-${{ matrix.target }}
+      - name: Download SQLite amalgamation (provides sqlite3ext.h)
+        run: |
+          curl -fsSL https://www.sqlite.org/2024/sqlite-amalgamation-3470200.zip -o sqlite-amal.zip
+          unzip -q sqlite-amal.zip
+          echo "SQLITE_INCLUDE_DIR=$PWD/sqlite-amalgamation-3470200" >> $GITHUB_ENV
+      - name: Set up NDK toolchain environment
+        run: |
+          NDK_BIN="$ANDROID_NDK_LATEST_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          CLANG="${NDK_BIN}/${{ matrix.ndk_triple }}${{ matrix.api }}-clang"
+          TARGET="${{ matrix.target }}"
+          TARGET_UPPER=$(echo "$TARGET" | tr '[:lower:]-' '[:upper:]_')
+          TARGET_UNDER=$(echo "$TARGET" | tr '-' '_')
+          echo "CARGO_TARGET_${TARGET_UPPER}_LINKER=$CLANG" >> $GITHUB_ENV
+          echo "CC_${TARGET_UNDER}=$CLANG"                  >> $GITHUB_ENV
+          echo "AR_${TARGET_UNDER}=${NDK_BIN}/llvm-ar"      >> $GITHUB_ENV
+      - name: Build kham-sqlite
+        run: cargo build -p kham-sqlite --release --target ${{ matrix.target }}
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          ABI="${{ matrix.abi }}"
+          TARGET="${{ matrix.target }}"
+          mkdir -p dist
+          cp "target/$TARGET/release/libkham_sqlite.so" dist/
+          (cd dist && zip "kham-sqlite-${VERSION}-android-${ABI}.zip" libkham_sqlite.so \
+            && rm libkham_sqlite.so)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-${{ matrix.abi }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
   # Build kham-pg for Linux x86_64 against PostgreSQL 16 and 17
   #
   # The .so must match the major PG version it will be loaded into, so we
@@ -297,7 +368,7 @@ jobs:
   # ---------------------------------------------------------------------------
   github_release:
     name: GitHub Release
-    needs: [publish_crates, publish_pypi, publish_npm, build_binaries, build_pg]
+    needs: [publish_crates, publish_pypi, publish_npm, build_binaries, build_pg, build_android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -318,6 +389,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: kham-pg-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: android-*
           merge-multiple: true
           path: dist
       - uses: softprops/action-gh-release@v2

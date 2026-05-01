@@ -10,8 +10,14 @@ fn main() {
     // Locate SQLite headers. Priority:
     // 1. SQLITE_INCLUDE_DIR env var (user override — works on all platforms)
     // 2. macOS: Xcode/CLT SDK via xcrun, then Homebrew sqlite
-    // 3. Windows: vcpkg (VCPKG_ROOT env, then C:/vcpkg default)
-    // 4. Linux: pkg-config sqlite3, then /usr/include
+    // 3. Android: NDK sysroot (sqlite3.h only — sqlite3ext.h requires SQLITE_INCLUDE_DIR)
+    // 4. Windows: vcpkg (VCPKG_ROOT env, then C:/vcpkg default)
+    // 5. Linux: pkg-config sqlite3, then /usr/include
+    //
+    // Android note: sqlite3ext.h is not in the NDK sysroot. For Android builds,
+    // set SQLITE_INCLUDE_DIR to the SQLite amalgamation directory which contains
+    // both sqlite3.h and sqlite3ext.h (https://www.sqlite.org/download.html).
+    // CI downloads this automatically via the release workflow.
     if let Ok(dir) = std::env::var("SQLITE_INCLUDE_DIR") {
         build.include(&dir);
     } else {
@@ -31,6 +37,21 @@ fn main() {
             }
         }
 
+        #[cfg(target_os = "android")]
+        {
+            // NDK sysroot provides sqlite3.h; sqlite3ext.h must come from
+            // SQLITE_INCLUDE_DIR (SQLite amalgamation). Without it the build fails.
+            let ndk = std::env::var("ANDROID_NDK_LATEST_HOME")
+                .or_else(|_| std::env::var("ANDROID_NDK_ROOT"))
+                .or_else(|_| std::env::var("ANDROID_NDK_HOME"))
+                .unwrap_or_default();
+            if !ndk.is_empty() {
+                build.include(format!(
+                    "{ndk}/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/include"
+                ));
+            }
+        }
+
         #[cfg(target_os = "windows")]
         {
             // vcpkg is the standard way to get SQLite headers on Windows.
@@ -40,9 +61,13 @@ fn main() {
             build.include(format!("{vcpkg_root}/installed/x64-windows/include"));
         }
 
-        #[cfg(all(not(target_os = "macos"), not(target_os = "windows")))]
+        #[cfg(all(
+            not(target_os = "macos"),
+            not(target_os = "android"),
+            not(target_os = "windows")
+        ))]
         {
-            // Try pkg-config first, fall back to /usr/include
+            // Linux: try pkg-config first, fall back to /usr/include
             let pkg_flags = Command::new("pkg-config")
                 .args(["--cflags-only-I", "sqlite3"])
                 .output();
