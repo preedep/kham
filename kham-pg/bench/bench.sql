@@ -132,33 +132,25 @@ BEGIN
     RAISE NOTICE '';
 END $$;
 
--- ── Sequential scan on 10k rows ───────────────────────────────────────────────
+-- ── GIN-indexed scan on 10k rows ──────────────────────────────────────────────
+-- Pre-compute exactly 5 tsvectors in a CTE, then replicate via generate_series.
+-- This calls to_tsvector only 5 times at setup (not 10k), so index build is fast.
 
 DROP TABLE IF EXISTS kham_bench_docs;
-CREATE TABLE kham_bench_docs (id serial, body text);
+CREATE TABLE kham_bench_docs (id serial, body text, fts tsvector);
 
-INSERT INTO kham_bench_docs (body)
-SELECT
-    CASE (i % 5)
-        WHEN 0 THEN 'กินข้าวกับปลาทะเลสดและผักรวม'
-        WHEN 1 THEN 'Python สำหรับนักพัฒนาซอฟต์แวร์'
-        WHEN 2 THEN 'ราคา ๑๕๐ บาทต่อกิโลกรัม'
-        WHEN 3 THEN 'ท่องเที่ยวทะเลอ่าวไทยช่วงหน้าร้อน'
-        ELSE        'นักพัฒนาเขียนโปรแกรมด้วยภาษา Rust'
-    END
-FROM generate_series(1, 10000) i;
-
--- Sequential scan (to_tsvector on every row) is intentionally omitted:
--- at ~50–200 µs/call × 10k rows it takes 30+ seconds per scan in Docker,
--- and is not a realistic production pattern (use a GIN index instead).
-
--- ── GIN-indexed scan on 10k rows ──────────────────────────────────────────────
--- Build the stored tsvector column and GIN index on the 10k rows already inserted.
--- Larger tables (100k+) require minutes to populate the GENERATED ALWAYS column
--- inside Docker; 10k rows keeps total bench time under ~30 seconds.
-
-ALTER TABLE kham_bench_docs ADD COLUMN fts tsvector
-    GENERATED ALWAYS AS (to_tsvector('kham', body)) STORED;
+WITH precomp(body, fts) AS (
+    SELECT body, to_tsvector('kham', body)
+    FROM (VALUES
+        ('กินข้าวกับปลาทะเลสดและผักรวม'::text),
+        ('Python สำหรับนักพัฒนาซอฟต์แวร์'),
+        ('ราคา ๑๕๐ บาทต่อกิโลกรัม'),
+        ('ท่องเที่ยวทะเลอ่าวไทยช่วงหน้าร้อน'),
+        ('นักพัฒนาเขียนโปรแกรมด้วยภาษา Rust')
+    ) t(body)
+)
+INSERT INTO kham_bench_docs (body, fts)
+SELECT body, fts FROM precomp, generate_series(1, 2000);
 
 CREATE INDEX kham_bench_gin ON kham_bench_docs USING GIN (fts);
 
