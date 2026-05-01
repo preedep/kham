@@ -28,8 +28,8 @@ DECLARE
 BEGIN
     RAISE NOTICE '';
     RAISE NOTICE '=== kham-pg benchmark ===';
-    RAISE NOTICE '%-42s %10s %10s', 'operation', 'ops/s', 'ms/op';
-    RAISE NOTICE '%s', repeat('-', 65);
+    RAISE NOTICE '%', format('%-42s %10s %10s', 'operation', 'ops/s', 'ms/op');
+    RAISE NOTICE '%', repeat('-', 65);
 
     -- ── to_tsvector ───────────────────────────────────────────────────────────
 
@@ -42,42 +42,52 @@ BEGIN
     SELECT count(*) INTO dummy
     FROM (SELECT to_tsvector('kham', doc_s) FROM generate_series(1, n_s)) t;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'to_tsvector small  (~63 B)', n_s / e, e * 1000 / n_s;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'to_tsvector small  (~63 B)',
+        to_char((n_s / e)::numeric,       'FM9999999990'),
+        to_char((e * 1000 / n_s)::numeric, 'FM9990.000'));
 
     -- medium (~630 bytes)
     t0 := clock_timestamp();
     SELECT count(*) INTO dummy
     FROM (SELECT to_tsvector('kham', doc_m) FROM generate_series(1, n_m)) t;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'to_tsvector medium (~630 B)', n_m / e, e * 1000 / n_m;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'to_tsvector medium (~630 B)',
+        to_char((n_m / e)::numeric,       'FM9999999990'),
+        to_char((e * 1000 / n_m)::numeric, 'FM9990.000'));
 
     -- large (~6.3 KB)
     t0 := clock_timestamp();
     SELECT count(*) INTO dummy
     FROM (SELECT to_tsvector('kham', doc_l) FROM generate_series(1, n_l)) t;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'to_tsvector large  (~6.3 KB)', n_l / e, e * 1000 / n_l;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'to_tsvector large  (~6.3 KB)',
+        to_char((n_l / e)::numeric,       'FM9999999990'),
+        to_char((e * 1000 / n_l)::numeric, 'FM9990.000'));
 
     -- ── plainto_tsquery ───────────────────────────────────────────────────────
 
-    RAISE NOTICE '%s', repeat('-', 65);
+    RAISE NOTICE '%', repeat('-', 65);
 
     t0 := clock_timestamp();
     SELECT count(*) INTO dummy
     FROM (SELECT plainto_tsquery('kham', 'ปลาทะเล') FROM generate_series(1, n_s)) t;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'plainto_tsquery (single word)', n_s / e, e * 1000 / n_s;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'plainto_tsquery (single word)',
+        to_char((n_s / e)::numeric,       'FM9999999990'),
+        to_char((e * 1000 / n_s)::numeric, 'FM9990.000'));
 
     t0 := clock_timestamp();
     SELECT count(*) INTO dummy
     FROM (SELECT plainto_tsquery('kham', 'กินข้าว ปลาทะเล ผักสด') FROM generate_series(1, n_s)) t;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'plainto_tsquery (3 words)', n_s / e, e * 1000 / n_s;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'plainto_tsquery (3 words)',
+        to_char((n_s / e)::numeric,       'FM9999999990'),
+        to_char((e * 1000 / n_s)::numeric, 'FM9990.000'));
 
     RAISE NOTICE '';
 END $$;
@@ -103,15 +113,15 @@ DECLARE
     t0    timestamptz;
     e     float8;
     dummy bigint;
-    n_seq int := 100;   -- how many times to repeat the full-table scan
+    n_seq int := 20;   -- full-table scans (to_tsvector per row is expensive)
 BEGIN
     -- warmup
     SELECT count(*) INTO dummy
     FROM kham_bench_docs
     WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
 
-    RAISE NOTICE '%-42s %10s %10s', 'operation', 'ops/s', 'ms/op';
-    RAISE NOTICE '%s', repeat('-', 65);
+    RAISE NOTICE '%', format('%-42s %10s %10s', 'operation', 'ops/s', 'ms/op');
+    RAISE NOTICE '%', repeat('-', 65);
 
     t0 := clock_timestamp();
     FOR i IN 1..n_seq LOOP
@@ -120,8 +130,10 @@ BEGIN
         WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.1f',
-        '@@ seq scan 10k rows (ปลา)', n_seq / e, e * 1000 / n_seq;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        '@@ seq scan 10k rows (ปลา)',
+        to_char((n_seq / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_seq)::numeric,  'FM99990.0'));
 
     t0 := clock_timestamp();
     FOR i IN 1..n_seq LOOP
@@ -130,8 +142,10 @@ BEGIN
         WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'Python นักพัฒนา');
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.1f',
-        '@@ seq scan 10k rows (mixed script)', n_seq / e, e * 1000 / n_seq;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        '@@ seq scan 10k rows (mixed script)',
+        to_char((n_seq / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_seq)::numeric,  'FM99990.0'));
 
     RAISE NOTICE '';
 END $$;
@@ -161,14 +175,14 @@ DECLARE
     t0    timestamptz;
     e     float8;
     dummy bigint;
-    n_idx int := 500;
+    n_idx int := 200;
 BEGIN
     -- warmup — force index build into OS cache
     SELECT count(*) INTO dummy
     FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'ปลา');
 
-    RAISE NOTICE '%-42s %10s %10s', 'operation', 'ops/s', 'ms/op';
-    RAISE NOTICE '%s', repeat('-', 65);
+    RAISE NOTICE '%', format('%-42s %10s %10s', 'operation', 'ops/s', 'ms/op');
+    RAISE NOTICE '%', repeat('-', 65);
 
     t0 := clock_timestamp();
     FOR i IN 1..n_idx LOOP
@@ -176,8 +190,10 @@ BEGIN
         FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'ปลา');
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'GIN scan 100k rows (ปลา)', n_idx / e, e * 1000 / n_idx;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'GIN scan 100k rows (ปลา)',
+        to_char((n_idx / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
     t0 := clock_timestamp();
     FOR i IN 1..n_idx LOOP
@@ -185,14 +201,16 @@ BEGIN
         FROM kham_bench_docs WHERE fts @@ plainto_tsquery('kham', 'Python นักพัฒนา');
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'GIN scan 100k rows (mixed script)', n_idx / e, e * 1000 / n_idx;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'GIN scan 100k rows (mixed script)',
+        to_char((n_idx / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
     -- ── ts_rank ───────────────────────────────────────────────────────────────
 
-    RAISE NOTICE '%s', repeat('-', 65);
+    RAISE NOTICE '%', repeat('-', 65);
 
-    n_idx := 200;
+    n_idx := 100;
     t0 := clock_timestamp();
     FOR i IN 1..n_idx LOOP
         SELECT count(*) INTO dummy FROM (
@@ -204,8 +222,10 @@ BEGIN
         ) t;
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'ts_rank top-10 (GIN + rank)', n_idx / e, e * 1000 / n_idx;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'ts_rank top-10 (GIN + rank)',
+        to_char((n_idx / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
     t0 := clock_timestamp();
     FOR i IN 1..n_idx LOOP
@@ -221,8 +241,10 @@ BEGIN
         ) t;
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
-    RAISE NOTICE '%-42s %10.0f %10.3f',
-        'ts_rank setweight A top-10', n_idx / e, e * 1000 / n_idx;
+    RAISE NOTICE '%', format('%-42s %10s %10s',
+        'ts_rank setweight A top-10',
+        to_char((n_idx / e)::numeric,        'FM9999999990'),
+        to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
     RAISE NOTICE '';
     RAISE NOTICE '=== done ===';
