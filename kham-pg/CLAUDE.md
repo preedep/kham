@@ -145,7 +145,7 @@ done
 make -C kham-pg bench
 ```
 
-Reports `ops/s` and `ms/op` for each FTS operation via `RAISE NOTICE`. The benchmark covers:
+Reports `ops/s`/`µs/op` (fast operations) or `queries/s`/`ms/query` (scan operations) via `RAISE NOTICE`. The benchmark covers:
 
 | Operation | Iterations |
 |-----------|-----------|
@@ -154,12 +154,24 @@ Reports `ops/s` and `ms/op` for each FTS operation via `RAISE NOTICE`. The bench
 | `to_tsvector` large (~6.3 KB) | 500 |
 | `plainto_tsquery` single word | 50 000 |
 | `plainto_tsquery` 3 words | 50 000 |
-| `@@` sequential scan — 10k rows | 100 full scans |
-| `@@` GIN-indexed scan — 100k rows | 500 queries |
-| `ts_rank` top-10 (GIN + rank) | 200 queries |
-| `ts_rank` setweight A top-10 | 200 queries |
+| `@@` sequential scan — 10k rows | 20 full scans |
+| `@@` GIN-indexed scan — 100k rows | 200 queries |
+| `ts_rank` top-10 (GIN + rank) | 100 queries |
+| `ts_rank` setweight A top-10 | 100 queries |
 
 Files: `bench/bench.sql` (SQL), `bench/Dockerfile.bench` (two-stage build), `bench/docker-compose.yml`, `bench/entrypoint.sh`.
+
+**`RAISE NOTICE` format pitfall** — `RAISE NOTICE` substitutes bare `%` positionally; it does NOT support `printf`-style width/precision specifiers like `%-42s` or `%10.3f`. Use `format()` + `to_char()` instead:
+
+```sql
+-- Wrong: %-42s and %10.3f are emitted as literals
+RAISE NOTICE '%-42s %10.3f', label, value;
+
+-- Correct:
+RAISE NOTICE '%', format('%-42s %10s', label, to_char(value::numeric, 'FM9990.000'));
+```
+
+**Constant-folding of STABLE functions** — `to_tsvector` and `plainto_tsquery` are STABLE. When called with a fixed PL/pgSQL variable inside `generate_series`, PostgreSQL may evaluate the call once and reuse the result, making the measured time unrealistically fast. The benchmark varies inputs via `CASE (i % 3)` cycling through three equivalent-length documents to prevent this.
 
 ## unsafe policy
 
