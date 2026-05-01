@@ -31,9 +31,31 @@ const codeSnippet = `use kham_core::Segmenter;
 let seg = Segmenter::new();
 let tokens = seg.segment("กินข้าวกับปลา");
 // ["กิน", "ข้าว", "กับ", "ปลา"]`;
+
+const softwareSchema = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'kham',
+  url: 'https://kham.io',
+  downloadUrl: 'https://crates.io/crates/kham-core',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Linux, macOS, Windows, Android, WebAssembly',
+  softwareVersion: '0.6.0',
+  programmingLanguage: ['Rust', 'Python', 'JavaScript', 'TypeScript', 'C', 'SQL'],
+  description: 'Fast Thai word segmentation library for Rust, Python, WebAssembly, C FFI, CLI, PostgreSQL FTS, and SQLite FTS5. Zero-dependency, no_std core.',
+  license: 'https://opensource.org/licenses/MIT',
+  codeRepository: 'https://github.com/preedep/kham',
+  author: { '@type': 'Person', name: 'Preedee Ponchevin' },
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
 ---
 
-<Layout title="kham — Fast Thai Word Segmentation in Rust" lang="en">
+<Layout
+  title="kham — Fast Thai Word Segmentation in Rust"
+  lang="en"
+  keywords="Thai word segmentation, Thai NLP, Rust NLP, Thai tokenizer, PyThaiNLP alternative, WASM Thai, kham, ตัดคำ, ภาษาไทย"
+  jsonLd={softwareSchema}
+>
 
   <!-- Hero -->
   <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white">

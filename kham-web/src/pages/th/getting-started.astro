@@ -121,7 +121,16 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
 ---
 
 <Layout title="เริ่มต้นใช้งาน — kham" lang="th"
-  description="คู่มือเริ่มต้นใช้งาน kham สำหรับ Rust, Python, WebAssembly, CLI, PostgreSQL FTS และ SQLite FTS5">
+  description="คู่มือเริ่มต้นใช้งาน kham สำหรับ Rust, Python, WebAssembly, CLI, PostgreSQL FTS และ SQLite FTS5"
+  keywords="ติดตั้ง kham, ตัดคำภาษาไทย Rust, kham Python, kham WASM, kham CLI, kham PostgreSQL, kham SQLite, เริ่มต้น NLP ภาษาไทย"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'หน้าหลัก', item: 'https://kham.io/th/' },
+      { '@type': 'ListItem', position: 2, name: 'เริ่มต้นใช้งาน', item: 'https://kham.io/th/getting-started' },
+    ],
+  }}>
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
       <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">{t('gs.title')}</h1>

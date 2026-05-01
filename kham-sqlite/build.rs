@@ -56,8 +56,7 @@ fn main() {
         {
             // vcpkg is the standard way to get SQLite headers on Windows.
             // GitHub Actions runners have vcpkg at C:/vcpkg by default.
-            let vcpkg_root = std::env::var("VCPKG_ROOT")
-                .unwrap_or_else(|_| "C:/vcpkg".to_string());
+            let vcpkg_root = std::env::var("VCPKG_ROOT").unwrap_or_else(|_| "C:/vcpkg".to_string());
             build.include(format!("{vcpkg_root}/installed/x64-windows/include"));
         }
 
