@@ -63,10 +63,31 @@ echo "[bench] PostgreSQL ready"
 # ── Create benchmark database ─────────────────────────────────────────────────
 $RUNAS "$PG_BIN/createdb" -h "$PGSOCKET" -p "$PGPORT" -U "$PGUSER" kham_bench
 
-# ── Run benchmark ─────────────────────────────────────────────────────────────
-echo "[bench] Running benchmark..."
+# ── Run batch-throughput benchmark (generate_series, cache-warm) ──────────────
+echo "[bench] Running cache-warm batch throughput benchmark..."
 $RUNAS "$PG_BIN/psql" \
     -h "$PGSOCKET" -p "$PGPORT" -U "$PGUSER" -d kham_bench \
     -f /kham/bench/bench.sql
 
+# ── Seed sentences for pgbench ────────────────────────────────────────────────
+$RUNAS "$PG_BIN/psql" \
+    -h "$PGSOCKET" -p "$PGPORT" -U "$PGUSER" -d kham_bench \
+    -f /kham/bench/bench_setup.sql -q
+
+# ── Run per-call latency benchmark (pgbench, fresh ExprContext per tx) ────────
+PGBENCH="$PG_BIN/pgbench"
+PGBENCH_OPTS="-h $PGSOCKET -p $PGPORT -U $PGUSER -d kham_bench -c 1 -j 1 --no-vacuum"
+
+echo ""
+echo "[bench] === kham-pg benchmark (true per-call latency via pgbench) ==="
+echo ""
+
+echo "[bench] pgbench: to_tsvector (10 000 transactions, 20 unique inputs)"
+$RUNAS "$PGBENCH" $PGBENCH_OPTS -t 10000 -f /kham/bench/bench_pgbench_tsvector.sql
+
+echo ""
+echo "[bench] pgbench: plainto_tsquery (10 000 transactions, 20 unique inputs)"
+$RUNAS "$PGBENCH" $PGBENCH_OPTS -t 10000 -f /kham/bench/bench_pgbench_tsquery.sql
+
+echo ""
 echo "[bench] Done."

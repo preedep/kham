@@ -139,13 +139,15 @@ done
 
 ## Benchmark suite
 
-`kham-pg/bench/` contains a Docker-based throughput benchmark:
+`kham-pg/bench/` contains a Docker-based benchmark with two sections:
 
 ```bash
 make -C kham-pg bench
 ```
 
-Reports `ops/s` and `µs/op` via `RAISE NOTICE`. The benchmark covers:
+### Section 1 — cache-warm batch throughput (`bench.sql`)
+
+`generate_series` + `CASE i%3` cycles 3 unique documents. PostgreSQL caches STABLE function results within a single `ExprContext`; after the first 3 calls, subsequent iterations hit the cache. Numbers represent **amortised cache-warm throughput** — useful for estimating bulk indexing rates, not single-call latency.
 
 | Operation | Iterations |
 |-----------|-----------|
@@ -155,9 +157,18 @@ Reports `ops/s` and `µs/op` via `RAISE NOTICE`. The benchmark covers:
 | `plainto_tsquery` single word | 50 000 |
 | `plainto_tsquery` 3 words | 50 000 |
 
+### Section 2 — true per-call latency (`pgbench`)
+
+pgbench runs each transaction in a fresh `ExprContext`; the function-result cache does NOT carry over between transactions. 20 unique Thai sentences (`bench_setup.sql`) are seeded first; each pgbench transaction picks one at random via `\set id random(1,20)`. Numbers represent **actual single-call tokenizer latency**.
+
+| Script | Transactions |
+|--------|-------------|
+| `bench_pgbench_tsvector.sql` | 10 000 |
+| `bench_pgbench_tsquery.sql`  | 10 000 |
+
 GIN-indexed scan and `ts_rank` are excluded from the Docker suite — building a stored tsvector column or large table triggers thousands of real `to_tsvector` calls that cause the bench to hang in Docker. Use `EXPLAIN ANALYZE` or `pgbench` against a real PG instance for GIN/ts_rank timings.
 
-Files: `bench/bench.sql` (SQL), `bench/Dockerfile.bench` (two-stage build), `bench/docker-compose.yml`, `bench/entrypoint.sh`.
+Files: `bench/bench.sql`, `bench/bench_setup.sql`, `bench/bench_pgbench_tsvector.sql`, `bench/bench_pgbench_tsquery.sql`, `bench/Dockerfile.bench`, `bench/docker-compose.yml`, `bench/entrypoint.sh`.
 
 **`RAISE NOTICE` format pitfall** — `RAISE NOTICE` substitutes bare `%` positionally; it does NOT support `printf`-style width/precision specifiers like `%-42s` or `%10.3f`. Use `format()` + `to_char()` instead:
 
@@ -169,7 +180,9 @@ RAISE NOTICE '%-42s %10.3f', label, value;
 RAISE NOTICE '%', format('%-42s %10s', label, to_char(value::numeric, 'FM9990.000'));
 ```
 
-**Constant-folding of STABLE functions** — `to_tsvector` and `plainto_tsquery` are STABLE. When called with a fixed PL/pgSQL variable inside `generate_series`, PostgreSQL may evaluate the call once and reuse the result, making the measured time unrealistically fast. The benchmark varies inputs via `CASE (i % 3)` cycling through three equivalent-length documents to prevent this.
+**Function-result cache vs. constant-folding** — two distinct mechanisms:
+- *Constant-folding*: optimizer evaluates a STABLE function at plan time when all inputs are literals. Avoided by binding inputs to a PL/pgSQL variable.
+- *Function-result cache*: runtime caches STABLE results within one `ExprContext`. With only 3 unique `CASE i%3` inputs, PG caches after 3 calls; all subsequent generate_series rows are cache hits. This is why Section 1 numbers are cache-warm throughput, not cold-call latency. Use pgbench (Section 2) for cold-call measurements.
 
 ## unsafe policy
 

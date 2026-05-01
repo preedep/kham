@@ -7,6 +7,15 @@
 --   ms/op  — mean latency in milliseconds (for slower operations)
 --
 -- Run via:  make -C kham-pg bench
+--
+-- Section 1: cache-warm batch throughput
+--   generate_series cycles only 3 unique inputs; PG caches STABLE function results
+--   within a single ExprContext after the first 3 calls. These numbers reflect
+--   cache-warm amortised throughput — useful for bulk indexing estimates.
+--
+-- Section 2: true per-call latency (pgbench)
+--   pgbench runs each transaction in a fresh ExprContext; no cross-transaction
+--   result cache. Numbers reflect actual single-call tokenizer latency.
 
 CREATE EXTENSION IF NOT EXISTS kham_pg;
 
@@ -23,7 +32,7 @@ DECLARE
     dummy  bigint;
 BEGIN
     RAISE NOTICE '';
-    RAISE NOTICE '=== kham-pg benchmark ===';
+    RAISE NOTICE '=== kham-pg benchmark (cache-warm batch throughput) ===';
     RAISE NOTICE '%', format('%-42s %12s %10s', 'operation', 'ops/s', 'µs/op');
     RAISE NOTICE '%', repeat('-', 67);
 
