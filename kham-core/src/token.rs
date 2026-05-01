@@ -195,4 +195,79 @@ mod tests {
         assert_eq!(t.char_len(), 1);
         assert_eq!(t.byte_len(), 4);
     }
+
+    // --- NamedEntityKind::from_tag ---
+
+    #[test]
+    fn from_tag_person() {
+        assert_eq!(
+            NamedEntityKind::from_tag("PERSON"),
+            Some(NamedEntityKind::Person)
+        );
+    }
+
+    #[test]
+    fn from_tag_place() {
+        assert_eq!(
+            NamedEntityKind::from_tag("PLACE"),
+            Some(NamedEntityKind::Place)
+        );
+    }
+
+    #[test]
+    fn from_tag_org() {
+        assert_eq!(NamedEntityKind::from_tag("ORG"), Some(NamedEntityKind::Org));
+    }
+
+    #[test]
+    fn from_tag_unrecognised_is_none() {
+        assert_eq!(NamedEntityKind::from_tag("Person"), None);
+        assert_eq!(NamedEntityKind::from_tag(""), None);
+        assert_eq!(NamedEntityKind::from_tag("UNKNOWN"), None);
+    }
+
+    // --- NamedEntityKind::as_tag ---
+
+    #[test]
+    fn as_tag_roundtrips_from_tag() {
+        for kind in [
+            NamedEntityKind::Person,
+            NamedEntityKind::Place,
+            NamedEntityKind::Org,
+        ] {
+            assert_eq!(NamedEntityKind::from_tag(kind.as_tag()), Some(kind));
+        }
+    }
+
+    // --- NamedEntityKind::as_str ---
+
+    #[test]
+    fn as_str_human_readable_labels() {
+        assert_eq!(NamedEntityKind::Person.as_str(), "Person");
+        assert_eq!(NamedEntityKind::Place.as_str(), "Place");
+        assert_eq!(NamedEntityKind::Org.as_str(), "Org");
+    }
+
+    #[test]
+    fn as_str_differs_from_as_tag() {
+        // as_tag is UPPERCASE, as_str is Title-case
+        assert_ne!(
+            NamedEntityKind::Person.as_str(),
+            NamedEntityKind::Person.as_tag()
+        );
+    }
+
+    // --- TokenKind::Named ---
+
+    #[test]
+    fn token_kind_named_equality() {
+        assert_eq!(
+            TokenKind::Named(NamedEntityKind::Person),
+            TokenKind::Named(NamedEntityKind::Person)
+        );
+        assert_ne!(
+            TokenKind::Named(NamedEntityKind::Person),
+            TokenKind::Named(NamedEntityKind::Place)
+        );
+    }
 }

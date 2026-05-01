@@ -10,7 +10,7 @@ repository.workspace = true
 readme.workspace = true
 
 [lib]
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib", "rlib"]
 
 [dependencies]
 kham-core = { workspace = true, features = ["std"] }

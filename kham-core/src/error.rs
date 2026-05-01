@@ -38,3 +38,68 @@ extern crate std;
 // `std::error::Error` is only available when the `std` feature is enabled.
 #[cfg(feature = "std")]
 impl std::error::Error for KhamError {}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::alloc::string::ToString;
+
+    #[test]
+    fn display_invalid_utf8() {
+        assert_eq!(KhamError::InvalidUtf8.to_string(), "invalid UTF-8 sequence");
+    }
+
+    #[test]
+    fn display_dict_load_error_includes_message() {
+        let e = KhamError::DictLoadError(String::from("file not found"));
+        assert_eq!(e.to_string(), "dictionary load error: file not found");
+    }
+
+    #[test]
+    fn display_corrupt_dict() {
+        assert_eq!(
+            KhamError::CorruptDict.to_string(),
+            "dictionary data is corrupt or has wrong version"
+        );
+    }
+
+    #[test]
+    fn display_empty_input() {
+        assert_eq!(KhamError::EmptyInput.to_string(), "input must not be empty");
+    }
+
+    #[test]
+    fn clone_produces_equal_value() {
+        let original = KhamError::DictLoadError(String::from("oops"));
+        assert_eq!(original.clone(), original);
+    }
+
+    #[test]
+    fn partial_eq_same_variant() {
+        assert_eq!(KhamError::InvalidUtf8, KhamError::InvalidUtf8);
+        assert_eq!(KhamError::CorruptDict, KhamError::CorruptDict);
+        assert_eq!(KhamError::EmptyInput, KhamError::EmptyInput);
+    }
+
+    #[test]
+    fn partial_eq_different_variants() {
+        assert_ne!(KhamError::InvalidUtf8, KhamError::CorruptDict);
+        assert_ne!(KhamError::EmptyInput, KhamError::InvalidUtf8);
+    }
+
+    #[test]
+    fn partial_eq_dict_load_error_compares_message() {
+        assert_eq!(
+            KhamError::DictLoadError(String::from("a")),
+            KhamError::DictLoadError(String::from("a"))
+        );
+        assert_ne!(
+            KhamError::DictLoadError(String::from("a")),
+            KhamError::DictLoadError(String::from("b"))
+        );
+    }
+}

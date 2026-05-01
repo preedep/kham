@@ -921,3 +921,325 @@ pub unsafe extern "C" fn kham_baht_amount_free(amt: *mut KhamBahtAmount) {
         drop(unsafe { Box::from_raw(amt) });
     }
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::ffi::CString;
+
+    unsafe fn ptr_to_str<'a>(ptr: *const c_char) -> &'a str {
+        CStr::from_ptr(ptr).to_str().expect("valid UTF-8")
+    }
+
+    // --- kham_segment ---
+
+    #[test]
+    fn segment_null_returns_null() {
+        assert!(unsafe { kham_segment(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn segment_basic_returns_tokens() {
+        let input = CString::new("กินข้าวกับปลา").unwrap();
+        let result = unsafe { kham_segment(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len >= 2, "expected multiple tokens, got {}", list.len);
+        for i in 0..list.len {
+            assert!(!unsafe { ptr_to_str(*list.words.add(i)) }.is_empty());
+        }
+        unsafe { kham_tokens_free(result) };
+    }
+
+    #[test]
+    fn tokens_free_null_is_safe() {
+        unsafe { kham_tokens_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_segment_tokens ---
+
+    #[test]
+    fn segment_tokens_null_returns_null() {
+        assert!(unsafe { kham_segment_tokens(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn segment_tokens_spans_are_consistent() {
+        let src = "ธนาคาร100แห่ง";
+        let input = CString::new(src).unwrap();
+        let result = unsafe { kham_segment_tokens(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            let text = unsafe { ptr_to_str(t.text) };
+            assert_eq!(
+                text.len(),
+                t.byte_end - t.byte_start,
+                "byte span mismatch for token {text:?}"
+            );
+            assert!(t.char_start <= t.char_end);
+        }
+        unsafe { kham_token_list_free(result) };
+    }
+
+    #[test]
+    fn token_list_free_null_is_safe() {
+        unsafe { kham_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_fts_segment ---
+
+    #[test]
+    fn fts_segment_null_returns_null() {
+        assert!(unsafe { kham_fts_segment(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn fts_segment_returns_kind_and_roman() {
+        let input = CString::new("กินข้าว").unwrap();
+        let result = unsafe { kham_fts_segment(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len > 0);
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            assert!(!t.text.is_null(), "text must not be null");
+            assert!(!t.kind.is_null(), "kind must not be null");
+            assert!(!t.roman.is_null(), "roman must not be null");
+        }
+        unsafe { kham_fts_token_list_free(result) };
+    }
+
+    #[test]
+    fn fts_token_list_free_null_is_safe() {
+        unsafe { kham_fts_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_fts_lexemes ---
+
+    #[test]
+    fn fts_lexemes_null_returns_null() {
+        let mut len: usize = 0;
+        assert!(unsafe { kham_fts_lexemes(std::ptr::null(), &mut len) }.is_null());
+    }
+
+    #[test]
+    fn fts_lexemes_returns_non_empty_for_thai() {
+        let input = CString::new("กินข้าว").unwrap();
+        let mut len: usize = 0;
+        let result = unsafe { kham_fts_lexemes(input.as_ptr(), &mut len) };
+        assert!(!result.is_null());
+        assert!(len > 0);
+        for i in 0..len {
+            assert!(!unsafe { *result.add(i) }.is_null());
+        }
+        unsafe { kham_fts_lexemes_free(result, len) };
+    }
+
+    // --- kham_string_free ---
+
+    #[test]
+    fn string_free_null_is_safe() {
+        unsafe { kham_string_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_normalize ---
+
+    #[test]
+    fn normalize_null_returns_null() {
+        assert!(unsafe { kham_normalize(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn normalize_already_normal_is_unchanged() {
+        let input = CString::new("กินข้าว").unwrap();
+        let result = unsafe { kham_normalize(input.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "กินข้าว");
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_soundex / kham_sounds_like ---
+
+    #[test]
+    fn soundex_null_word_returns_null() {
+        assert!(unsafe { kham_soundex(std::ptr::null(), std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn soundex_lk82_is_four_chars() {
+        let word = CString::new("กาน").unwrap();
+        let result = unsafe { kham_soundex(word.as_ptr(), std::ptr::null()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }.len(), 4);
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn soundex_udom83_is_four_chars() {
+        let word = CString::new("กาน").unwrap();
+        let algo = CString::new("udom83").unwrap();
+        let result = unsafe { kham_soundex(word.as_ptr(), algo.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }.len(), 4);
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn sounds_like_null_returns_false() {
+        let a = CString::new("กาน").unwrap();
+        assert!(!unsafe { kham_sounds_like(std::ptr::null(), a.as_ptr(), std::ptr::null()) });
+        assert!(!unsafe { kham_sounds_like(a.as_ptr(), std::ptr::null(), std::ptr::null()) });
+    }
+
+    #[test]
+    fn sounds_like_homophones_true() {
+        let a = CString::new("กาน").unwrap();
+        let b = CString::new("ขาน").unwrap();
+        assert!(unsafe { kham_sounds_like(a.as_ptr(), b.as_ptr(), std::ptr::null()) });
+    }
+
+    // --- kham_thai_english_soundex / kham_sounds_like_cross_lang ---
+
+    #[test]
+    fn thai_english_soundex_null_returns_null() {
+        assert!(unsafe { kham_thai_english_soundex(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn thai_english_soundex_returns_non_empty() {
+        let word = CString::new("กิน").unwrap();
+        let result = unsafe { kham_thai_english_soundex(word.as_ptr()) };
+        assert!(!result.is_null());
+        assert!(!unsafe { ptr_to_str(result) }.is_empty());
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn sounds_like_cross_lang_null_returns_false() {
+        let a = CString::new("กิน").unwrap();
+        assert!(!unsafe { kham_sounds_like_cross_lang(std::ptr::null(), a.as_ptr()) });
+        assert!(!unsafe { kham_sounds_like_cross_lang(a.as_ptr(), std::ptr::null()) });
+    }
+
+    // --- kham_thai_digits_to_ascii ---
+
+    #[test]
+    fn thai_digits_to_ascii_null_returns_null() {
+        assert!(unsafe { kham_thai_digits_to_ascii(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn thai_digits_to_ascii_converts_thai_digits() {
+        let input = CString::new("๑๒๓").unwrap();
+        let result = unsafe { kham_thai_digits_to_ascii(input.as_ptr()) };
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "123");
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_number_to_thai_word / kham_thai_word_to_number ---
+
+    #[test]
+    fn number_to_thai_word_zero() {
+        let result = kham_number_to_thai_word(0);
+        assert!(!result.is_null());
+        assert_eq!(unsafe { ptr_to_str(result) }, "ศูนย์");
+        unsafe { kham_string_free(result) };
+    }
+
+    #[test]
+    fn thai_word_to_number_roundtrip() {
+        let input = CString::new("หนึ่งร้อย").unwrap();
+        let mut n: u64 = 0;
+        assert!(unsafe { kham_thai_word_to_number(input.as_ptr(), &mut n) });
+        assert_eq!(n, 100);
+    }
+
+    #[test]
+    fn thai_word_to_number_null_out_returns_false() {
+        let input = CString::new("หนึ่ง").unwrap();
+        assert!(!unsafe { kham_thai_word_to_number(input.as_ptr(), std::ptr::null_mut()) });
+    }
+
+    #[test]
+    fn thai_word_to_number_invalid_returns_false() {
+        let input = CString::new("กินข้าว").unwrap();
+        let mut n: u64 = 0;
+        assert!(!unsafe { kham_thai_word_to_number(input.as_ptr(), &mut n) });
+    }
+
+    // --- kham_number_to_baht_text / kham_parse_baht_text / kham_baht_amount_free ---
+
+    #[test]
+    fn baht_text_roundtrip_100_baht() {
+        let text_ptr = kham_number_to_baht_text(100, 0);
+        assert!(!text_ptr.is_null());
+        let parsed = unsafe { kham_parse_baht_text(text_ptr as *const c_char) };
+        unsafe { kham_string_free(text_ptr) };
+        assert!(!parsed.is_null());
+        let amt = unsafe { &*parsed };
+        assert_eq!(amt.baht, 100);
+        assert_eq!(amt.satang, 0);
+        unsafe { kham_baht_amount_free(parsed) };
+    }
+
+    #[test]
+    fn baht_amount_free_null_is_safe() {
+        unsafe { kham_baht_amount_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_romanize ---
+
+    #[test]
+    fn romanize_null_returns_null() {
+        assert!(unsafe { kham_romanize(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn romanize_returns_text_and_roman_fields() {
+        let input = CString::new("กิน").unwrap();
+        let result = unsafe { kham_romanize(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len > 0);
+        for i in 0..list.len {
+            let t = unsafe { &*list.tokens.add(i) };
+            assert!(!t.text.is_null());
+            assert!(!t.roman.is_null());
+        }
+        unsafe { kham_roman_token_list_free(result) };
+    }
+
+    #[test]
+    fn roman_token_list_free_null_is_safe() {
+        unsafe { kham_roman_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_split_sentences ---
+
+    #[test]
+    fn split_sentences_null_returns_null() {
+        assert!(unsafe { kham_split_sentences(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn split_sentences_on_newline() {
+        let input = CString::new("กินข้าว\nดื่มน้ำ").unwrap();
+        let result = unsafe { kham_split_sentences(input.as_ptr()) };
+        assert!(!result.is_null());
+        let list = unsafe { &*result };
+        assert!(list.len >= 2, "expected >= 2 sentences, got {}", list.len);
+        unsafe { kham_sentence_list_free(result) };
+    }
+
+    #[test]
+    fn sentence_list_free_null_is_safe() {
+        unsafe { kham_sentence_list_free(std::ptr::null_mut()) };
+    }
+}
