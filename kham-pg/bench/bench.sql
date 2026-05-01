@@ -152,18 +152,10 @@ FROM generate_series(1, 10000) i;
 -- at ~50–200 µs/call × 10k rows it takes 30+ seconds per scan in Docker,
 -- and is not a realistic production pattern (use a GIN index instead).
 
--- ── GIN-indexed scan on 100k rows ─────────────────────────────────────────────
-
-INSERT INTO kham_bench_docs (body)
-SELECT
-    CASE (i % 5)
-        WHEN 0 THEN 'กินข้าวกับปลาทะเลสดและผักรวม'
-        WHEN 1 THEN 'Python สำหรับนักพัฒนาซอฟต์แวร์'
-        WHEN 2 THEN 'ราคา ๑๕๐ บาทต่อกิโลกรัม'
-        WHEN 3 THEN 'ท่องเที่ยวทะเลอ่าวไทยช่วงหน้าร้อน'
-        ELSE        'นักพัฒนาเขียนโปรแกรมด้วยภาษา Rust'
-    END
-FROM generate_series(1, 90000) i;
+-- ── GIN-indexed scan on 10k rows ──────────────────────────────────────────────
+-- Build the stored tsvector column and GIN index on the 10k rows already inserted.
+-- Larger tables (100k+) require minutes to populate the GENERATED ALWAYS column
+-- inside Docker; 10k rows keeps total bench time under ~30 seconds.
 
 ALTER TABLE kham_bench_docs ADD COLUMN fts tsvector
     GENERATED ALWAYS AS (to_tsvector('kham', body)) STORED;
@@ -193,7 +185,7 @@ BEGIN
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
     RAISE NOTICE '%', format('%-42s %12s %10s',
-        'GIN scan 100k rows (ปลา)',
+        'GIN scan 10k rows (ปลา)',
         to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
         to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
@@ -204,7 +196,7 @@ BEGIN
     END LOOP;
     e := extract(epoch from (clock_timestamp() - t0));
     RAISE NOTICE '%', format('%-42s %12s %10s',
-        'GIN scan 100k rows (mixed script)',
+        'GIN scan 10k rows (mixed script)',
         to_char((n_idx / e)::numeric,        'FM9,999,990.00'),
         to_char((e * 1000 / n_idx)::numeric,  'FM9990.000'));
 
