@@ -1,3 +1,4 @@
+#[cfg(not(any(target_os = "android", target_os = "windows")))]
 use std::process::Command;
 
 fn main() {
@@ -5,7 +6,9 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let mut build = cc::Build::new();
-    build.file("src/shim.c").flag("-Wno-unused-parameter");
+    build
+        .file("src/shim.c")
+        .flag_if_supported("-Wno-unused-parameter");
 
     // Locate SQLite headers. Priority:
     // 1. SQLITE_INCLUDE_DIR env var (user override — works on all platforms)
