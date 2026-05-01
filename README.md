@@ -50,7 +50,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.5"
+kham-core = "0.6"
 ```
 
 ```rust
@@ -261,6 +261,39 @@ assert_eq!(sents[2].text, "เราไปกินข้าวกันเถ�
 
 ---
 
+## Spell checking
+
+```rust
+use kham_core::spell::SpellChecker;
+
+let checker = SpellChecker::builtin();
+let suggestions = checker.suggestions("กีนข้าว", 5);
+for s in &suggestions {
+    println!("{} (edit={}, soundex={}, freq={})", s.word, s.edit_distance, s.soundex_match, s.freq_score);
+}
+// กินข้าว (edit=1, soundex=true, freq=1342)
+```
+
+Candidates are filtered to Levenshtein edit distance ≤ 2, then ranked by soundex-match flag (lk82), then by TNC corpus frequency descending.
+
+---
+
+## Keyword extraction
+
+```rust
+use kham_core::keyword::KeyExtractor;
+
+let extractor = KeyExtractor::builtin();
+let keywords = extractor.extract("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจใหม่สำหรับประชาชน", 3);
+for kw in &keywords {
+    println!("{} (score={:.3}, count={})", kw.word, kw.score, kw.count);
+}
+```
+
+Stopwords and single-character tokens are excluded. Scoring uses TF × IDF-proxy where IDF-proxy = `(max_tnc_freq + 1) / (tnc_freq + 1)` — rare words score higher.
+
+---
+
 ## Named entity recognition
 
 The built-in gazetteer (~36,600 entries) covers Thai provinces, 246 countries, 17,000+ Wikipedia places/orgs, and 9,000+ person and family names. Multi-token matching merges compound names split by the segmenter:
@@ -332,9 +365,9 @@ Prerequisites:
 | `clippy` | `cargo clippy -D warnings` |
 | `test` | Unit + integration + doc tests, stable and MSRV 1.85, Linux and macOS |
 | `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` |
-| `wasm` | `wasm-pack build --target web` succeeds |
-| `python` | `maturin develop` on Python 3.8 and 3.12 |
-| `pg_regress` | 31 SQL tests across 4 suites in Docker PostgreSQL 17 |
+| `wasm` | Unit tests (`cargo test -p kham-wasm`) + `wasm-pack build --target web` |
+| `python` | `maturin develop` + `pytest` on Python 3.11 and 3.12 |
+| `pg_regress` | 67 SQL tests across 4 suites in Docker PostgreSQL 17 |
 
 ---
 

@@ -44,6 +44,33 @@ kham_token_list_free(list);
 | `kham_tokens_free(t)` | Free a `KhamTokens*` |
 | `kham_segment_tokens(text)` | Segment text; returns `KhamTokenList*` (rich structs) |
 | `kham_token_list_free(list)` | Free a `KhamTokenList*` |
+| `kham_spell_suggestions(word, max_n)` | Spell suggestions ranked by edit distance + phonetic + frequency; returns `KhamSpellList*` |
+| `kham_spell_list_free(list)` | Free a `KhamSpellList*` |
+| `kham_keywords(text, max_n)` | Top-N keywords by TF × IDF-proxy; returns `KhamKeywordList*` |
+| `kham_keyword_list_free(list)` | Free a `KhamKeywordList*` |
+
+### Spell checking
+
+```c
+KhamSpellList *list = kham_spell_suggestions("กีนข้าว", 5);
+for (size_t i = 0; i < list->len; i++) {
+    KhamSpellSuggestion s = list->suggestions[i];
+    printf("%s  edit=%d  soundex=%d  freq=%zu\n",
+           s.word, s.edit_distance, s.soundex_match, s.freq_score);
+}
+kham_spell_list_free(list);
+```
+
+### Keyword extraction
+
+```c
+KhamKeywordList *kws = kham_keywords("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจ", 5);
+for (size_t i = 0; i < kws->len; i++) {
+    KhamKeyword kw = kws->keywords[i];
+    printf("%s  score=%.3f  count=%zu\n", kw.word, kw.score, kw.count);
+}
+kham_keyword_list_free(kws);
+```
 
 ## Link flags
 

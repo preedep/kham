@@ -14,6 +14,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.4.0 | Compound-first DP scoring (F1 0.418→0.975 vs PyThaiNLP), Thai Soundex (lk82/udom83/MetaSound/cross-lang), NE/POS/freq data expansion, `kham-bench-accuracy`, `--soundex` CLI flag |
 | v0.5.0 | `kham-pg` ts_headline support, `kham_fts_dict` custom dictionary template (phonetic + RTGS lexemes), C FFI parity (`kham-capi`), full WASM/Python feature parity, kham-web live demo site |
 | v0.5.1 | WASM u32 overflow fix for large numbers, NE tag correction (ประเทศไทย PERSON→PLACE), kham-web dark mode |
+| v0.6.0 | SpellChecker, KeyExtractor, spell/keyword bindings (WASM/Python/CAPI), kham-sqlite custom synonyms/dict/Windows/Android, CI pytest + wasm tests |
 
 ---
 
@@ -33,7 +34,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 - [x] **Rule-based RTGS romanization** — `romanize_word(word) -> String` rule engine added to `romanizer.rs`; handles leading vowels (เ แ โ ใ ไ), above/below diacritics, following vowels, thanthakat silent mark; `romanize_or_rule()` + `romanize_owned()` methods expose it; table still takes priority; 109 doctests pass
 - [x] **NE gazetteer expansion** — already completed: 36,670 entries (8k PLACE, 19k PERSON, 9.6k ORG); Wikipedia titles, family names, full country list imported in prior releases
 - [x] **Keyword extraction** (`keyword.rs`) — `KeyExtractor::builtin()` + `extract(text, max_n) -> Vec<Keyword>`; TF × IDF_proxy scoring (no transcendentals, `no_std` safe); IDF proxy = `(max_tnc_freq + 1) / (tnc_freq + 1)`; stopwords + single-char tokens excluded; 104 tests pass
-- [ ] **Dict merge API** — `Tokenizer::builder().dict_merge(WordList)` incremental overlay
+- [x] **Dict merge API** — FtsTokenizerBuilder::dict_merge() fast overlay; no trie rebuild
 - [ ] **PGXN upload** — publish `kham-pg` to pgxn.org
 - [ ] **kham-capi / kham-cli publish** — publish to crates.io
 
@@ -141,6 +142,6 @@ with zero schema change.
 - [x] **kham-sqlite soundex** — lk82/udom83/MetaSound codes emitted as `FTS5_TOKEN_COLOCATED` tokens; default lk82; override via `tokenize='kham soundex=udom83'`; disable with `soundex=none`
 - [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
 - [x] **kham-sqlite ngram_size** — `ngram_size N` xCreate argument; controls char n-gram size for Unknown tokens; default 3; 0 disables n-grams
-- [ ] **Mobile support (iOS / Android)** — static registration via `kham_sqlite_register(db)` C symbol + `staticlib` crate type; bundled SQLite amalgamation with `SQLITE_ENABLE_FTS5`; Rust targets `aarch64-apple-ios` / `aarch64-linux-android`; prerequisite: finish kham-sqlite v3
+- [x] **Android build** — kham-sqlite built for arm64-v8a, armeabi-v7a, x86_64, x86 via NDK in release CI; iOS static lib deferred
 - [ ] **Spelling correction** — moved to v0.6.0; see v0.6.0 section above
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely

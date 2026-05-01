@@ -10,6 +10,21 @@ cargo build -p kham-sqlite --release
 # → target/release/libkham_sqlite.so     (Linux)
 ```
 
+## Platform support
+
+| Platform | SQLite headers | Notes |
+|---|---|---|
+| macOS | Xcode CLT (`xcrun --show-sdk-path`) or `brew install sqlite` | System `sqlite3` binary disables `load_extension`; use Homebrew sqlite3 for testing |
+| Linux | `apt install libsqlite3-dev` (Debian/Ubuntu) or `dnf install sqlite-devel` (Fedora/RHEL) | Auto-detected via `pkg-config sqlite3` |
+| Windows | `vcpkg install sqlite3:x64-windows`, then set `SQLITE_INCLUDE_DIR` to the vcpkg include path | `build.rs` detects Windows and skips `-undefined dynamic_lookup` linker flag |
+| Android | NDK cross-compilation; `SQLITE_INCLUDE_DIR` required (points to `sqlite3ext.h` from the NDK or amalgamation) | CI release workflow builds 4 ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` |
+
+Override the header path on any platform:
+
+```bash
+SQLITE_INCLUDE_DIR=/path/to/sqlite/include cargo build -p kham-sqlite --release
+```
+
 ## Basic usage
 
 ```sql
