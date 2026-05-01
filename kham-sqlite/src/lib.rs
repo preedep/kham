@@ -76,6 +76,7 @@ use kham_core::fts::FtsTokenizer;
 use kham_core::normalizer;
 use kham_core::romanizer::RomanizationMap;
 use kham_core::soundex::SoundexAlgorithm;
+use kham_core::synonym::SynonymMap;
 
 // ---------------------------------------------------------------------------
 // SQLite / FTS5 constants
@@ -249,6 +250,43 @@ fn parse_stopwords_arg(az_arg: *const *const c_char, n_arg: c_int) -> bool {
     false
 }
 
+/// Parse a file path from the `synonyms <path>` argument pair in `az_arg`.
+///
+/// Returns the path string when the keyword `"synonyms"` is found followed by
+/// a non-null argument.  Returns `None` when the keyword is absent.
+///
+/// Usage: `tokenize='kham synonyms /path/to/synonyms.tsv'`
+fn parse_synonyms_path(az_arg: *const *const c_char, n_arg: c_int) -> Option<String> {
+    let n = n_arg as usize;
+    let mut i = 0usize;
+    while i < n {
+        let ptr = unsafe { *az_arg.add(i) };
+        i += 1;
+        if ptr.is_null() {
+            continue;
+        }
+        let s = match unsafe { std::ffi::CStr::from_ptr(ptr) }.to_str() {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if s == "synonyms" {
+            let val_ptr = if i < n {
+                unsafe { *az_arg.add(i) }
+            } else {
+                std::ptr::null()
+            };
+            if val_ptr.is_null() {
+                return None;
+            }
+            return unsafe { std::ffi::CStr::from_ptr(val_ptr) }
+                .to_str()
+                .ok()
+                .map(|p| p.to_string());
+        }
+    }
+    None
+}
+
 /// Parse n-gram size from the `xCreate` argument list.
 ///
 /// Scans for the keyword `"ngram_size"` and parses the next argument as a
@@ -297,12 +335,17 @@ fn parse_ngram_size_arg(az_arg: *const *const c_char, n_arg: c_int) -> usize {
 /// - `soundex <lk82|udom83|metasound|none>` — phonetic algorithm (default: lk82)
 /// - `stopwords <on|off>` — suppress stopword tokens from the index (default: off)
 /// - `ngram_size <N>` — n-gram size for unknown tokens (default: 3; 0 = disabled)
+/// - `synonyms <path>` — path to a TSV synonym map (`canonical\tsyn1\tsyn2…`);
+///   **the path must be single-quoted** because `/`, `.`, and `-` are not FTS5
+///   bareword characters — use `''` to escape quotes inside a SQL string:
+///   `tokenize='kham synonyms ''/path/to/synonyms.tsv'''`
 ///
 /// Examples:
 /// - `tokenize='kham'`
 /// - `tokenize='kham soundex udom83'`
 /// - `tokenize='kham stopwords on'`
 /// - `tokenize='kham ngram_size 2'`
+/// - `tokenize='kham synonyms ''/etc/kham/synonyms.tsv'''`
 /// - `tokenize='kham soundex lk82 stopwords on ngram_size 4'`
 unsafe extern "C" fn kham_fts5_create(
     _p_ctx: *mut c_void,
@@ -321,6 +364,12 @@ unsafe extern "C" fn kham_fts5_create(
         .ngram_size(ngram_size);
     if let Some(algo) = soundex_algo {
         builder = builder.soundex(algo);
+    }
+    if let Some(path) = parse_synonyms_path(az_arg, n_arg) {
+        match std::fs::read_to_string(&path) {
+            Ok(data) => builder = builder.synonyms(SynonymMap::from_tsv(&data)),
+            Err(_) => return SQLITE_ERROR,
+        }
     }
     let instance = Box::new(KhamInstance {
         vtable: KhamFts5Tokenizer {
@@ -437,7 +486,7 @@ unsafe extern "C" fn kham_fts5_tokenize(
                 return rc;
             }
 
-            // Emit colocated synonyms (synonym map + RTGS romanization from builder).
+            // Emit colocated synonyms (synonym map + RTGS romanization + soundex).
             for syn in &ft.synonyms {
                 let syn_bytes = syn.as_bytes();
                 if syn_bytes.is_empty() {
@@ -449,6 +498,27 @@ unsafe extern "C" fn kham_fts5_tokenize(
                         FTS5_TOKEN_COLOCATED,
                         syn_bytes.as_ptr() as *const c_char,
                         syn_bytes.len() as c_int,
+                        i_start,
+                        i_end,
+                    )
+                };
+                if rc != SQLITE_OK {
+                    return rc;
+                }
+            }
+
+            // Emit char n-grams as colocated synonyms (populated for Unknown tokens only).
+            for tri in &ft.trigrams {
+                let tri_bytes = tri.as_bytes();
+                if tri_bytes.is_empty() {
+                    continue;
+                }
+                let rc = unsafe {
+                    x_token(
+                        p_ctx,
+                        FTS5_TOKEN_COLOCATED,
+                        tri_bytes.as_ptr() as *const c_char,
+                        tri_bytes.len() as c_int,
                         i_start,
                         i_end,
                     )

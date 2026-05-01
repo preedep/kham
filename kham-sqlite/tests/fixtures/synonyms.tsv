@@ -1,0 +1,5 @@
+# Test synonym map for kham-sqlite integration tests.
+# Format: canonical<TAB>syn1<TAB>syn2<TAB>...
+กิน	ทาน	รับประทาน
+บ้าน	เรือน
+รถยนต์	รถ
