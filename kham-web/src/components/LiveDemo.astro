@@ -818,7 +818,13 @@ const keywordSamples = [
         mode = btn.dataset.mode;
         updateModeButtons();
         updateRomanToggle();
-        if (lastTokens.length > 0 || mode === 'sentences' || mode === 'spell' || mode === 'keywords') run();
+
+        // Load first sample for this mode into the textarea
+        const sampleMode = (mode === 'fts') ? 'seg' : mode;
+        const firstSample = document.querySelector(`.demo-sample[data-mode="${sampleMode}"]`);
+        if (firstSample) document.getElementById('demo-input').value = firstSample.dataset.text;
+
+        run();
       });
     });
 
