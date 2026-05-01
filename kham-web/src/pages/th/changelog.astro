@@ -16,6 +16,35 @@ import Layout from '../../layouts/Layout.astro';
 
     <div class="space-y-16">
 
+      <!-- v0.6.0 (unreleased) -->
+      <section>
+        <div class="flex items-center gap-4 mb-6">
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.6.0</span>
+          <span class="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full px-3 py-1 font-medium">ยังไม่ปล่อย — develop</span>
+        </div>
+        <div class="space-y-6 pl-4 border-l-2 border-amber-200 dark:border-amber-800">
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>เพิ่มเติม — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom synonym map</strong> — argument <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">synonyms '&lt;path&gt;'</code> โหลดไฟล์ TSV คำพ้องความหมายตอนสร้างตาราง ส่ง synonym เป็น <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FTS5_TOKEN_COLOCATED</code> ให้ค้นหาได้ทั้งรูปแบบ canonical และ synonym</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom dictionary overlay</strong> — argument <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">dict '&lt;path&gt;'</code> เพิ่มคำเฉพาะทางไว้บนพจนานุกรมในตัว โดยไม่ต้อง rebuild trie ใหม่ เหมาะสำหรับชื่อสินค้าและคำศัพท์เทคนิค</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Integration test suite</strong> — 31 tests ครอบคลุม MATCH พื้นฐาน, RTGS romanization, lk82 soundex, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">snippet()</code>/<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">highlight()</code>, การกรอง stopword, mixed script, NE, ตัวเลือก config ทั้งหมด, synonyms และ dict</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizerBuilder::dict_merge()</code></strong> — method builder ใหม่ใน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-core</code> สำหรับเพิ่มคำพิเศษตอนสร้าง <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer</code> (fast overlay ไม่ rebuild trie)</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>แก้ไข — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Trigrams ไม่ถูกส่งออก</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsToken::trigrams</code> สำหรับ Unknown token ถูก populate โดย FTS pipeline แต่ไม่ได้ส่งไปยัง SQLite เป็น colocated token การค้นหา OOV n-gram จึงใช้งานได้ถูกต้องแล้ว</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- v0.5.1 -->
       <section>
         <div class="flex items-center gap-4 mb-6">

@@ -119,6 +119,38 @@ SELECT snippet(docs, 1, '<b>', '</b>', '…', 10)
 FROM docs WHERE docs MATCH 'กรุงเทพ';`,
         lang: 'sql', label: 'sqlite3',
       },
+      {
+        heading: 'argument ของ tokenize',
+        body: 'ทุก argument เป็น optional และไม่ขึ้นกับลำดับ path ของไฟล์ต้องใส่ single quote ภายใน tokenize directive (FTS5 bareword รองรับเฉพาะ A–Z, 0–9 และ _) และ escape สำหรับ SQL ด้วย \'\' (single quote สองตัว)',
+        code: `-- lk82 soundex (default) — คำที่ออกเสียงใกล้เคียงจะมีรหัสเดียวกัน
+CREATE VIRTUAL TABLE t1 USING fts5(body, tokenize='kham');
+
+-- udom83 soundex (แยกแยะ sibilant/liquid ละเอียดกว่า)
+CREATE VIRTUAL TABLE t2 USING fts5(body, tokenize='kham soundex udom83');
+
+-- ปิด soundex
+CREATE VIRTUAL TABLE t3 USING fts5(body, tokenize='kham soundex none');
+
+-- ไม่ index stopword
+CREATE VIRTUAL TABLE t4 USING fts5(body, tokenize='kham stopwords on');
+
+-- bigram สำหรับ OOV/unknown token (default: trigram; 0 = ปิด)
+CREATE VIRTUAL TABLE t5 USING fts5(body, tokenize='kham ngram_size 2');
+
+-- custom synonym map (path ต้องใส่ single quote)
+CREATE VIRTUAL TABLE t6 USING fts5(body,
+  tokenize='kham synonyms ''/etc/kham/synonyms.tsv''');
+
+-- custom word list (overlay บน built-in dictionary ไม่ rebuild trie)
+CREATE VIRTUAL TABLE t7 USING fts5(body,
+  tokenize='kham dict ''/etc/kham/domain_words.txt''');
+
+-- รวมทุก option
+CREATE VIRTUAL TABLE t8 USING fts5(body,
+  tokenize='kham soundex lk82 stopwords on ngram_size 2
+            dict ''/words.txt'' synonyms ''/syns.tsv''');`,
+        lang: 'sql', label: 'sqlite3',
+      },
     ],
   },
 
