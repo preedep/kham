@@ -74,6 +74,39 @@ WHERE tsv @@ query
 ORDER BY ts_rank(tsv, query) DESC;`,
         lang: 'sql', label: 'psql',
       },
+      {
+        heading: 'การจัดอันดับและ field boosting',
+        body: 'ใช้ ts_rank() หรือ ts_rank_cd() เรียงผลตามความเกี่ยวข้อง และใช้ setweight() เพิ่มน้ำหนักแต่ละ field — น้ำหนัก A (1.0) > B (0.4) > C (0.2) > D (0.1)',
+        code: `-- จัดอันดับพื้นฐาน (ค่ามากกว่า = เกี่ยวข้องมากกว่า)
+SELECT id, ts_rank(tsv, query) AS rank
+FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- Cover-density rank — ลงโทษ token ที่กระจายห่างกัน เหมาะกับภาษาไทย
+SELECT id, ts_rank_cd(tsv, query) AS rank
+FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- Field boosting: สร้าง tsvector แยก field พร้อมน้ำหนัก
+-- token น้ำหนัก A มีค่า ~5× เทียบกับน้ำหนัก C
+UPDATE articles
+SET tsv =
+  setweight(to_tsvector('kham_cfg', coalesce(title, '')), 'A') ||
+  setweight(to_tsvector('kham_cfg', coalesce(body,  '')), 'C');
+
+-- กำหนด weight vector เอง {D, C, B, A}
+SELECT id, ts_rank(tsv, query, '{0.1, 0.2, 0.4, 1.0}') AS rank
+FROM articles, to_tsquery('kham_cfg', 'กรุงเทพ') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- synonym เสียง (RTGS/soundex) ถูก index ที่ตำแหน่งเดียวกับ token หลัก
+-- ts_rank จึงให้น้ำหนักเท่ากัน หากต้องการลดน้ำหนัก phonetic match
+-- ให้ rerank ใน application code หลัง fetch จาก FTS (คูณ score × 0.3)`,
+        lang: 'sql', label: 'psql',
+      },
     ],
   },
 
@@ -149,6 +182,31 @@ CREATE VIRTUAL TABLE t7 USING fts5(body,
 CREATE VIRTUAL TABLE t8 USING fts5(body,
   tokenize='kham soundex lk82 stopwords on ngram_size 2
             dict ''/words.txt'' synonyms ''/syns.tsv''');`,
+        lang: 'sql', label: 'sqlite3',
+      },
+      {
+        heading: 'การจัดอันดับและ field boosting',
+        body: 'FTS5 มี BM25 built-in ค่าต่ำกว่า (ติดลบมากกว่า) = match ดีกว่า ส่งน้ำหนัก column เพื่อให้ title มีผลมากกว่า body การ match แบบ phonetic/soundex ได้น้ำหนัก BM25 เท่ากับ exact match — หากต้องการลด ให้ rerank ใน application code',
+        code: `-- BM25 พื้นฐาน (ค่าน้อยกว่า = match ดีกว่า)
+SELECT title, body, bm25(docs) AS score
+FROM docs
+WHERE docs MATCH 'ปลา'
+ORDER BY score;
+
+-- Field boosting: title 10×, body 1×
+-- argument ตามลำดับ column ใน CREATE VIRTUAL TABLE
+CREATE VIRTUAL TABLE docs USING fts5(title, body, tokenize='kham');
+
+SELECT title, bm25(docs, 10.0, 1.0) AS score
+FROM docs
+WHERE docs MATCH 'ปลา'
+ORDER BY score;
+
+-- Exact match vs phonetic match: FTS5 ให้น้ำหนักเท่ากัน
+-- หากต้องการแยก:
+--   1. ดึง candidate ด้วย FTS5 MATCH (ใช้ index เร็ว)
+--   2. ใน app code ตรวจ query term ว่า exact token หรือไม่ (edit distance 0)
+--   3. คูณ BM25 score × 0.3 สำหรับ phonetic-only match`,
         lang: 'sql', label: 'sqlite3',
       },
     ],

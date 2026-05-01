@@ -107,6 +107,41 @@ LIMIT 10;`,
         lang: 'sql',
         label: 'psql',
       },
+      {
+        heading: 'Ranking and field boosting',
+        body: 'Use ts_rank() or ts_rank_cd() to order results by relevance. Boost individual fields with setweight() — weights A (1.0) > B (0.4) > C (0.2) > D (0.1). Store separate weighted tsvectors per field for the best precision.',
+        code: `-- Basic rank (higher = more relevant)
+SELECT id, ts_rank(tsv, query) AS rank
+FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- Cover-density rank — penalises scattered token matches, better for Thai
+SELECT id, ts_rank_cd(tsv, query) AS rank
+FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- Field boosting: build tsvector with per-field weights
+-- Weight A tokens score ~5× higher than weight C
+UPDATE articles
+SET tsv =
+  setweight(to_tsvector('kham_cfg', coalesce(title, '')), 'A') ||
+  setweight(to_tsvector('kham_cfg', coalesce(body,  '')), 'C');
+
+-- Custom weight vector {D, C, B, A} — tune to taste
+SELECT id, ts_rank(tsv, query, '{0.1, 0.2, 0.4, 1.0}') AS rank
+FROM articles, to_tsquery('kham_cfg', 'กรุงเทพ') query
+WHERE tsv @@ query
+ORDER BY rank DESC;
+
+-- Phonetic synonyms (RTGS/soundex) are indexed at the same tsvector position
+-- as the original token, so ts_rank weights them equally.
+-- To downweight phonetic matches, rerank in application code after fetching
+-- FTS candidates: multiply score × 0.3 if the query term is not an exact token.`,
+        lang: 'sql',
+        label: 'psql',
+      },
     ],
   },
 
@@ -199,6 +234,33 @@ CREATE VIRTUAL TABLE t7 USING fts5(body,
 CREATE VIRTUAL TABLE t8 USING fts5(body,
   tokenize='kham soundex lk82 stopwords on ngram_size 2
             dict ''/words.txt'' synonyms ''/syns.tsv''');`,
+        lang: 'sql',
+        label: 'sqlite3',
+      },
+      {
+        heading: 'Ranking and field boosting',
+        body: 'FTS5 provides BM25 scoring built-in. Lower (more negative) scores rank higher. Pass column weight arguments to boost title over body. Phonetic/soundex matches receive the same BM25 weight as exact token matches — to downweight them, rerank in application code after fetching FTS candidates.',
+        code: `-- Basic BM25 ranking (lower value = better match)
+SELECT title, body, bm25(docs) AS score
+FROM docs
+WHERE docs MATCH 'ปลา'
+ORDER BY score;
+
+-- Field boosting: title column weight 10×, body column weight 1×
+-- Arguments follow the column order in CREATE VIRTUAL TABLE
+CREATE VIRTUAL TABLE docs USING fts5(title, body, tokenize='kham');
+
+SELECT title, bm25(docs, 10.0, 1.0) AS score
+FROM docs
+WHERE docs MATCH 'ปลา'
+ORDER BY score;
+
+-- Exact match vs phonetic match: FTS5 weights them equally.
+-- Application-level reranking for phonetic downweighting:
+--   1. Fetch candidates with FTS5 MATCH (fast, index-backed)
+--   2. In app code, tokenize the query and check if each matched token
+--      is an exact dictionary word (edit distance 0)
+--   3. Multiply the BM25 score by 0.3 for phonetic-only matches`,
         lang: 'sql',
         label: 'sqlite3',
       },

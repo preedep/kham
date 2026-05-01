@@ -61,14 +61,16 @@ if (token == NULL || len <= 0)
 
 `LexDescr[]` in `kham_lextypes_shim` must be null-terminated (lexid=0 sentinel at index 7).
 
-## SQL install objects (`kham_pg--0.1.x.sql`)
+## SQL install objects (`kham_pg--0.x.y.sql`)
 
 Created in this order:
-1. `CREATE FUNCTION kham_start/gettoken/end/lextypes` — registers C symbols from `MODULE_PATHNAME`
-2. `CREATE TEXT SEARCH PARSER kham` — wires up the four functions
-3. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through)
-4. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
-5. `ALTER TEXT SEARCH CONFIGURATION kham ADD MAPPING FOR thai, latin, number, unknown, named WITH kham_dict`
+1. `CREATE FUNCTION kham_start/gettoken/end/lextypes/headline/dict_lexize` — registers C symbols
+2. `CREATE TEXT SEARCH PARSER kham` — wires up the parser functions
+3. `CREATE TEXT SEARCH TEMPLATE kham_fts_template` + `CREATE TEXT SEARCH DICTIONARY kham_fts_dict` — expands Thai/Named tokens to [word, lk82_soundex, RTGS_romanization]
+4. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through for Latin/Number/Unknown)
+5. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
+6. `ALTER … ADD MAPPING FOR thai, named WITH kham_fts_dict` — phonetic expansion
+7. `ALTER … ADD MAPPING FOR latin, number, unknown WITH kham_dict` — simple pass-through
 
 Punctuation and emoji have no mapping — PG discards those token types at index time.
 
@@ -111,15 +113,76 @@ Key constraints:
 
 Expected output: `kham-pg/regress/expected/` (committed). Results: `kham-pg/regress/results/` (gitignored).
 
-Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`
+Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`, `kham_advanced.sql`
 
 **NE test words:** Use single-syllable words (e.g. จีน) for named entity regress tests — multi-syllable words (e.g. กรุงเทพ) are split by the segmenter before NE tagging. Verify with `Tokenizer::new().segment("candidate")` before adding to the test.
 
-**Updating expected output:** If pg_regress output changes, use a volume mount to capture actual results:
+**Updating expected output:** NEVER write expected `.out` files by hand — the format has invisible trailing spaces on every column header line, a `NOTICE` line when the extension already exists, and no `CREATE TABLE`/`INSERT 0 N` command tags for single-line DDL. Always capture from Docker:
 ```bash
-docker compose run --rm --build -v "$(pwd)/kham-pg/regress/results:/kham/kham-pg/regress/results" test
-cp kham-pg/regress/results/kham_fts.out kham-pg/regress/expected/kham_fts.out
+# capture actual output for all tests
+docker compose -f kham-pg/docker/docker-compose.yml run --rm --build \
+  -v "$(pwd)/kham-pg/regress/results:/kham/kham-pg/regress/results" regress
+
+# promote to expected after verifying correctness
+for f in kham-pg/regress/results/*.out; do
+  cp "$f" kham-pg/regress/expected/"$(basename "$f")"
+done
 ```
+
+**Regress test authoring pitfalls:**
+
+- **lk82 soundex cross-word matching** — Thai labial consonants (ป ผ พ ภ บ ม) all fall in the same soundex class. A query for ปลา (pla) will phonetically match documents containing ผัก (phak) or other labial-initial words. Avoid `ts_rank(doc_A) > ts_rank(doc_B)` comparisons between Thai documents; the phonetic match usually makes them equal. Use `ts_rank(...) > 0` to verify a match exists, or compare a match against a clearly zero-rank result from a non-Thai document.
+
+- **Single-word tsvector inputs** — `to_tsvector('kham', 'ปลา')` (a single standalone Thai word) may behave differently from multi-word input. Always use natural Thai phrases (`'กินข้าวกับปลา'`) for ts_rank tests to ensure the segmenter operates in its normal context. The `@@` match operator works on single words; ts_rank comparisons do not reliably.
+
+- **pg_regress output format** — Column headers have a trailing space (` is_emoji `, not ` is_emoji`). Single-line DDL (`CREATE TABLE foo (...);`) produces no command tag; multi-line DDL produces `CREATE TABLE` / `INSERT 0 N`. The second and later `CREATE EXTENSION IF NOT EXISTS` calls emit a `NOTICE` line. These are invisible when editing by hand — capture from Docker instead.
+
+## Benchmark suite
+
+`kham-pg/bench/` contains a Docker-based benchmark with two sections:
+
+```bash
+make -C kham-pg bench
+```
+
+### Section 1 — cache-warm batch throughput (`bench.sql`)
+
+`generate_series` + `CASE i%3` cycles 3 unique documents. PostgreSQL caches STABLE function results within a single `ExprContext`; after the first 3 calls, subsequent iterations hit the cache. Numbers represent **amortised cache-warm throughput** — useful for estimating bulk indexing rates, not single-call latency.
+
+| Operation | Iterations |
+|-----------|-----------|
+| `to_tsvector` small (~63 B) | 50 000 |
+| `to_tsvector` medium (~630 B) | 5 000 |
+| `to_tsvector` large (~6.3 KB) | 500 |
+| `plainto_tsquery` single word | 50 000 |
+| `plainto_tsquery` 3 words | 50 000 |
+
+### Section 2 — true per-call latency (`pgbench`)
+
+pgbench runs each transaction in a fresh `ExprContext`; the function-result cache does NOT carry over between transactions. 20 unique Thai sentences (`bench_setup.sql`) are seeded first; each pgbench transaction picks one at random via `\set id random(1,20)`. Numbers represent **actual single-call tokenizer latency**.
+
+| Script | Transactions |
+|--------|-------------|
+| `bench_pgbench_tsvector.sql` | 10 000 |
+| `bench_pgbench_tsquery.sql`  | 10 000 |
+
+GIN-indexed scan and `ts_rank` are excluded from the Docker suite — building a stored tsvector column or large table triggers thousands of real `to_tsvector` calls that cause the bench to hang in Docker. Use `EXPLAIN ANALYZE` or `pgbench` against a real PG instance for GIN/ts_rank timings.
+
+Files: `bench/bench.sql`, `bench/bench_setup.sql`, `bench/bench_pgbench_tsvector.sql`, `bench/bench_pgbench_tsquery.sql`, `bench/Dockerfile.bench`, `bench/docker-compose.yml`, `bench/entrypoint.sh`.
+
+**`RAISE NOTICE` format pitfall** — `RAISE NOTICE` substitutes bare `%` positionally; it does NOT support `printf`-style width/precision specifiers like `%-42s` or `%10.3f`. Use `format()` + `to_char()` instead:
+
+```sql
+-- Wrong: %-42s and %10.3f are emitted as literals
+RAISE NOTICE '%-42s %10.3f', label, value;
+
+-- Correct:
+RAISE NOTICE '%', format('%-42s %10s', label, to_char(value::numeric, 'FM9990.000'));
+```
+
+**Function-result cache vs. constant-folding** — two distinct mechanisms:
+- *Constant-folding*: optimizer evaluates a STABLE function at plan time when all inputs are literals. Avoided by binding inputs to a PL/pgSQL variable.
+- *Function-result cache*: runtime caches STABLE results within one `ExprContext`. With only 3 unique `CASE i%3` inputs, PG caches after 3 calls; all subsequent generate_series rows are cache hits. This is why Section 1 numbers are cache-warm throughput, not cold-call latency. Use pgbench (Section 2) for cold-call measurements.
 
 ## unsafe policy
 

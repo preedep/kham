@@ -4,6 +4,7 @@
 #   build    — compile the Rust cdylib against the host pg_config
 #   install  — build + copy .so / control / SQL files to the host PG install
 #   regress  — run pg_regress integration tests inside Docker (PG 17)
+#   bench    — run throughput benchmark inside Docker (PG 17); reports ops/s and ms/op
 #   dist     — produce kham_pg-$(EXT_VERSION).zip for PGXN upload
 #   clean    — remove Cargo build artefacts and dist directory
 #
@@ -24,7 +25,7 @@ EXT_DIR        := $(PG_SHAREDIR)/extension
 LIBNAME        := libkham_pg.so
 RELEASE_LIB    := ../target/release/$(LIBNAME)
 
-.PHONY: build install regress regress-update-expected dist clean
+.PHONY: build install regress regress-update-expected bench dist clean
 
 # ── build ─────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,15 @@ regress-update-expected:
 	@echo "Actual output is in the container at /kham/kham-pg/regress/results/output/kham_fts.out"
 	@echo "Run: docker compose -f docker/docker-compose.yml run regress cat /kham/kham-pg/regress/results/output/kham_fts.out"
 	@echo "     > regress/expected/kham_fts.out"
+
+# ── bench (Docker) ───────────────────────────────────────────────────────────
+
+bench:
+	$(DOCKER_COMPOSE) -f bench/docker-compose.yml up \
+	    --build \
+	    --exit-code-from bench \
+	    --abort-on-container-exit \
+	    --remove-orphans
 
 # ── dist — PGXN distribution zip ─────────────────────────────────────────────
 #
@@ -104,4 +114,5 @@ cc = "1"\n' > $(DIST_NAME)/Cargo.toml
 clean:
 	$(CARGO) clean -p kham-pg
 	$(DOCKER_COMPOSE) -f docker/docker-compose.yml down --rmi local 2>/dev/null || true
+	$(DOCKER_COMPOSE) -f bench/docker-compose.yml down --rmi local 2>/dev/null || true
 	rm -rf kham_pg-*.zip kham_pg-*/

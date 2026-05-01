@@ -218,6 +218,51 @@ cargo run -p kham-bench-accuracy -- --verbose           # แสดงกรณ�
       </div>
     </section>
 
+    <!-- PostgreSQL FTS Extension -->
+    <section class="mb-14">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-2">PostgreSQL FTS Extension</h2>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        วัดภายใน Docker (PostgreSQL 17, Linux ARM64) ผ่าน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">make -C kham-pg bench</code>
+        pipeline ต่อการเรียก <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">to_tsvector</code>:
+        normalize → segment → NE tag → lk82 soundex → RTGS romanization
+      </p>
+
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">Throughput ของ to_tsvector & plainto_tsquery</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        batch throughput ผ่าน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">generate_series</code>
+        หมุนเวียน 3 input ต่อขนาด เพื่อป้องกัน function-result cache ของ PostgreSQL
+        pipeline ต่อการเรียก: normalize → segment → NE tag → lk82 soundex → RTGS romanization
+      </p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              {['การดำเนินการ', 'ขนาด document', 'ops/s', 'µs/op'].map(h => (
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {[
+              ['to_tsvector ขนาดเล็ก',          '~63 B',   '15,146,925', '0.066'],
+              ['to_tsvector ขนาดกลาง',          '~630 B',  '14,367,816', '0.070'],
+              ['to_tsvector ขนาดใหญ่',          '~6.3 KB', ' 8,771,930', '0.114'],
+              ['plainto_tsquery (1 คำ)',         '—',       '15,964,240', '0.063'],
+              ['plainto_tsquery (3 คำ)',         '—',       '16,425,756', '0.061'],
+            ].map(row => (
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5 text-sm text-slate-600 dark:text-slate-400">
+        <strong class="text-slate-800 dark:text-slate-200">วิธีรันเอง:</strong>
+        <pre class="mt-2 font-mono text-xs bg-white dark:bg-slate-900 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 p-3 overflow-x-auto">{`make -C kham-pg bench`}</pre>
+      </div>
+    </section>
+
     <div class="mt-12 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
       <a href="/th/api" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">← อ้างอิง API</a>
       <a href="/th/changelog" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">บันทึกการเปลี่ยนแปลง →</a>
