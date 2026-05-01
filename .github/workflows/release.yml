@@ -18,6 +18,149 @@ jobs:
     uses: ./.github/workflows/ci.yml
 
   # ---------------------------------------------------------------------------
+  # Build kham-cli + kham-sqlite binaries for each platform
+  #
+  # kham-sqlite build.rs supports macOS (xcrun/brew) and Linux (pkg-config).
+  # Windows has no SQLite header path wired up, so sqlite is skipped there.
+  # ---------------------------------------------------------------------------
+  build_binaries:
+    name: Binaries / ${{ matrix.target }}
+    needs: ci_check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: so
+          - os: macos-13
+            target: x86_64-apple-darwin
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            sqlite: true
+            archive: tar.gz
+            exe: ""
+            lib_prefix: lib
+            lib_ext: dylib
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            sqlite: false
+            archive: zip
+            exe: .exe
+            lib_prefix: ""
+            lib_ext: dll
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Install SQLite headers (Linux)
+        if: matrix.sqlite && runner.os == 'Linux'
+        run: sudo apt-get install -y libsqlite3-dev
+      - name: Build kham-cli
+        run: cargo build -p kham-cli --release
+      - name: Build kham-sqlite
+        if: matrix.sqlite
+        run: cargo build -p kham-sqlite --release
+      - name: Package artifacts
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          TARGET="${{ matrix.target }}"
+          EXE="${{ matrix.exe }}"
+          LIB_PREFIX="${{ matrix.lib_prefix }}"
+          LIB_EXT="${{ matrix.lib_ext }}"
+          ARCHIVE="${{ matrix.archive }}"
+
+          mkdir -p dist
+
+          # --- kham-cli ---
+          CLI_BIN="target/release/kham${EXE}"
+          CLI_NAME="kham-cli-${VERSION}-${TARGET}"
+          cp "$CLI_BIN" dist/
+
+          if [ "$ARCHIVE" = "zip" ]; then
+            (cd dist && zip "${CLI_NAME}.zip" "kham${EXE}" && rm "kham${EXE}")
+          else
+            (cd dist && tar czf "${CLI_NAME}.tar.gz" "kham${EXE}" && rm "kham${EXE}")
+          fi
+
+          # --- kham-sqlite (Unix only) ---
+          if [ "${{ matrix.sqlite }}" = "true" ]; then
+            SQLITE_LIB="target/release/${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
+            SQLITE_NAME="kham-sqlite-${VERSION}-${TARGET}"
+            cp "$SQLITE_LIB" dist/
+            LIB_FILE="${LIB_PREFIX}kham_sqlite.${LIB_EXT}"
+            (cd dist && tar czf "${SQLITE_NAME}.tar.gz" "$LIB_FILE" && rm "$LIB_FILE")
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: binaries-${{ matrix.target }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
+  # Build kham-pg for Linux x86_64 against PostgreSQL 16 and 17
+  #
+  # The .so must match the major PG version it will be loaded into, so we
+  # build once per version and ship both. macOS/Windows are not supported
+  # because pg_config availability is not guaranteed on those runners.
+  # ---------------------------------------------------------------------------
+  build_pg:
+    name: kham-pg / PG ${{ matrix.pg }} / Linux x86_64
+    needs: ci_check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [16, 17]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: pg${{ matrix.pg }}
+      - name: Add PostgreSQL apt repository
+        run: |
+          sudo apt-get install -y curl ca-certificates gnupg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
+          echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+            https://apt.postgresql.org/pub/repos/apt \
+            $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+      - name: Install postgresql-server-dev-${{ matrix.pg }}
+        run: sudo apt-get install -y postgresql-server-dev-${{ matrix.pg }}
+      - name: Build kham-pg
+        run: cargo build -p kham-pg --release
+        env:
+          PG_CONFIG: /usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+      - name: Package
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          PG="${{ matrix.pg }}"
+          mkdir -p dist
+          cp target/release/libkham_pg.so dist/
+          (cd dist && tar czf "kham-pg-${VERSION}-pg${PG}-x86_64-unknown-linux-gnu.tar.gz" \
+            libkham_pg.so && rm libkham_pg.so)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kham-pg-pg${{ matrix.pg }}
+          path: dist/
+
+  # ---------------------------------------------------------------------------
   # Publish kham-core then kham-cli to crates.io
   # ---------------------------------------------------------------------------
   publish_crates:
@@ -143,11 +286,11 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # GitHub Release — auto-generate notes and attach wheel artifacts
+  # GitHub Release — auto-generate notes and attach all artifacts as assets
   # ---------------------------------------------------------------------------
   github_release:
     name: GitHub Release
-    needs: [publish_crates, publish_pypi, publish_npm]
+    needs: [publish_crates, publish_pypi, publish_npm, build_binaries, build_pg]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -158,6 +301,16 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: wheels-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: binaries-*
+          merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: kham-pg-*
           merge-multiple: true
           path: dist
       - uses: softprops/action-gh-release@v2
