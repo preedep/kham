@@ -13,7 +13,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 ## Features
 
 - **newmm algorithm** — DAG-based maximal matching constrained to Thai Character Cluster (TCC) boundaries
-- **Compound-first DP scoring** — minimises token count before maximising dictionary matches, then uses TNC frequency as tiebreaker; 94.9% sentence-level agreement with PyThaiNLP newmm (F1 0.975)
+- **Compound-first DP scoring** — minimises token count before maximising dictionary matches, then uses TNC frequency as tiebreaker; F1 1.000 on 228 curated test cases; 94.9% sentence-level agreement with PyThaiNLP newmm
 - **Zero-copy API** — `segment()` returns `&str` slices into the original input; no heap allocation per token
 - **`no_std` core** — `kham-core` compiles for bare-metal targets (`alloc` only)
 - **Built-in dictionary** — 62,102-word CC0-licensed Thai word list embedded at compile time; `dict_merge()` overlay adds custom words without a full trie rebuild
