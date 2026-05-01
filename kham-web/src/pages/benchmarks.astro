@@ -291,12 +291,38 @@ cargo run -p kham-bench-accuracy -- --verbose           # show failing cases`}</
         normalize → segment → NE tag → lk82 soundex → RTGS romanization.
       </p>
 
+      <h3 class="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">to_tsvector & plainto_tsquery throughput</h3>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 text-sm">
+        Batch throughput via <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded font-mono">generate_series</code> with 3 input variants per size, cycling to defeat PG's function-result cache.
+        Pipeline per call: normalize → segment → NE tag → lk82 soundex → RTGS romanization.
+      </p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 mb-6">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              {['Operation', 'Doc size', 'ops/s', 'µs/op'].map(h => (
+                <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {[
+              ['to_tsvector small',         '~63 B',   '15,146,925', '0.066'],
+              ['to_tsvector medium',        '~630 B',  '14,367,816', '0.070'],
+              ['to_tsvector large',         '~6.3 KB', ' 8,771,930', '0.114'],
+              ['plainto_tsquery (1 word)',  '—',       '15,964,240', '0.063'],
+              ['plainto_tsquery (3 words)', '—',       '16,425,756', '0.061'],
+            ].map(row => (
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                {row.map(cell => <td class="px-5 py-3 font-mono text-slate-700 dark:text-slate-300">{cell}</td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <div class="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 p-5 text-sm text-slate-600 dark:text-slate-400">
         <strong class="text-slate-800 dark:text-slate-200">How to reproduce:</strong>
-        <pre class="mt-2 font-mono text-xs bg-white dark:bg-slate-900 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 p-3 overflow-x-auto">{`make -C kham-pg bench
-# Reports ops/s + µs/op for to_tsvector & plainto_tsquery (batch)
-# Reports scans/s + ms/scan for @@ seq scan (10k rows)
-# Reports queries/s + ms/query for GIN scan (100k rows) and ts_rank top-10`}</pre>
+        <pre class="mt-2 font-mono text-xs bg-white dark:bg-slate-900 dark:text-slate-300 rounded border border-slate-200 dark:border-slate-700 p-3 overflow-x-auto">{`make -C kham-pg bench`}</pre>
       </div>
     </section>
 
