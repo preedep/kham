@@ -1058,10 +1058,7 @@ pub struct KhamKeywordList {
 /// * The returned pointer must be freed with [`kham_keyword_list_free`].
 /// * Returns `NULL` if `text` is null or contains invalid UTF-8.
 #[no_mangle]
-pub unsafe extern "C" fn kham_keywords(
-    text: *const c_char,
-    max_n: usize,
-) -> *mut KhamKeywordList {
+pub unsafe extern "C" fn kham_keywords(text: *const c_char, max_n: usize) -> *mut KhamKeywordList {
     if text.is_null() || max_n == 0 {
         return std::ptr::null_mut();
     }
@@ -1084,10 +1081,7 @@ pub unsafe extern "C" fn kham_keywords(
     let ptr = c_kws.as_mut_ptr();
     std::mem::forget(c_kws);
 
-    Box::into_raw(Box::new(KhamKeywordList {
-        keywords: ptr,
-        len,
-    }))
+    Box::into_raw(Box::new(KhamKeywordList { keywords: ptr, len }))
 }
 
 /// Free a [`KhamKeywordList`] returned by [`kham_keywords`].
