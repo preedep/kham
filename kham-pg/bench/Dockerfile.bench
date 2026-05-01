@@ -1,0 +1,80 @@
+# Dockerfile.bench — multi-stage build for kham-pg benchmark suite.
+#
+# Stage 1 (builder): Debian slim + postgresql-server-dev-17 + Rust → libkham_pg.so
+# Stage 2 (runner):  Debian slim + postgresql-17 only             → psql + extension
+#
+# Build context: repository root (full Cargo workspace must be available).
+
+# ── Stage 1: builder ─────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+        pkg-config \
+        gnupg \
+        lsb-release \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-server-dev-17 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain stable --no-modify-path \
+    && chmod -R a+w /usr/local/rustup /usr/local/cargo
+
+WORKDIR /kham
+COPY . .
+
+ENV PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+RUN cargo build -p kham-pg --release
+
+# ── Stage 2: runner ───────────────────────────────────────────────────────────
+FROM debian:bookworm-slim AS runner
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        curl \
+        gosu \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-17 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install extension files
+COPY --from=builder /kham/target/release/libkham_pg.so /tmp/kham_pg.so
+COPY kham-pg/kham_pg.control                           /tmp/kham_pg.control
+COPY kham-pg/sql/kham_pg--0.3.0.sql                   /tmp/kham_pg--0.3.0.sql
+
+RUN set -e; \
+    PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config; \
+    PG_PKGLIBDIR=$($PG_CONFIG --pkglibdir); \
+    PG_EXTDIR=$($PG_CONFIG --sharedir)/extension; \
+    install -m 755 /tmp/kham_pg.so             "$PG_PKGLIBDIR/kham_pg.so"; \
+    install -m 644 /tmp/kham_pg.control        "$PG_EXTDIR/kham_pg.control"; \
+    install -m 644 /tmp/kham_pg--0.3.0.sql     "$PG_EXTDIR/kham_pg--0.3.0.sql"
+
+COPY kham-pg/bench/bench.sql      /kham/bench/bench.sql
+COPY kham-pg/bench/entrypoint.sh  /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]

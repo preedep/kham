@@ -137,6 +137,30 @@ done
 
 - **pg_regress output format** — Column headers have a trailing space (` is_emoji `, not ` is_emoji`). Single-line DDL (`CREATE TABLE foo (...);`) produces no command tag; multi-line DDL produces `CREATE TABLE` / `INSERT 0 N`. The second and later `CREATE EXTENSION IF NOT EXISTS` calls emit a `NOTICE` line. These are invisible when editing by hand — capture from Docker instead.
 
+## Benchmark suite
+
+`kham-pg/bench/` contains a Docker-based throughput benchmark:
+
+```bash
+make -C kham-pg bench
+```
+
+Reports `ops/s` and `ms/op` for each FTS operation via `RAISE NOTICE`. The benchmark covers:
+
+| Operation | Iterations |
+|-----------|-----------|
+| `to_tsvector` small (~63 B) | 50 000 |
+| `to_tsvector` medium (~630 B) | 5 000 |
+| `to_tsvector` large (~6.3 KB) | 500 |
+| `plainto_tsquery` single word | 50 000 |
+| `plainto_tsquery` 3 words | 50 000 |
+| `@@` sequential scan — 10k rows | 100 full scans |
+| `@@` GIN-indexed scan — 100k rows | 500 queries |
+| `ts_rank` top-10 (GIN + rank) | 200 queries |
+| `ts_rank` setweight A top-10 | 200 queries |
+
+Files: `bench/bench.sql` (SQL), `bench/Dockerfile.bench` (two-stage build), `bench/docker-compose.yml`, `bench/entrypoint.sh`.
+
 ## unsafe policy
 
 `unsafe` is confined to `src/lib.rs` (FFI boundary). `src/shim.c` is plain C. Do not add `unsafe` to any other crate.
