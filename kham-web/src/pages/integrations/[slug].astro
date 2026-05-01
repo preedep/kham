@@ -169,6 +169,39 @@ WHERE docs MATCH 'กรุงเทพ';`,
         lang: 'sql',
         label: 'sqlite3',
       },
+      {
+        heading: 'tokenize arguments',
+        body: 'All arguments are optional and order-independent. File paths must be single-quoted inside the tokenize directive (FTS5 barewords only allow A–Z, 0–9, and _). Escape the quotes for SQL with \'\' (two single quotes).',
+        code: `-- lk82 soundex (default) — near-homophones share a code
+CREATE VIRTUAL TABLE t1 USING fts5(body, tokenize='kham');
+
+-- udom83 soundex (finer sibilant/liquid distinctions)
+CREATE VIRTUAL TABLE t2 USING fts5(body, tokenize='kham soundex udom83');
+
+-- Disable soundex entirely
+CREATE VIRTUAL TABLE t3 USING fts5(body, tokenize='kham soundex none');
+
+-- Suppress stopwords from the index
+CREATE VIRTUAL TABLE t4 USING fts5(body, tokenize='kham stopwords on');
+
+-- Bigrams for OOV/unknown tokens (default: trigrams; 0 = disabled)
+CREATE VIRTUAL TABLE t5 USING fts5(body, tokenize='kham ngram_size 2');
+
+-- Custom synonym map (path must be single-quoted)
+CREATE VIRTUAL TABLE t6 USING fts5(body,
+  tokenize='kham synonyms ''/etc/kham/synonyms.tsv''');
+
+-- Custom domain word list (overlaid on built-in dictionary, no trie rebuild)
+CREATE VIRTUAL TABLE t7 USING fts5(body,
+  tokenize='kham dict ''/etc/kham/domain_words.txt''');
+
+-- All options combined
+CREATE VIRTUAL TABLE t8 USING fts5(body,
+  tokenize='kham soundex lk82 stopwords on ngram_size 2
+            dict ''/words.txt'' synonyms ''/syns.tsv''');`,
+        lang: 'sql',
+        label: 'sqlite3',
+      },
     ],
   },
 

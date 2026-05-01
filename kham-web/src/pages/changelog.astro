@@ -15,6 +15,35 @@ import Layout from '../layouts/Layout.astro';
 
     <div class="space-y-16">
 
+      <!-- v0.6.0 (unreleased) -->
+      <section>
+        <div class="flex items-center gap-4 mb-6">
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">v0.6.0</span>
+          <span class="text-xs bg-amber-100 dark:bg-amber-900 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 rounded-full px-3 py-1 font-medium">unreleased — develop</span>
+        </div>
+        <div class="space-y-6 pl-4 border-l-2 border-amber-200 dark:border-amber-800">
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>Added — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom synonym map</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">synonyms '&lt;path&gt;'</code> tokenize argument loads a TSV synonym file at table-creation time. Synonyms are emitted as <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FTS5_TOKEN_COLOCATED</code> so queries match canonical and synonym forms.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Custom dictionary overlay</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">dict '&lt;path&gt;'</code> tokenize argument overlays domain-specific words on the built-in dictionary without a full trie rebuild. Useful for product names and technical terms.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">Integration test suite</strong> — 31 tests covering basic MATCH, RTGS romanization, lk82 soundex, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">snippet()</code>/<code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">highlight()</code>, stopword filtering, mixed script, NE recognition, all config options, custom synonyms and dict.</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizerBuilder::dict_merge()</code></strong> — new builder method on <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham-core</code> to overlay extra words when constructing an <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer</code> (fast overlay path, no trie rebuild).</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>Fixed — kham-sqlite
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">Trigrams not emitted</strong> — <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsToken::trigrams</code> for Unknown tokens was populated by the FTS pipeline but never forwarded to SQLite as colocated tokens. OOV n-gram search now works correctly.</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- v0.5.1 -->
       <section>
         <div class="flex items-center gap-4 mb-6">
