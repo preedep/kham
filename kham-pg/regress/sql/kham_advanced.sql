@@ -26,27 +26,21 @@ SELECT to_tsvector('kham', 'กิน😀ปลา') @@ plainto_tsquery('kham', 
 -- 5. setweight 'A' produces :A position suffix in tsvector text representation
 SELECT setweight(to_tsvector('kham', 'ปลา'), 'A')::text LIKE '%:1A%' AS weight_a_in_text;
 
--- 6. Title weight A ranks higher than body weight C for the same query term
---    doc-a: ปลา in title (A=1.0) vs doc-b: ปลา in body (C=0.2)
-SELECT (
-    ts_rank(
-        setweight(to_tsvector('kham', 'ปลาทะเล'), 'A') ||
-            setweight(to_tsvector('kham', 'กินข้าวกับผัก'), 'C'),
-        plainto_tsquery('kham', 'ปลา')
-    )
-    >
-    ts_rank(
-        setweight(to_tsvector('kham', 'กินข้าว'), 'A') ||
-            setweight(to_tsvector('kham', 'ปลาทะเลสดอร่อย'), 'C'),
-        plainto_tsquery('kham', 'ปลา')
-    )
-) AS title_ranks_higher;
+-- 6. Weight A ranks higher than weight C for the same token and query
+--    Uses ปลา directly (not inside a compound) to guarantee the token is present.
+SELECT ts_rank(
+    setweight(to_tsvector('kham', 'ปลา'), 'A'),
+    plainto_tsquery('kham', 'ปลา')
+) > ts_rank(
+    setweight(to_tsvector('kham', 'ปลา'), 'C'),
+    plainto_tsquery('kham', 'ปลา')
+) AS weight_a_ranks_higher_than_c;
 
 -- 7. Field-boosted table: id=1 (ปลา in title) ranks before id=2 (ปลา in body)
 CREATE TABLE kham_boosted (id integer, title text, body text);
 INSERT INTO kham_boosted VALUES
-    (1, 'ปลาทะเล',        'กินข้าวกับผัก'),
-    (2, 'กินข้าว',        'ปลาทะเลสดอร่อย');
+    (1, 'ปลา',        'กินข้าวกับผัก'),
+    (2, 'กินข้าว',   'ปลาสด');
 
 SELECT id
 FROM kham_boosted
@@ -90,11 +84,12 @@ SELECT to_tsvector('kham', 'Python ยอดเยี่ยม')
 
 -- ── ts_rank with custom weight array ──────────────────────────────────────────
 
--- 14. Custom weight array {D,C,B,A} still produces non-zero rank for a match
+-- 14. Custom weight array {D,C,B,A} as first argument produces non-zero rank
+--     Weights must come before the tsvector: ts_rank(float4[], tsvector, tsquery)
 SELECT ts_rank(
+    '{0.1,0.2,0.4,1.0}'::float4[],
     to_tsvector('kham', 'กินข้าวกับปลา'),
-    plainto_tsquery('kham', 'ปลา'),
-    '{0.1, 0.2, 0.4, 1.0}'
+    plainto_tsquery('kham', 'ปลา')
 ) > 0 AS custom_weight_ranked;
 
 -- ── Phonetic (soundex) search across table ────────────────────────────────────

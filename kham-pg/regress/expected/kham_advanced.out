@@ -4,10 +4,11 @@
 --
 -- Run via:  make -C kham-pg regress   (uses Docker PostgreSQL 17)
 CREATE EXTENSION IF NOT EXISTS kham_pg;
+NOTICE:  extension "kham_pg" already exists, skipping
 -- ── Emoji ─────────────────────────────────────────────────────────────────────
 -- 1. Emoji character → tokid=5 in ts_parse
 SELECT tokid = 5 AS is_emoji FROM ts_parse('kham', '😀');
- is_emoji
+ is_emoji 
 ----------
  t
 (1 row)
@@ -15,21 +16,21 @@ SELECT tokid = 5 AS is_emoji FROM ts_parse('kham', '😀');
 -- 2. Emoji in mixed Thai+emoji input — emoji token count
 SELECT count(*) FILTER (WHERE tokid = 5) AS emoji_count
 FROM ts_parse('kham', 'กิน😀ปลา');
- emoji_count
+ emoji_count 
 -------------
            1
 (1 row)
 
 -- 3. Emoji has no mapping in kham config → discarded from tsvector entirely
 SELECT to_tsvector('kham', '😀') = ''::tsvector AS emoji_not_indexed;
- emoji_not_indexed
+ emoji_not_indexed 
 -------------------
  t
 (1 row)
 
 -- 4. Thai tokens still indexed correctly in mixed emoji+Thai input
 SELECT to_tsvector('kham', 'กิน😀ปลา') @@ plainto_tsquery('kham', 'ปลา') AS found;
- found
+ found 
 -------
  t
 (1 row)
@@ -37,38 +38,30 @@ SELECT to_tsvector('kham', 'กิน😀ปลา') @@ plainto_tsquery('kham', 
 -- ── setweight — field boosting ────────────────────────────────────────────────
 -- 5. setweight 'A' produces :A position suffix in tsvector text representation
 SELECT setweight(to_tsvector('kham', 'ปลา'), 'A')::text LIKE '%:1A%' AS weight_a_in_text;
- weight_a_in_text
+ weight_a_in_text 
 ------------------
  t
 (1 row)
 
--- 6. Title weight A ranks higher than body weight C for the same query term
---    doc-a: ปลา in title (A=1.0) vs doc-b: ปลา in body (C=0.2)
-SELECT (
-    ts_rank(
-        setweight(to_tsvector('kham', 'ปลาทะเล'), 'A') ||
-            setweight(to_tsvector('kham', 'กินข้าวกับผัก'), 'C'),
-        plainto_tsquery('kham', 'ปลา')
-    )
-    >
-    ts_rank(
-        setweight(to_tsvector('kham', 'กินข้าว'), 'A') ||
-            setweight(to_tsvector('kham', 'ปลาทะเลสดอร่อย'), 'C'),
-        plainto_tsquery('kham', 'ปลา')
-    )
-) AS title_ranks_higher;
- title_ranks_higher
---------------------
+-- 6. Weight A ranks higher than weight C for the same token and query
+--    Uses ปลา directly (not inside a compound) to guarantee the token is present.
+SELECT ts_rank(
+    setweight(to_tsvector('kham', 'ปลา'), 'A'),
+    plainto_tsquery('kham', 'ปลา')
+) > ts_rank(
+    setweight(to_tsvector('kham', 'ปลา'), 'C'),
+    plainto_tsquery('kham', 'ปลา')
+) AS weight_a_ranks_higher_than_c;
+ weight_a_ranks_higher_than_c 
+------------------------------
  t
 (1 row)
 
 -- 7. Field-boosted table: id=1 (ปลา in title) ranks before id=2 (ปลา in body)
 CREATE TABLE kham_boosted (id integer, title text, body text);
-CREATE TABLE
 INSERT INTO kham_boosted VALUES
-    (1, 'ปลาทะเล',        'กินข้าวกับผัก'),
-    (2, 'กินข้าว',        'ปลาทะเลสดอร่อย');
-INSERT 0 2
+    (1, 'ปลา',        'กินข้าวกับผัก'),
+    (2, 'กินข้าว',   'ปลาสด');
 SELECT id
 FROM kham_boosted
 WHERE (
@@ -80,7 +73,7 @@ ORDER BY ts_rank(
     setweight(to_tsvector('kham', body), 'C'),
     plainto_tsquery('kham', 'ปลา')
 ) DESC;
- id
+ id 
 ----
   1
   2
@@ -89,7 +82,7 @@ ORDER BY ts_rank(
 -- ── Long document ─────────────────────────────────────────────────────────────
 -- 8. Very long document (~300 bytes) tokenises without error
 SELECT to_tsvector('kham', repeat('กินข้าวกับปลา ', 20)) IS NOT NULL AS long_doc_ok;
- long_doc_ok
+ long_doc_ok 
 -------------
  t
 (1 row)
@@ -97,7 +90,7 @@ SELECT to_tsvector('kham', repeat('กินข้าวกับปลา ', 20
 -- 9. Search finds a token in a long document
 SELECT to_tsvector('kham', repeat('กินข้าวกับปลา ', 20))
     @@ plainto_tsquery('kham', 'ปลา') AS found_in_long_doc;
- found_in_long_doc
+ found_in_long_doc 
 -------------------
  t
 (1 row)
@@ -105,7 +98,7 @@ SELECT to_tsvector('kham', repeat('กินข้าวกับปลา ', 20
 -- ── Thai numeral search ───────────────────────────────────────────────────────
 -- 10. Thai numeral ๑๒๓ is indexed as Number and searchable by the same numeral
 SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '๑๒๓') AS numeral_found;
- numeral_found
+ numeral_found 
 ---------------
  t
 (1 row)
@@ -113,7 +106,7 @@ SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '๑๒๓') 
 -- 11. Thai numeral inside a sentence is independently searchable
 SELECT to_tsvector('kham', 'ราคา ๑๕๐ บาท')
     @@ plainto_tsquery('kham', '๑๕๐') AS numeral_in_sentence;
- numeral_in_sentence
+ numeral_in_sentence 
 ---------------------
  t
 (1 row)
@@ -122,7 +115,7 @@ SELECT to_tsvector('kham', 'ราคา ๑๕๐ บาท')
 -- 12. AND query combining Latin and Thai tokens — both must be present
 SELECT to_tsvector('kham', 'Python สำหรับนักพัฒนา')
     @@ to_tsquery('kham', 'python & พัฒนา') AS mixed_and_match;
- mixed_and_match
+ mixed_and_match 
 -----------------
  t
 (1 row)
@@ -130,19 +123,20 @@ SELECT to_tsvector('kham', 'Python สำหรับนักพัฒนา')
 -- 13. OR query — only the Latin token is present; Thai alternative absent
 SELECT to_tsvector('kham', 'Python ยอดเยี่ยม')
     @@ to_tsquery('kham', 'python | ปลา') AS mixed_or_match;
- mixed_or_match
+ mixed_or_match 
 ----------------
  t
 (1 row)
 
 -- ── ts_rank with custom weight array ──────────────────────────────────────────
--- 14. Custom weight array {D,C,B,A} still produces non-zero rank for a match
+-- 14. Custom weight array {D,C,B,A} as first argument produces non-zero rank
+--     Weights must come before the tsvector: ts_rank(float4[], tsvector, tsquery)
 SELECT ts_rank(
+    '{0.1,0.2,0.4,1.0}'::float4[],
     to_tsvector('kham', 'กินข้าวกับปลา'),
-    plainto_tsquery('kham', 'ปลา'),
-    '{0.1, 0.2, 0.4, 1.0}'
+    plainto_tsquery('kham', 'ปลา')
 ) > 0 AS custom_weight_ranked;
- custom_weight_ranked
+ custom_weight_ranked 
 ----------------------
  t
 (1 row)
@@ -151,12 +145,10 @@ SELECT ts_rank(
 -- 15. lk82 soundex code for ปลา finds every document containing ปลา
 --     regardless of which surrounding words appear
 CREATE TABLE kham_phonetic (id integer, body text);
-CREATE TABLE
 INSERT INTO kham_phonetic VALUES
     (1, 'ปลาสด'),
     (2, 'กินข้าว'),
     (3, 'ปลาทะเล');
-INSERT 0 3
 SELECT count(*) AS soundex_matches
 FROM kham_phonetic
 WHERE to_tsvector('kham', body) @@
@@ -166,7 +158,7 @@ WHERE to_tsvector('kham', body) @@
         WHERE lexeme ~ '^[0-9]'
         LIMIT 1
     ));
- soundex_matches
+ soundex_matches 
 -----------------
                2
 (1 row)
@@ -176,7 +168,7 @@ WHERE to_tsvector('kham', body) @@
 SELECT count(*) > 0 AS has_soundex_stats
 FROM ts_stat($$SELECT to_tsvector('kham', body) FROM kham_phonetic$$)
 WHERE word ~ '^[0-9]';
- has_soundex_stats
+ has_soundex_stats 
 -------------------
  t
 (1 row)
@@ -185,8 +177,9 @@ WHERE word ~ '^[0-9]';
 -- 17. Unknown (OOV) tokens are indexed via kham_dict (simple) and searchable
 --     เปปซี่ → เป(Unknown) + ป(Unknown) + ซี่(Thai); both Unknown parts are indexed
 SELECT to_tsvector('kham', 'เปปซี่') @@ to_tsquery('kham', 'เป') AS oov_token_searchable;
- oov_token_searchable
+ oov_token_searchable 
 ----------------------
  t
 (1 row)
+
 

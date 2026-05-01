@@ -111,7 +111,7 @@ Key constraints:
 
 Expected output: `kham-pg/regress/expected/` (committed). Results: `kham-pg/regress/results/` (gitignored).
 
-Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`
+Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`, `kham_advanced.sql`
 
 **NE test words:** Use single-syllable words (e.g. จีน) for named entity regress tests — multi-syllable words (e.g. กรุงเทพ) are split by the segmenter before NE tagging. Verify with `Tokenizer::new().segment("candidate")` before adding to the test.
 
