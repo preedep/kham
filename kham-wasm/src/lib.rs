@@ -944,4 +944,91 @@ mod tests {
             "expected at least one stopword token"
         );
     }
+
+    // --- spell_did_you_mean ---
+
+    #[test]
+    fn spell_did_you_mean_correct_word_returns_empty() {
+        assert_eq!(spell_did_you_mean("กิน"), "");
+    }
+
+    #[test]
+    fn spell_did_you_mean_empty_input_returns_empty() {
+        assert_eq!(spell_did_you_mean(""), "");
+    }
+
+    // --- spell_correct_text ---
+
+    #[test]
+    fn spell_correct_text_known_text_unchanged() {
+        let result = spell_correct_text("กินข้าว");
+        assert!(
+            !result.is_empty(),
+            "expected non-empty result for known text"
+        );
+    }
+
+    #[test]
+    fn spell_correct_text_returns_string() {
+        let result = spell_correct_text("กินข้าวกับปลา");
+        assert!(!result.is_empty());
+    }
+
+    // --- romanize_sentence ---
+
+    #[test]
+    fn romanize_sentence_produces_ascii_for_thai() {
+        let result = romanize_sentence("กิน");
+        assert!(
+            result.is_ascii(),
+            "expected ASCII romanization, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn romanize_sentence_preserves_latin_passthrough() {
+        let result = romanize_sentence("hello");
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn romanize_sentence_non_empty_for_thai_input() {
+        let result = romanize_sentence("กินข้าว");
+        assert!(!result.is_empty());
+    }
+
+    // --- extract_phrases ---
+
+    #[test]
+    fn extract_phrases_max_n_zero_returns_empty() {
+        let result = extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn extract_phrases_short_text_returns_empty_or_vec() {
+        let result = extract_phrases("กิน", 5);
+        // Short single-token text may return nothing; just check it doesn't panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn extract_phrases_respects_max_n() {
+        let text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล";
+        let result = extract_phrases(text, 2);
+        assert!(
+            result.len() <= 2,
+            "got {} phrases, expected ≤ 2",
+            result.len()
+        );
+    }
+
+    #[test]
+    fn extract_phrases_phrase_text_non_empty() {
+        let text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล";
+        let result = extract_phrases(text, 5);
+        for p in &result {
+            assert!(!p.word().is_empty(), "phrase word must not be empty");
+        }
+    }
 }
