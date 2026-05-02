@@ -22,7 +22,9 @@ use alloc::vec::Vec;
 
 use crate::dict::BUILTIN_WORDS;
 use crate::freq::FreqMap;
+use crate::segmenter::Tokenizer;
 use crate::soundex::lk82;
+use crate::token::TokenKind;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -76,6 +78,7 @@ pub struct Suggestion {
 pub struct SpellChecker {
     words_text: &'static str,
     freq: FreqMap,
+    tokenizer: Tokenizer,
 }
 
 impl SpellChecker {
@@ -97,6 +100,7 @@ impl SpellChecker {
         Self {
             words_text: BUILTIN_WORDS,
             freq: FreqMap::builtin(),
+            tokenizer: Tokenizer::new(),
         }
     }
 
@@ -173,6 +177,54 @@ impl SpellChecker {
 
         results.truncate(max_n);
         results
+    }
+
+    /// Return the single best spelling correction for `word`, or `None` if the
+    /// word appears correctly in the dictionary (edit distance 0).
+    pub fn did_you_mean(&self, word: &str) -> Option<String> {
+        match self.suggestions(word, 1).into_iter().next() {
+            Some(s) if s.edit_distance == 0 => None,
+            Some(s) => Some(s.word),
+            None => None,
+        }
+    }
+
+    /// Correct an entire Thai text by replacing Unknown tokens with their best
+    /// spelling suggestion.
+    ///
+    /// Segments `text` with the built-in tokenizer, then for every
+    /// `TokenKind::Unknown` token that is at least 2 characters long, looks up
+    /// the best suggestion and substitutes it. All other tokens (including known
+    /// Thai words, numbers, Latin, punctuation) are passed through unchanged.
+    ///
+    /// Returns the input unchanged when no Unknown tokens are found or no
+    /// correction candidates exist.
+    ///
+    /// # Example
+    /// ```rust
+    /// use kham_core::spell::SpellChecker;
+    /// let checker = SpellChecker::builtin();
+    /// // A correctly spelled sentence should come back unchanged word-for-word.
+    /// let out = checker.correct_text("กินข้าวกับปลา");
+    /// assert!(!out.is_empty());
+    /// ```
+    pub fn correct_text(&self, text: &str) -> String {
+        if text.is_empty() {
+            return String::new();
+        }
+        let tokens = self.tokenizer.segment(text);
+        let mut result = String::with_capacity(text.len());
+        for token in &tokens {
+            if token.kind == TokenKind::Unknown && token.text.chars().count() >= 2 {
+                match self.did_you_mean(token.text) {
+                    Some(correction) => result.push_str(&correction),
+                    None => result.push_str(token.text),
+                }
+            } else {
+                result.push_str(token.text);
+            }
+        }
+        result
     }
 }
 
@@ -361,5 +413,40 @@ mod tests {
         let a_chars: Vec<char> = "กิน".chars().collect();
         // Distance is 5 but max_dist is 2 — should return 3 (max_dist + 1).
         assert_eq!(levenshtein(&a_chars, "สวัสดีครับ", 2), 3);
+    }
+
+    // did_you_mean / correct_text tests ----------------------------------------
+
+    #[test]
+    fn did_you_mean_correct_word_returns_none() {
+        // "กิน" is in the built-in dictionary — edit distance 0 → None
+        assert_eq!(checker().did_you_mean("กิน"), None);
+    }
+
+    #[test]
+    fn did_you_mean_misspelled_word_returns_suggestion() {
+        // "กินข้า" is "กินข้าว" with the final ว deleted — not in the dictionary
+        let result = checker().did_you_mean("กินข้า");
+        assert!(result.is_some(), "expected a suggestion for กินข้า");
+        assert_ne!(
+            result.as_deref(),
+            Some("กินข้า"),
+            "suggestion should differ from input"
+        );
+    }
+
+    #[test]
+    fn correct_text_passthrough_clean_input() {
+        let out = checker().correct_text("กินข้าวกับปลา");
+        assert!(!out.is_empty(), "output should not be empty");
+        // No Unknown tokens expected for well-known words
+        let tokenizer = crate::segmenter::Tokenizer::new();
+        let tokens = tokenizer.segment(&out);
+        assert!(
+            tokens
+                .iter()
+                .all(|t| t.kind != crate::token::TokenKind::Unknown),
+            "expected no Unknown tokens in corrected output; got: {tokens:?}"
+        );
     }
 }

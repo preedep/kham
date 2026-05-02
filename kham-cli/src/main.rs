@@ -30,6 +30,7 @@ use std::time::Instant;
 use clap::Parser;
 use colored::Colorize;
 use kham_core::fts::FtsTokenizer;
+use kham_core::romanizer::RomanizationMap;
 use kham_core::soundex::SoundexAlgorithm;
 use kham_core::{TokenKind, TokenStream, Tokenizer};
 use log::{debug, info, warn};
@@ -140,6 +141,12 @@ struct Cli {
     /// Output format: text (default), json, csv.
     #[arg(long, default_value = "text", value_name = "FORMAT")]
     format: String,
+
+    /// Segment text and romanize every Thai token to RTGS Latin.
+    /// Non-Thai tokens (numbers, Latin, punctuation) are passed through unchanged.
+    /// Incompatible with --fts.
+    #[arg(long)]
+    romanize: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -190,6 +197,12 @@ fn main() {
         warn!("--soundex has no effect without --fts");
     }
 
+    if cli.romanize && cli.fts {
+        warn!(
+            "--romanize is ignored in --fts mode; romanization appears in syn= field via --soundex"
+        );
+    }
+
     if cli.confidence && (cli.format == "json" || cli.format == "csv") {
         warn!(
             "--confidence has no effect with --format {}; confidence is always included",
@@ -209,6 +222,10 @@ fn main() {
 // ---------------------------------------------------------------------------
 
 fn run_basic_mode(cli: &Cli) {
+    if cli.romanize {
+        run_romanize_mode(cli);
+        return;
+    }
     debug!("Building tokenizer (keep_whitespace={})", cli.whitespace);
     let t0 = Instant::now();
 
@@ -388,6 +405,33 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
                 })
                 .collect();
             println!("{}", parts.join(&cli.sep));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Romanize mode
+// ---------------------------------------------------------------------------
+
+fn run_romanize_mode(cli: &Cli) {
+    let map = RomanizationMap::builtin();
+    let process = |text: &str| {
+        let out = map.romanize_sentence(text);
+        println!("{out}");
+    };
+    match cli.text {
+        Some(ref text) => process(text),
+        None => {
+            let stdin = io::stdin();
+            for line in stdin.lock().lines() {
+                match line {
+                    Ok(text) => process(&text),
+                    Err(e) => {
+                        eprintln!("kham: read error: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
         }
     }
 }

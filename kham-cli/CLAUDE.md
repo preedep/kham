@@ -17,6 +17,7 @@ CLI binary using `clap`. Exposes user-facing runtime flags only — not internal
 | `--confidence` | Append `conf=<val>` per token in text output mode (e.g. `กิน:Thai:conf=0.90`). In FTS text mode, appends a `conf=<val>` tab-separated field. No effect with `--format json` or `--format csv` (confidence is always included there). |
 | `--min-confidence <MIN>` | Filter output to tokens with confidence ≥ MIN (0.0–1.0). Works in both basic and FTS mode. |
 | `--format <FORMAT>` | Output format: `text` (default), `json`, `csv`. `text` = current behaviour. `json` = one JSON array per input line. `csv` = header row then data rows (comma-separated, fields quoted if needed). |
+| `--romanize` | Segment and romanize Thai text to RTGS Latin. Non-Thai tokens pass through unchanged. Incompatible with --fts. |
 
 Combined `--kind --spans` produces `กิน:Thai:0-3`.
 
