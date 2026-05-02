@@ -91,9 +91,9 @@ SELECT tokid, token
 FROM ts_parse('kham', 'ของ')
 ORDER BY tokid, token;
 
--- ── 15. Stopwords appear in tsvector (kham_dict=simple, no PG-level filtering)
+-- ── 15. Stopword suppression — กับ absent from tsvector in 0.7.0 ─────────────
 
-SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'กับ') AS stopword_indexed;
+SELECT 'กับ' NOT IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา'))) AS stopword_suppressed;
 
 -- ── 16. Thai + Arabic number: กินข้าว 3 มื้อ ────────────────────────────────
 

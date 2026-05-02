@@ -11,7 +11,7 @@
 -- for it so PostgreSQL does not include it in the tsvector.
 SELECT 'กับ' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))
     AS stopword_present;
- stopword_present
+ stopword_present 
 ------------------
  f
 (1 row)
@@ -19,7 +19,7 @@ SELECT 'กับ' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กิน�
 -- ── 2. Content word retained after stopword ───────────────────────────────────
 SELECT 'ปลา' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))
     AS content_present;
- content_present
+ content_present 
 -----------------
  t
 (1 row)
@@ -29,7 +29,7 @@ SELECT 'ปลา' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กิน�
 -- kham_fts_dict expands it to [๑๒๓, 123], so querying 123 finds ๑๒๓.
 SELECT '123' IN (SELECT lexeme FROM unnest(to_tsvector('kham', '๑๒๓')))
     AS ascii_indexed;
- ascii_indexed
+ ascii_indexed 
 ---------------
  t
 (1 row)
@@ -37,7 +37,7 @@ SELECT '123' IN (SELECT lexeme FROM unnest(to_tsvector('kham', '๑๒๓')))
 -- ── 4. Thai number normalization — ASCII query matches Thai digit document ────
 SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '123')
     AS found_by_ascii;
- found_by_ascii
+ found_by_ascii 
 ----------------
  t
 (1 row)
@@ -46,7 +46,7 @@ SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '123')
 -- กิน (eat) is tagged VERB in the built-in POS table.
 SELECT 'pos_verb' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กิน')))
     AS pos_verb_indexed;
- pos_verb_indexed
+ pos_verb_indexed 
 ------------------
  t
 (1 row)
@@ -55,7 +55,7 @@ SELECT 'pos_verb' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กิน')
 -- ปลา (fish) is tagged NOUN in the built-in POS table.
 SELECT 'pos_noun' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')))
     AS pos_noun_indexed;
- pos_noun_indexed
+ pos_noun_indexed 
 ------------------
  t
 (1 row)
@@ -64,7 +64,7 @@ SELECT 'pos_noun' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')
 SELECT count(*) AS udom83_dict_exists
 FROM pg_ts_dict
 WHERE dictname = 'kham_fts_dict_udom83';
- udom83_dict_exists
+ udom83_dict_exists 
 --------------------
                   1
 (1 row)
@@ -73,7 +73,7 @@ WHERE dictname = 'kham_fts_dict_udom83';
 SELECT count(*) AS metasound_dict_exists
 FROM pg_ts_dict
 WHERE dictname = 'kham_fts_dict_metasound';
- metasound_dict_exists
+ metasound_dict_exists 
 -----------------------
                      1
 (1 row)
@@ -86,7 +86,7 @@ ALTER TEXT SEARCH CONFIGURATION kham_udom83
 ALTER TEXT SEARCH CONFIGURATION kham_udom83
     ADD MAPPING FOR latin, number, unknown WITH kham_dict;
 SELECT to_tsvector('kham_udom83', 'ปลา') IS NOT NULL AS udom83_works;
- udom83_works
+ udom83_works 
 --------------
  t
 (1 row)
@@ -96,7 +96,7 @@ SELECT EXISTS (
     SELECT 1 FROM unnest(to_tsvector('kham_udom83', 'ปลา'))
     WHERE lexeme ~ '^[0-9]'
 ) AS udom83_soundex_indexed;
- udom83_soundex_indexed
+ udom83_soundex_indexed 
 ------------------------
  t
 (1 row)
@@ -108,7 +108,7 @@ ALTER TEXT SEARCH CONFIGURATION kham_metasound
 ALTER TEXT SEARCH CONFIGURATION kham_metasound
     ADD MAPPING FOR latin, number, unknown WITH kham_dict;
 SELECT to_tsvector('kham_metasound', 'ปลา') IS NOT NULL AS metasound_works;
- metasound_works
+ metasound_works 
 -----------------
  t
 (1 row)
@@ -118,7 +118,7 @@ SELECT EXISTS (
     SELECT 1 FROM unnest(to_tsvector('kham_metasound', 'ปลา'))
     WHERE lexeme ~ '^[0-9]'
 ) AS metasound_soundex_indexed;
- metasound_soundex_indexed
+ metasound_soundex_indexed 
 ---------------------------
  t
 (1 row)
@@ -126,7 +126,7 @@ SELECT EXISTS (
 -- ── 13. POS filtering — query for pos_verb matches document with a verb ────────
 -- Use the tsquery literal cast so the underscore is treated as part of the lexeme.
 SELECT to_tsvector('kham', 'กิน') @@ 'pos_verb'::tsquery AS found_by_pos;
- found_by_pos
+ found_by_pos 
 --------------
  t
 (1 row)
@@ -136,7 +136,7 @@ SELECT to_tsvector('kham', 'กิน') @@ 'pos_verb'::tsquery AS found_by_pos;
 SELECT
     EXISTS (SELECT 1 FROM unnest(to_tsvector('kham', 'ปลา'))        WHERE lexeme ~ '^[0-9]') AS lk82_code,
     EXISTS (SELECT 1 FROM unnest(to_tsvector('kham_udom83', 'ปลา')) WHERE lexeme ~ '^[0-9]') AS udom83_code;
- lk82_code | udom83_code
+ lk82_code | udom83_code 
 -----------+-------------
  t         | t
 (1 row)

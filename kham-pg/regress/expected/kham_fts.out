@@ -96,7 +96,7 @@ SELECT to_tsvector('kham', 'กินข้าว')::text;
 SELECT
     ('กับ' NOT IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))) AS stopword_suppressed,
     ('ปลา' IN     (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))) AS content_indexed;
- stopword_suppressed | content_indexed
+ stopword_suppressed | content_indexed 
 ---------------------+-----------------
  t                   | t
 (1 row)
@@ -245,7 +245,7 @@ SELECT
     ('ปลา' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')))) AS word_indexed,
     EXISTS (SELECT 1 FROM unnest(to_tsvector('kham', 'ปลา')) WHERE lexeme ~ '^[0-9]') AS soundex_indexed,
     ('pla' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')))) AS rtgs_indexed;
- word_indexed | soundex_indexed | rtgs_indexed
+ word_indexed | soundex_indexed | rtgs_indexed 
 --------------+-----------------+--------------
  t            | t               | t
 (1 row)
