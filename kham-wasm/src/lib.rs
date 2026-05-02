@@ -617,6 +617,56 @@ pub fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
         .collect()
 }
 
+/// Return the single best spelling suggestion for `word`, or an empty string
+/// if the word is already correct or no candidate is found within edit distance 2.
+///
+/// JavaScript note: use `=== ""` to detect "no suggestion"; an empty result
+/// means the word is likely correct or unrecognised.
+#[wasm_bindgen]
+pub fn spell_did_you_mean(word: &str) -> String {
+    SpellChecker::builtin()
+        .did_you_mean(word)
+        .unwrap_or_default()
+}
+
+/// Correct misspelled unknown tokens in `text` using the built-in dictionary.
+///
+/// Segments `text` into tokens, replaces each `Unknown` token (≥ 2 chars)
+/// with the best spelling suggestion if one exists within edit distance 2, and
+/// joins the result. Known tokens are passed through unchanged.
+#[wasm_bindgen]
+pub fn spell_correct_text(text: &str) -> String {
+    SpellChecker::builtin().correct_text(text)
+}
+
+/// Segment `text` and romanize it to RTGS Latin.
+///
+/// Thai and Named tokens are converted to RTGS romanization; Latin, Number,
+/// Punctuation, and other token kinds pass through unchanged. Whitespace
+/// between tokens is preserved.
+#[wasm_bindgen]
+pub fn romanize_sentence(text: &str) -> String {
+    RomanizationMap::builtin().romanize_sentence(text)
+}
+
+/// Extract up to `max_n` keyphrases (bigrams and trigrams) from `text`,
+/// ranked by TF × average-IDF of constituent words.
+///
+/// Stopwords and single-character tokens are excluded as phrase constituents.
+/// Returns an empty array for very short text or `max_n = 0`.
+#[wasm_bindgen]
+pub fn extract_phrases(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract_phrases(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Keyword
 // ---------------------------------------------------------------------------

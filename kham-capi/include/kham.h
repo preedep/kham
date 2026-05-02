@@ -646,6 +646,69 @@ struct KhamSpellList *kham_spell_suggestions(const char *word, uintptr_t max_n);
 void kham_spell_list_free(struct KhamSpellList *list);
 
 /**
+ * Return the single best spelling suggestion for `word`.
+ *
+ * Returns a newly allocated null-terminated UTF-8 string, or `NULL` if the
+ * word is already correct or no candidate is found within edit distance 2.
+ * Free with [`kham_string_free`].
+ *
+ * # Safety
+ *
+ * * `word` must be a valid null-terminated UTF-8 string.
+ * * Returns `NULL` if `word` is null or contains invalid UTF-8.
+ */
+char *kham_spell_did_you_mean(const char *word);
+
+/**
+ * Correct misspelled unknown tokens in `text` using the built-in dictionary.
+ *
+ * Segments `text`, replaces each `Unknown` token (≥ 2 chars) with the best
+ * spelling suggestion within edit distance 2, and returns the corrected text.
+ * Known tokens are passed through unchanged.
+ *
+ * Returns a newly allocated null-terminated UTF-8 string.
+ * Free with [`kham_string_free`].
+ *
+ * # Safety
+ *
+ * * `text` must be a valid null-terminated UTF-8 string.
+ * * Returns `NULL` if `text` is null or contains invalid UTF-8.
+ */
+char *kham_spell_correct_text(const char *text);
+
+/**
+ * Segment `text` and romanize it to RTGS Latin.
+ *
+ * Thai and Named tokens are converted to RTGS romanization; other token kinds
+ * (Latin, Number, Punctuation, etc.) pass through unchanged. Whitespace is
+ * preserved between tokens.
+ *
+ * Returns a newly allocated null-terminated UTF-8 string.
+ * Free with [`kham_string_free`].
+ *
+ * # Safety
+ *
+ * * `text` must be a valid null-terminated UTF-8 string.
+ * * Returns `NULL` if `text` is null or contains invalid UTF-8.
+ */
+char *kham_romanize_sentence(const char *text);
+
+/**
+ * Extract up to `max_n` keyphrases (bigrams and trigrams) from `text`,
+ * ranked by TF × average-IDF of constituent words.
+ *
+ * Returns a heap-allocated [`KhamKeywordList`]. Each entry's `word` field
+ * contains the phrase text. Free with [`kham_keyword_list_free`].
+ *
+ * # Safety
+ *
+ * * `text` must be a valid null-terminated UTF-8 string.
+ * * The returned pointer must be freed with [`kham_keyword_list_free`].
+ * * Returns `NULL` if `text` is null, contains invalid UTF-8, or `max_n` is 0.
+ */
+struct KhamKeywordList *kham_extract_phrases(const char *text, uintptr_t max_n);
+
+/**
  * Extract up to `max_n` keywords from `text`, ranked by TF × IDF_proxy.
  *
  * Stopwords and single-character tokens are excluded. Returns `NULL` when

@@ -695,6 +695,96 @@ fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
         .collect()
 }
 
+/// Return the single best spelling suggestion for ``word``, or ``None`` if the
+/// word is already correct or no candidate is found within edit distance 2.
+///
+/// Args:
+///     word (str): Potentially misspelled Thai word.
+///
+/// Returns:
+///     str | None: The best suggestion, or ``None``.
+///
+/// Example:
+///     >>> kham.spell_did_you_mean("กานข้าว")
+///     'กินข้าว'
+///     >>> kham.spell_did_you_mean("กิน") is None
+///     True
+#[pyfunction]
+fn spell_did_you_mean(word: &str) -> Option<String> {
+    SpellChecker::builtin().did_you_mean(word)
+}
+
+/// Correct misspelled unknown tokens in ``text`` using the built-in dictionary.
+///
+/// Segments ``text`` into tokens, replaces each ``Unknown`` token (≥ 2 chars)
+/// with the best spelling suggestion if one exists within edit distance 2, and
+/// joins the result. Known tokens are passed through unchanged.
+///
+/// Args:
+///     text (str): Input text.
+///
+/// Returns:
+///     str: Corrected text.
+///
+/// Example:
+///     >>> kham.spell_correct_text("กานข้าว")
+///     'กินข้าว'
+#[pyfunction]
+fn spell_correct_text(text: &str) -> String {
+    SpellChecker::builtin().correct_text(text)
+}
+
+/// Segment ``text`` and romanize it to RTGS Latin.
+///
+/// Thai and Named tokens are converted to RTGS romanization; all other
+/// token kinds (Latin, Number, Punctuation, etc.) pass through unchanged.
+/// Whitespace between tokens is preserved.
+///
+/// Args:
+///     text (str): Input text (may contain mixed scripts).
+///
+/// Returns:
+///     str: Romanized text.
+///
+/// Example:
+///     >>> kham.romanize_sentence("กินข้าว")
+///     'kin khao'
+#[pyfunction]
+fn romanize_sentence(text: &str) -> String {
+    RomanizationMap::builtin().romanize_sentence(text)
+}
+
+/// Extract up to ``max_n`` keyphrases (bigrams and trigrams) from ``text``,
+/// ranked by TF × average-IDF of constituent words.
+///
+/// Stopwords and single-character tokens are excluded as phrase constituents.
+/// Returns an empty list for very short text or ``max_n = 0``.
+///
+/// Args:
+///     text (str): Input document text.
+///     max_n (int): Maximum number of keyphrases to return.
+///
+/// Returns:
+///     list[Keyword]: Each entry has ``word`` (the phrase text), ``score``,
+///     and ``count``.
+///
+/// Example:
+///     >>> khs = kham.extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 3)
+///     >>> [k.word for k in khs]
+///     ['การพัฒนาซอฟต์แวร์', ...]
+#[pyfunction]
+fn extract_phrases(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract_phrases(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Keyword
 // ---------------------------------------------------------------------------
@@ -845,9 +935,15 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Spell checking
     m.add_function(wrap_pyfunction!(spell_suggestions, m)?)?;
+    m.add_function(wrap_pyfunction!(spell_did_you_mean, m)?)?;
+    m.add_function(wrap_pyfunction!(spell_correct_text, m)?)?;
+
+    // Romanization (sentence-level)
+    m.add_function(wrap_pyfunction!(romanize_sentence, m)?)?;
 
     // Keyword extraction
     m.add_function(wrap_pyfunction!(extract_keywords, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_phrases, m)?)?;
 
     Ok(())
 }
