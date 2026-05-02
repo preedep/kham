@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — 0.8.0
+
+### Added
+
+**kham-core**
+- `Token::confidence: f32` — segmentation confidence score on every token; 0.0 for Unknown tokens, 1.0 for unambiguous dict matches; intermediate values reflect TNC frequency and boundary ambiguity (competing edge count from the newmm DP pass); propagated into `FtsToken::confidence` and all bindings (Python, WASM, C FFI)
+
+---
+
 ## [0.7.0] - 2026-05-02
 
 ### Added
@@ -23,7 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `kham_tsquery(text) → tsquery` — SQL STABLE helper; shorthand for `plainto_tsquery('kham', text)`
 - `kham_features` regress suite — 14 SQL tests covering all new features
 - Docker Hub images — `preedep/kham-pg:<version>-pg<N>` multi-arch images (amd64 + arm64) for PostgreSQL 14–18; `preedep/kham-pg:latest` points to PG 17; no Rust toolchain required
-- `Token::confidence: f32` — segmentation confidence score on every token; 0.0 for Unknown tokens, 1.0 for unambiguous dict matches; intermediate values reflect TNC frequency and boundary ambiguity (competing edge count from the newmm DP pass); propagated into `FtsToken::confidence` and all bindings (Python, WASM, C FFI)
 
 ### Changed
 
