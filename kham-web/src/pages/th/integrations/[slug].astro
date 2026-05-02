@@ -29,6 +29,24 @@ const integrations: Record<string, IntegrationData> = {
     description: 'kham-pg เป็น extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL แต่ละ token ภาษาไทยขยายเป็น lexeme สูงสุด 6 ตัวในตำแหน่งเดียวกัน: คำเอง, รหัส soundex lk82, RTGS, รูป ASCII (สำหรับเลขไทย) และ tag ชนิดคำ (POS) คำ stopword จะถูกกรองออกอัตโนมัติ',
     sections: [
       {
+        heading: 'Docker Hub (เริ่มใช้งานเร็วที่สุด)',
+        body: 'ดึง image พร้อมใช้ — ไม่ต้องติดตั้ง Rust, ไม่ต้อง build เอง รองรับ amd64 + arm64',
+        code: `# PostgreSQL 17 พร้อม kham_pg ติดตั้งไว้แล้ว
+docker run --rm -e POSTGRES_PASSWORD=secret \\
+  -p 5432:5432 preedep/kham-pg:latest
+
+# ระบุ PostgreSQL version (14–18)
+docker run --rm -e POSTGRES_PASSWORD=secret \\
+  -p 5432:5432 preedep/kham-pg:0.7.0-pg17
+
+# เชื่อมต่อและใช้งานได้เลย
+psql -h localhost -U postgres -c "
+  CREATE EXTENSION kham_pg;
+  SELECT to_tsvector('kham', 'กินข้าวกับปลา');
+"`,
+        lang: 'bash', label: 'shell',
+      },
+      {
         heading: 'สิ่งที่ต้องมีก่อน',
         body: 'PostgreSQL 14 ขึ้นไป, Rust toolchain (1.85+) และ pg_config ใน PATH',
         code: 'pg_config --version   # PostgreSQL 14 หรือใหม่กว่า',

@@ -29,6 +29,25 @@ const integrations: Record<string, IntegrationData> = {
     description: 'kham-pg is a PostgreSQL text-search parser extension. It tokenises Thai text for full-text search, replacing the built-in parser for Thai-script documents. Each Thai token expands to up to six colocated lexemes: the word itself, lk82 soundex code, RTGS romanization, ASCII number form, and a POS tag. Thai stopwords are suppressed automatically.',
     sections: [
       {
+        heading: 'Docker Hub (fastest start)',
+        body: 'Pull a ready-to-use image — no Rust toolchain, no compiler, no manual install. Multi-arch: amd64 + arm64.',
+        code: `# PostgreSQL 17 with kham_pg pre-installed
+docker run --rm -e POSTGRES_PASSWORD=secret \\
+  -p 5432:5432 preedep/kham-pg:latest
+
+# Specific PostgreSQL version (14–18)
+docker run --rm -e POSTGRES_PASSWORD=secret \\
+  -p 5432:5432 preedep/kham-pg:0.7.0-pg17
+
+# Connect and use immediately
+psql -h localhost -U postgres -c "
+  CREATE EXTENSION kham_pg;
+  SELECT to_tsvector('kham', 'กินข้าวกับปลา');
+"`,
+        lang: 'bash',
+        label: 'shell',
+      },
+      {
         heading: 'Prerequisites',
         body: 'PostgreSQL 14 or later, Rust toolchain (1.85+), and pg_config in your PATH.',
         code: 'pg_config --version   # PostgreSQL 14 or later\nrustup target add x86_64-unknown-linux-gnu  # if cross-compiling',
