@@ -106,6 +106,9 @@ dist:
 	# Control and SQL
 	cp META.json kham_pg.control $(DIST_NAME)/
 	cp sql/kham_pg--$(EXT_VERSION).sql $(DIST_NAME)/sql/
+	cp sql/kham_pg--0.1.0--0.2.0.sql $(DIST_NAME)/sql/
+	cp sql/kham_pg--0.1.3--0.2.0.sql $(DIST_NAME)/sql/
+	cp sql/kham_pg--0.2.0--0.3.0.sql $(DIST_NAME)/sql/
 	# Source
 	cp src/lib.rs src/shim.c $(DIST_NAME)/src/
 	cp build.rs $(DIST_NAME)/
