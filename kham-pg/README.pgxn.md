@@ -17,11 +17,13 @@ Named entities (persons, places, organisations) are tagged automatically.
 
 ## Install
 
-Choose the path that fits your environment.
+**Try Option 1 first.** Pre-built binaries require no compiler or Rust toolchain.
+Fall back to Option 2 only if a pre-built binary is not available for your
+platform or PostgreSQL version.
 
 ---
 
-### Option 1 — Pre-built binary (no Rust required)
+### Option 1 — Pre-built binary (recommended, no Rust required)
 
 Pre-compiled `.so` files are available for **Linux x86_64** and **Linux aarch64**
 (AWS Graviton, Ampere) for PostgreSQL 14–18 on the
@@ -62,10 +64,11 @@ psql -c "CREATE EXTENSION kham_pg;"
 
 ---
 
-### Option 2 — Build from source
+### Option 2 — Build from source (fallback)
 
-Builds the extension from source using your local `pg_config` and Rust toolchain.
-Supports any platform where PostgreSQL and Rust are available (Linux, macOS).
+Use this path if no pre-built binary is available for your platform or
+PostgreSQL version. Supports any platform where PostgreSQL and Rust are
+available (Linux, macOS).
 
 **Prerequisites**
 
