@@ -227,10 +227,11 @@ let input = "ธนาคาร100แห่ง";
 let tokens = tok.segment(input);
 
 for t in &tokens {
-    // t.text      — &str (zero-copy slice of input)
-    // t.span      — Range<usize> byte offsets
-    // t.char_span — Range<usize> Unicode scalar-value offsets
-    // t.kind      — TokenKind
+    // t.text       — &str (zero-copy slice of input)
+    // t.span       — Range<usize> byte offsets
+    // t.char_span  — Range<usize> Unicode scalar-value offsets
+    // t.kind       — TokenKind
+    // t.confidence — f32: 0.0 (Unknown) … 1.0 (high-confidence dict match)
 
     assert_eq!(&input[t.span.clone()], t.text);
 }
@@ -247,13 +248,14 @@ for t in &tokens {
 tokens = kham.segment_tokens("ธนาคาร100แห่ง")
 
 for t in tokens:
-    # t.text       — str
+    # t.text        — str
     # t.byte_start / t.byte_end  — UTF-8 byte offsets
     # t.char_start / t.char_end  — Unicode scalar-value offsets
-    # t.kind       — str: "Thai" | "Latin" | "Number" | "Punctuation"
-    #                      "Emoji" | "Whitespace" | "Unknown"
-    #                      "Person" | "Place" | "Org"  (Named entities)
-    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}")`,
+    # t.kind        — str: "Thai" | "Latin" | "Number" | "Punctuation"
+    #                       "Emoji" | "Whitespace" | "Unknown"
+    #                       "Person" | "Place" | "Org"  (Named entities)
+    # t.confidence  — float: 0.0 (Unknown) … 1.0 (high-confidence dict match)
+    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}  conf={t.confidence:.2f}")`,
             },
             {
               label: 'WASM',
@@ -264,13 +266,14 @@ await init();
 const tokens = segment_tokens("ธนาคาร100แห่ง");
 
 for (const t of tokens) {
-  // t.text       — string
+  // t.text        — string
   // t.byte_start / t.byte_end  — UTF-8 byte offsets
   // t.char_start / t.char_end  — Unicode scalar-value offsets
-  // t.kind       — "Thai" | "Latin" | "Number" | "Punctuation"
-  //                "Emoji" | "Whitespace" | "Unknown"
-  //                "Person" | "Place" | "Org"  (Named entities)
-  console.log(t.text, t.kind, t.char_start, t.char_end);
+  // t.kind        — "Thai" | "Latin" | "Number" | "Punctuation"
+  //                 "Emoji" | "Whitespace" | "Unknown"
+  //                 "Person" | "Place" | "Org"  (Named entities)
+  // t.confidence  — number: 0.0 (Unknown) … 1.0 (high-confidence dict match)
+  console.log(t.text, t.kind, t.char_start, t.char_end, t.confidence);
 }`,
             },
             {
@@ -279,12 +282,13 @@ for (const t of tokens) {
               code: `#include "kham.h"
 
 // KhamToken fields:
-//   text       — char* (null-terminated UTF-8)
+//   text        — char* (null-terminated UTF-8)
 //   byte_start / byte_end  — size_t byte offsets
 //   char_start / char_end  — size_t Unicode scalar-value offsets
-//   kind       — char*: "Thai" | "Latin" | "Number" | "Punctuation"
-//                       "Emoji" | "Whitespace" | "Unknown"
-//                       "Person" | "Place" | "Org"  (FTS pipeline only)
+//   kind        — char*: "Thai" | "Latin" | "Number" | "Punctuation"
+//                        "Emoji" | "Whitespace" | "Unknown"
+//                        "Person" | "Place" | "Org"  (FTS pipeline only)
+//   confidence  — float: 0.0 (Unknown) … 1.0 (high-confidence dict match)
 
 KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
 for (size_t i = 0; i < list->len; i++) {
@@ -439,7 +443,7 @@ let fts2 = FtsTokenizer::builder()
               code: `import kham
 
 # FtsToken fields: text, position, kind, is_stop, roman,
-#                  pos, ne, synonyms (list), trigrams (list)
+#                  pos, ne, synonyms (list), trigrams (list), confidence (float)
 for t in kham.segment_fts("นายกรัฐมนตรีกินข้าว"):
     print(f"{t.text:10} pos={t.pos!r:15} ne={t.ne!r} stop={t.is_stop}")
 
@@ -460,7 +464,8 @@ await init();
 
 // FtsToken properties: text, position, kind, is_stop, roman,
 //                      pos (string|null), ne (string|null),
-//                      synonyms (string[]), trigrams (string[])
+//                      synonyms (string[]), trigrams (string[]),
+//                      confidence (number: 0.0…1.0)
 const tokens = segment_fts("นายกรัฐมนตรีกินข้าว");
 for (const t of tokens) {
   console.log(t.text, '| pos:', t.pos, '| ne:', t.ne,

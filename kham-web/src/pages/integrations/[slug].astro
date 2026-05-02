@@ -377,12 +377,13 @@ for tok in tokens:
       {
         heading: 'Token fields',
         body: 'Every Token object exposes the following attributes:',
-        code: `tok.text        # str  — the token text
-tok.kind        # str  — "Thai" | "Latin" | "Number" | "Punctuation" | "Emoji" | "Whitespace" | "Unknown"
-tok.char_start  # int  — Unicode scalar-value start offset (use with str.slice())
-tok.char_end    # int  — Unicode scalar-value end offset
-tok.byte_start  # int  — UTF-8 byte start offset
-tok.byte_end    # int  — UTF-8 byte end offset`,
+        code: `tok.text        # str   — the token text
+tok.kind        # str   — "Thai" | "Latin" | "Number" | "Punctuation" | "Emoji" | "Whitespace" | "Unknown"
+tok.char_start  # int   — Unicode scalar-value start offset (use with str.slice())
+tok.char_end    # int   — Unicode scalar-value end offset
+tok.byte_start  # int   — UTF-8 byte start offset
+tok.byte_end    # int   — UTF-8 byte end offset
+tok.confidence  # float — 0.0 (Unknown) … 1.0 (high-confidence dict match)`,
         lang: 'python',
         label: 'reference',
       },
@@ -497,7 +498,8 @@ tok.kind        // string — "Thai" | "Latin" | "Number" | "Punctuation" | "Emo
 tok.char_start  // number — Unicode scalar-value start (JS string index for BMP text)
 tok.char_end    // number — Unicode scalar-value end
 tok.byte_start  // number — UTF-8 byte start offset
-tok.byte_end    // number — UTF-8 byte end offset`,
+tok.byte_end    // number — UTF-8 byte end offset
+tok.confidence  // number — 0.0 (Unknown) … 1.0 (high-confidence dict match)`,
         lang: 'typescript',
         label: 'types.ts',
       },

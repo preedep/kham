@@ -306,12 +306,13 @@ for tok in tokens:
       },
       {
         heading: 'Field ของ Token',
-        code: `tok.text        # str  — ข้อความ token
-tok.kind        # str  — "Thai" | "Latin" | "Number" | "Punctuation" | ...
-tok.char_start  # int  — จุดเริ่มต้น Unicode (ใช้กับ str.slice())
-tok.char_end    # int  — จุดสิ้นสุด Unicode
-tok.byte_start  # int  — byte offset UTF-8 เริ่มต้น
-tok.byte_end    # int  — byte offset UTF-8 สิ้นสุด`,
+        code: `tok.text        # str   — ข้อความ token
+tok.kind        # str   — "Thai" | "Latin" | "Number" | "Punctuation" | ...
+tok.char_start  # int   — จุดเริ่มต้น Unicode (ใช้กับ str.slice())
+tok.char_end    # int   — จุดสิ้นสุด Unicode
+tok.byte_start  # int   — byte offset UTF-8 เริ่มต้น
+tok.byte_end    # int   — byte offset UTF-8 สิ้นสุด
+tok.confidence  # float — 0.0 (Unknown) … 1.0 (dict match ที่มีความมั่นใจสูง)`,
         lang: 'python', label: 'reference',
       },
       {

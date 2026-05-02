@@ -13,7 +13,7 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 | `dict` | Double-Array Trie (DARTS), built-in `words_th.txt` via `include_bytes!` |
 | `freq` | TNC frequency table (`tnc_freq.txt`), `FreqMap` used by DP scorer |
 | `segmenter` | DAG-based maximal matching (newmm algorithm) |
-| `token` | `Token` struct with text, byte span, char span, `TokenKind` |
+| `token` | `Token` struct with text, byte span, char span, `TokenKind`, `confidence: f32` |
 | `stopwords` | `StopwordSet`: sorted `Vec<String>`, binary-search lookup |
 | `synonym` | `SynonymMap`: `BTreeMap<canonical → Vec<synonym>>` from TSV |
 | `ngram` | `char_ngrams` / `token_ngrams` — OOV fallback indexing |
@@ -97,6 +97,7 @@ pub struct FtsToken {
     pub trigrams: Vec<String>,         // populated for Unknown tokens only
     pub pos: Option<PosTag>,           // Thai tokens only; None for OOV / non-Thai
     pub ne: Option<NamedEntityKind>,   // Some(k) iff kind == TokenKind::Named(k)
+    pub confidence: f32,               // 0.0 (Unknown) … 1.0; propagated from Token::confidence
 }
 
 FtsTokenizer::new()

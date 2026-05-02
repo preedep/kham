@@ -15,7 +15,8 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.5.0 | `kham-pg` ts_headline support, `kham_fts_dict` custom dictionary template (phonetic + RTGS lexemes), C FFI parity (`kham-capi`), full WASM/Python feature parity, kham-web live demo site |
 | v0.5.1 | WASM u32 overflow fix for large numbers, NE tag correction (ประเทศไทย PERSON→PLACE), kham-web dark mode |
 | v0.6.0 | SpellChecker, KeyExtractor, spell/keyword bindings (WASM/Python/CAPI), kham-sqlite custom synonyms/dict/Windows/Android, CI pytest + wasm tests |
-| kham-pg 0.7.0 | Stopword suppression, Thai number normalization, udom83/MetaSound soundex dict variants, POS lexeme expansion (`pos_verb`, `pos_noun`, …), `kham_features` regress suite |
+| v0.7.0 | Stopword suppression, Thai number normalization, udom83/MetaSound soundex dict variants, POS lexeme expansion (`pos_verb`, `pos_noun`, …), `kham_features` regress suite |
+| v0.8.0 | `Token::confidence: f32` — segmentation confidence derived from DP ambiguity (edge count + TNC frequency); propagated to FtsToken and all bindings |
 
 ---
 

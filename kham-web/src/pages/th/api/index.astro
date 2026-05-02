@@ -228,8 +228,9 @@ let tokens = tok.segment(input);
 for t in &tokens {
     // t.text      — &str (zero-copy slice ของ input)
     // t.span      — Range<usize> byte offsets
-    // t.char_span — Range<usize> Unicode scalar-value offsets
-    // t.kind      — TokenKind
+    // t.char_span   — Range<usize> Unicode scalar-value offsets
+    // t.kind        — TokenKind
+    // t.confidence  — f32: 0.0 (Unknown) … 1.0 (dict match ที่มีความมั่นใจสูง)
 
     assert_eq!(&input[t.span.clone()], t.text);
 }
@@ -249,10 +250,11 @@ for t in tokens:
     # t.text       — str
     # t.byte_start / t.byte_end  — UTF-8 byte offsets
     # t.char_start / t.char_end  — Unicode scalar-value offsets
-    # t.kind       — str: "Thai" | "Latin" | "Number" | "Punctuation"
-    #                      "Emoji" | "Whitespace" | "Unknown"
-    #                      "Person" | "Place" | "Org"  (Named entities)
-    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}")`,
+    # t.kind        — str: "Thai" | "Latin" | "Number" | "Punctuation"
+    #                       "Emoji" | "Whitespace" | "Unknown"
+    #                       "Person" | "Place" | "Org"  (Named entities)
+    # t.confidence  — float: 0.0 (Unknown) … 1.0 (dict match ที่มีความมั่นใจสูง)
+    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}  conf={t.confidence:.2f}")`,
             },
             {
               label: 'WASM',
@@ -266,10 +268,11 @@ for (const t of tokens) {
   // t.text       — string
   // t.byte_start / t.byte_end  — UTF-8 byte offsets
   // t.char_start / t.char_end  — Unicode scalar-value offsets
-  // t.kind       — "Thai" | "Latin" | "Number" | "Punctuation"
-  //                "Emoji" | "Whitespace" | "Unknown"
-  //                "Person" | "Place" | "Org"  (Named entities)
-  console.log(t.text, t.kind, t.char_start, t.char_end);
+  // t.kind        — "Thai" | "Latin" | "Number" | "Punctuation"
+  //                 "Emoji" | "Whitespace" | "Unknown"
+  //                 "Person" | "Place" | "Org"  (Named entities)
+  // t.confidence  — number: 0.0 (Unknown) … 1.0
+  console.log(t.text, t.kind, t.char_start, t.char_end, t.confidence);
 }`,
             },
             {
@@ -284,6 +287,7 @@ for (const t of tokens) {
 //   kind       — char*: "Thai" | "Latin" | "Number" | "Punctuation"
 //                       "Emoji" | "Whitespace" | "Unknown"
 //                       "Person" | "Place" | "Org"  (FTS pipeline เท่านั้น)
+//   confidence — float: 0.0 (Unknown) … 1.0
 
 KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
 for (size_t i = 0; i < list->len; i++) {
@@ -438,7 +442,7 @@ let fts2 = FtsTokenizer::builder()
               code: `import kham
 
 # FtsToken fields: text, position, kind, is_stop, roman,
-#                  pos, ne, synonyms (list), trigrams (list)
+#                  pos, ne, synonyms (list), trigrams (list), confidence (float)
 for t in kham.segment_fts("นายกรัฐมนตรีกินข้าว"):
     print(f"{t.text:10} pos={t.pos!r:15} ne={t.ne!r} stop={t.is_stop}")
 
@@ -459,7 +463,8 @@ await init();
 
 // FtsToken properties: text, position, kind, is_stop, roman,
 //                      pos (string|null), ne (string|null),
-//                      synonyms (string[]), trigrams (string[])
+//                      synonyms (string[]), trigrams (string[]),
+//                      confidence (number: 0.0…1.0)
 const tokens = segment_fts("นายกรัฐมนตรีกินข้าว");
 for (const t of tokens) {
   console.log(t.text, '| pos:', t.pos, '| ne:', t.ne,
@@ -502,7 +507,7 @@ kham_fts_lexemes_free(lex, len);`,
         />
         <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
           <strong>FtsToken fields:</strong>
-          {['text','position','kind','is_stop','roman','pos','ne','synonyms','trigrams'].map(f => (
+          {['text','position','kind','is_stop','roman','pos','ne','synonyms','trigrams','confidence'].map(f => (
             <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{f}</code>
           ))}
         </div>
