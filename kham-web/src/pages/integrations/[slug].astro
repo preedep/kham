@@ -33,11 +33,11 @@ const integrations: Record<string, IntegrationData> = {
         body: 'Pull a ready-to-use image — no Rust toolchain, no compiler, no manual install. Multi-arch: amd64 + arm64.',
         code: `# PostgreSQL 17 with kham_pg pre-installed
 docker run --rm -e POSTGRES_PASSWORD=secret \\
-  -p 5432:5432 preedep/kham-pg:latest
+  -p 5432:5432 nickmsft/kham-pg:latest
 
 # Specific PostgreSQL version (14–18)
 docker run --rm -e POSTGRES_PASSWORD=secret \\
-  -p 5432:5432 preedep/kham-pg:0.7.0-pg17
+  -p 5432:5432 nickmsft/kham-pg:0.8.0-pg17
 
 # Connect and use immediately
 psql -h localhost -U postgres -c "

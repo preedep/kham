@@ -41,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `kham_tsvector(text) → tsvector` — SQL STABLE helper; shorthand for `to_tsvector('kham', text)`
 - `kham_tsquery(text) → tsquery` — SQL STABLE helper; shorthand for `plainto_tsquery('kham', text)`
 - `kham_features` regress suite — 14 SQL tests covering all new features
-- Docker Hub images — `preedep/kham-pg:<version>-pg<N>` multi-arch images (amd64 + arm64) for PostgreSQL 14–18; `preedep/kham-pg:latest` points to PG 17; no Rust toolchain required
+- Docker Hub images — `nickmsft/kham-pg:<version>-pg<N>` multi-arch images (amd64 + arm64) for PostgreSQL 14–18; `nickmsft/kham-pg:latest` points to PG 17; no Rust toolchain required
 
 ### Changed
 
