@@ -19,8 +19,9 @@ DOCKER_COMPOSE ?= docker compose
 PG_VERSION     ?= 17
 PG_VERSIONS    := 14 15 16 17 18
 
-EXT_VERSION    := 0.3.0
-DIST_NAME      := kham_pg-$(EXT_VERSION)
+EXT_VERSION       := 0.3.0
+KHAM_CORE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' ../Cargo.toml | head -1)
+DIST_NAME         := kham_pg-$(EXT_VERSION)
 
 PG_PKGLIBDIR    = $(shell $(PG_CONFIG) --pkglibdir)
 PG_SHAREDIR     = $(shell $(PG_CONFIG) --sharedir)
@@ -126,7 +127,7 @@ repository = "https://github.com/preedep/kham"\n\
 crate-type = ["cdylib"]\n\
 \n\
 [dependencies]\n\
-kham-core = { version = "$(EXT_VERSION)", features = ["std"] }\n\
+kham-core = { version = "$(KHAM_CORE_VERSION)", features = ["std"] }\n\
 \n\
 [build-dependencies]\n\
 cc = "1"\n' > $(DIST_NAME)/Cargo.toml
