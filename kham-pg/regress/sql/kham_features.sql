@@ -83,11 +83,11 @@ ALTER TEXT SEARCH CONFIGURATION kham_metasound
 
 SELECT to_tsvector('kham_metasound', 'ปลา') IS NOT NULL AS metasound_works;
 
--- ── 12. MetaSound soundex — numeric code present in tsvector ──────────────────
+-- ── 12. MetaSound soundex — soundex code present in tsvector ───────────────────
 
 SELECT EXISTS (
     SELECT 1 FROM unnest(to_tsvector('kham_metasound', 'ปลา'))
-    WHERE lexeme ~ '^[0-9]'
+    WHERE lexeme ~ '^[0-9A-J]{3}'
 ) AS metasound_soundex_indexed;
 
 -- ── 13. POS filtering — query for pos_verb matches document with a verb ────────

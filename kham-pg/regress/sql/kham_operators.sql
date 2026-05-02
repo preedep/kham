@@ -49,13 +49,13 @@ SELECT to_tsvector('kham', 'กินข้าวกับปลา')
     @@ to_tsquery('kham', 'กินข้าว & !ปลา') AS not_excluded_present;
 
 -- ── Phrase operator (phraseto_tsquery) ───────────────────────────────────────
--- กินข้าวกับปลา: กินข้าว=pos1, กับ=pos2, ปลา=pos3
+-- กินข้าวกับปลา: กินข้าว=pos1, ปลา=pos2 (กับ suppressed as stopword in 0.7.0)
 
 -- 9. Phrase — adjacent tokens (pos 1 & 2) → true
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')
     @@ phraseto_tsquery('kham', 'กินข้าว กับ') AS phrase_adjacent;
 
--- 10. Phrase — non-adjacent tokens (pos 1 & 3, gap of 2) → false
+-- 10. Phrase — กับ suppressed; กินข้าว=pos1, ปลา=pos2, now adjacent → true
 SELECT to_tsvector('kham', 'กินข้าวกับปลา')
     @@ phraseto_tsquery('kham', 'กินข้าว ปลา') AS phrase_non_adjacent;
 
