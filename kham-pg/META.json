@@ -3,7 +3,7 @@
   "abstract": "Thai word-segmentation FTS parser — tsvector, soundex, RTGS romanization, NER",
   "description": "kham_pg is a PostgreSQL text-search parser for the Thai language. Thai has no spaces between words, so standard PostgreSQL parsers produce incorrect token boundaries. kham_pg uses the kham newmm segmentation engine to split Thai text correctly, then expands each token into up to three lexemes at the same tsvector position: the normalised word, its lk82 Thai Soundex code (phonetic-fuzzy search), and its RTGS romanization (Latin-script search). Named entities (persons, places, organisations) are tagged automatically. Supports to_tsvector, plainto_tsquery, ts_rank, ts_headline, and GIN/GiST indexes. Tested on PostgreSQL 14–18.",
   "tags": ["thai", "full-text-search", "nlp", "tokenizer", "soundex", "romanization", "named-entity", "parser"],
-  "version": "0.6.0",
+  "version": "0.7.0",
   "maintainer": [
     "Preedee Ponchevin <nickmsft@mac.com>"
   ],
@@ -23,8 +23,8 @@
   "provides": {
     "kham_pg": {
       "abstract": "Thai word-segmentation FTS parser — tsvector, soundex, RTGS romanization, NER",
-      "file": "sql/kham_pg--0.6.0.sql",
-      "version": "0.6.0"
+      "file": "sql/kham_pg--0.7.0.sql",
+      "version": "0.7.0"
     }
   },
   "resources": {

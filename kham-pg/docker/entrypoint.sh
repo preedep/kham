@@ -88,6 +88,7 @@ $RUNAS "$PG_REGRESS" \
     --port="$PGPORT" \
     --user="$PGUSER" \
     kham_fts \
+    kham_features \
     kham_thai \
     kham_operators \
     kham_ranking \

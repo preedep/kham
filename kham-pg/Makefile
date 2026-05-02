@@ -19,7 +19,7 @@ DOCKER_COMPOSE ?= docker compose
 PG_VERSION     ?= 17
 PG_VERSIONS    := 14 15 16 17 18
 
-EXT_VERSION       := 0.6.0
+EXT_VERSION       := 0.7.0
 KHAM_CORE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' ../Cargo.toml | head -1)
 DIST_NAME         := kham_pg-$(EXT_VERSION)
 
@@ -112,6 +112,7 @@ dist:
 	cp sql/kham_pg--0.1.3--0.2.0.sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.2.0--0.3.0.sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.3.0--0.6.0.sql $(DIST_NAME)/sql/
+	cp sql/kham_pg--0.6.0--0.7.0.sql $(DIST_NAME)/sql/
 	# Source
 	cp src/lib.rs src/shim.c $(DIST_NAME)/src/
 	cp build.rs $(DIST_NAME)/

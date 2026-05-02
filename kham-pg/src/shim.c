@@ -43,7 +43,7 @@ extern int   kham_gettoken_impl(void *state, const char **token, int *tokenlen);
 extern void  kham_end_impl(void *state);
 
 /*
- * KhamDictOut — output buffer filled by kham_dict_lexize_impl (Rust).
+ * KhamDictOut — output buffer filled by kham_dict_lexize_*_impl (Rust).
  * count: number of valid lexeme slots (0 = stopword / error).
  * words: up to 6 null-terminated UTF-8 strings, each at most 127 bytes.
  */
@@ -53,7 +53,10 @@ typedef struct
     char words[6][128];
 } KhamDictOut;
 
+/* Three dict impl variants: lk82 (default), udom83, MetaSound */
 extern int kham_dict_lexize_impl(const char *token, int token_len, KhamDictOut *out);
+extern int kham_dict_lexize_udom83_impl(const char *token, int token_len, KhamDictOut *out);
+extern int kham_dict_lexize_metasound_impl(const char *token, int token_len, KhamDictOut *out);
 
 /* ----------------------------------------------------------------
  * startfunc — allocate parser state
@@ -220,7 +223,37 @@ kham_headline_shim(PG_FUNCTION_ARGS)
 }
 
 /* ----------------------------------------------------------------
- * kham_dict_lexize — custom dictionary: word + soundex + RTGS lexemes
+ * build_tslex — shared helper: call impl_fn, build palloc'd TSLexeme[].
+ *
+ * Returns NULL when the impl signals stopword (count=0) or on end-of-input.
+ * The TSLexeme array is NULL-terminated as required by PG.
+ * ---------------------------------------------------------------- */
+static TSLexeme *
+build_tslex(const char *token, int len,
+            int (*impl_fn)(const char *, int, KhamDictOut *))
+{
+    KhamDictOut  out;
+    TSLexeme    *res;
+    int          i;
+
+    if (token == NULL || len <= 0)
+        return NULL;
+
+    memset(&out, 0, sizeof(out));
+    impl_fn(token, len, &out);
+
+    if (out.count <= 0)
+        return NULL;   /* stopword or error */
+
+    res = (TSLexeme *) palloc0(sizeof(TSLexeme) * (out.count + 1));
+    for (i = 0; i < out.count; i++)
+        res[i].lexeme = pstrdup(out.words[i]);
+    res[out.count].lexeme = NULL;  /* NULL-terminator required by PG */
+    return res;
+}
+
+/* ----------------------------------------------------------------
+ * kham_dict_lexize — lk82 soundex + RTGS + number normalization + POS
  *
  * Signature (internal, internal, internal, internal) → internal
  * Args:
@@ -234,42 +267,38 @@ kham_headline_shim(PG_FUNCTION_ARGS)
  *          ignored entirely.
  *
  * Returns a palloc'd TSLexeme[] containing the normalised word plus
- * any soundex / RTGS synonyms computed by Rust.  The array is
- * NULL-terminated (last entry has lexeme=NULL).
+ * soundex / RTGS / number synonyms and an optional POS lexeme.
  * Returns NULL to mark the token as a stopword (not indexed).
  * ---------------------------------------------------------------- */
 Datum
 kham_dict_lexize_shim(PG_FUNCTION_ARGS)
 {
-    /* arg0 = dict state (NULL — we use no INIT function)
-     * arg1 = token text (char *)
-     * arg2 = token length (int32)
-     * arg3 = List* of subsequent tokens for multi-word recognition (PG16+, ignored) */
-    const char  *token  = (const char *) PG_GETARG_POINTER(1);
-    int          len    = PG_GETARG_INT32(2);
-    KhamDictOut  out;
-    TSLexeme    *res;
-    int          i;
+    /* arg3 = List* of subsequent tokens (PG16+); NOT a bool isNull flag */
+    const char *token = (const char *) PG_GETARG_POINTER(1);
+    int         len   = PG_GETARG_INT32(2);
+    PG_RETURN_POINTER(build_tslex(token, len, kham_dict_lexize_impl));
+}
 
-    /* In PG 16+, arg3 is a List* of subsequent tokens for multi-word
-     * recognition (not a bool isNull flag as in older PG).  We do not
-     * use multi-word recognition, so we ignore arg3 entirely.
-     * End-of-input finalization: token pointer is NULL → return NULL. */
-    if (token == NULL || len <= 0)
-        PG_RETURN_POINTER(NULL);
+/* ----------------------------------------------------------------
+ * kham_dict_lexize_udom83 — udom83 soundex variant
+ * ---------------------------------------------------------------- */
+Datum
+kham_dict_lexize_udom83_shim(PG_FUNCTION_ARGS)
+{
+    const char *token = (const char *) PG_GETARG_POINTER(1);
+    int         len   = PG_GETARG_INT32(2);
+    PG_RETURN_POINTER(build_tslex(token, len, kham_dict_lexize_udom83_impl));
+}
 
-    memset(&out, 0, sizeof(out));
-    kham_dict_lexize_impl(token, len, &out);
-
-    if (out.count <= 0)
-        PG_RETURN_POINTER(NULL);   /* treat as stopword */
-
-    res = (TSLexeme *) palloc0(sizeof(TSLexeme) * (out.count + 1));
-    for (i = 0; i < out.count; i++)
-        res[i].lexeme = pstrdup(out.words[i]);
-    res[out.count].lexeme = NULL;  /* NULL-terminator required by PG */
-
-    PG_RETURN_POINTER(res);
+/* ----------------------------------------------------------------
+ * kham_dict_lexize_metasound — MetaSound soundex variant
+ * ---------------------------------------------------------------- */
+Datum
+kham_dict_lexize_metasound_shim(PG_FUNCTION_ARGS)
+{
+    const char *token = (const char *) PG_GETARG_POINTER(1);
+    int         len   = PG_GETARG_INT32(2);
+    PG_RETURN_POINTER(build_tslex(token, len, kham_dict_lexize_metasound_impl));
 }
 
 /* ----------------------------------------------------------------

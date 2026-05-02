@@ -16,6 +16,40 @@ import Layout from '../../layouts/Layout.astro';
 
     <div class="space-y-16">
 
+      <!-- kham-pg v0.7.0 -->
+      <section>
+        <div class="flex items-center gap-4 mb-6">
+          <span class="text-2xl font-bold text-slate-900 dark:text-slate-100">kham-pg v0.7.0</span>
+          <span class="text-sm text-slate-500 dark:text-slate-400 font-mono">2026-05-02</span>
+          <a href="https://github.com/preedep/kham/releases/tag/kham-pg-v0.7.0" target="_blank" rel="noopener noreferrer"
+             class="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 border border-blue-200 dark:border-blue-700 rounded-full px-3 py-1">Release ↗</a>
+        </div>
+        <div class="space-y-6 pl-4 border-l-2 border-blue-200 dark:border-blue-800">
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>เพิ่มเติม — kham-pg
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">การกรอง stopword</strong> — คำไวยากรณ์ภาษาไทย (กับ, ใน, ของ, …) จะถูกกรองออกจาก tsvector โดยอัตโนมัติผ่าน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_fts_dict</code> ลด noise ใน index โดยไม่ต้องตั้งค่าเพิ่มเติม</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">การแปลงตัวเลขไทย</strong> — ตัวเลขไทย (๑๒๓) จะถูก index พร้อมกับรูป ASCII (123) ในตำแหน่งเดียวกัน ทำให้ค้นหาด้วย <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">plainto_tsquery('kham', '123')</code> แล้วเจอเอกสารที่มี ๑๒๓ ได้ทันที</li>
+              <li><strong class="text-slate-800 dark:text-slate-200">การขยาย POS lexeme</strong> — token ที่รู้ชนิดคำพูดจะมี lexeme <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pos_&lt;tag&gt;</code> เพิ่ม (เช่น <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pos_noun</code>, <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">pos_verb</code>) กรองตามชนิดคำด้วย <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">'pos_verb'::tsquery</code></li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_fts_dict_udom83</code> และ <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_fts_dict_metasound</code></strong> — dictionary variants สองแบบที่ใช้อัลกอริทึม udom83 และ MetaSound สำหรับการจับเสียงที่ละเอียดกว่า</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_tsvector(text)</code> และ <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_tsquery(text)</code></strong> — SQL STABLE helper ย่อ; ใช้แทน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">to_tsvector('kham', …)</code> และ <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">plainto_tsquery('kham', …)</code> เพื่อลดความซ้ำซ้อนของชื่อ configuration</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">StopwordSet::builtin_with_extra(extra)</code></strong> (kham-core) — รวม built-in stopword 1 029 คำกับคำเพิ่มเติมของผู้ใช้ในครั้งเดียว</li>
+              <li><strong class="text-slate-800 dark:text-slate-200"><code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenizer::segment_stream(text)</code></strong> (kham-core) — คืน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">FtsTokenStream</code> iterator พร้อม <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">next_index_token()</code> สำหรับข้าม stopword อัตโนมัติ</li>
+            </ul>
+          </div>
+          <div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>เปลี่ยนแปลง — kham-pg
+            </h3>
+            <ul class="space-y-2 text-sm text-slate-600 dark:text-slate-400 list-disc list-inside ml-4">
+              <li><strong class="text-slate-800 dark:text-slate-200">การ mapping token ตัวเลข</strong> — configuration <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham</code> เปลี่ยน token ชนิด <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">number</code> ให้ผ่าน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_fts_dict</code> แทน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">kham_dict</code> รัน <code class="bg-slate-100 dark:bg-slate-700 dark:text-slate-300 px-1 rounded font-mono">ALTER EXTENSION kham_pg UPDATE</code> เพื่อ upgrade ฐานข้อมูลที่มีอยู่</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
       <!-- v0.6.0 -->
       <section>
         <div class="flex items-center gap-4 mb-6">

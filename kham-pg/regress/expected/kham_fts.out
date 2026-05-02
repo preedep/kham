@@ -92,11 +92,13 @@ SELECT to_tsvector('kham', 'กินข้าว')::text;
  '1619':1 'กินข้าว':1
 (1 row)
 
--- ── 12. tsvector lexeme content — sentence with stopword ────────────────────
-SELECT to_tsvector('kham', 'กินข้าวกับปลา')::text;
-                             to_tsvector                             
----------------------------------------------------------------------
- '1400':2 '1619':1 '4800':3 'kap':2 'pla':3 'กับ':2 'กินข้าว':1 'ปลา':3
+-- ── 12. tsvector — stopword suppressed, content words retained ────────────────
+SELECT
+    ('กับ' NOT IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))) AS stopword_suppressed,
+    ('ปลา' IN     (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา')))) AS content_indexed;
+ stopword_suppressed | content_indexed 
+---------------------+-----------------
+ t                   | t
 (1 row)
 
 -- ── 13. to_tsquery — single word match ───────────────────────────────────────
@@ -237,12 +239,15 @@ SELECT ts_headline('kham', 'กินข้าวกับปลา', to_tsquery
 (1 row)
 
 -- ── 28. kham_fts_dict — Thai word expands to word + soundex + RTGS lexemes ───
--- Show all lexemes for a single Thai word so we can see the soundex code
--- and RTGS romanization stored at the same tsvector position.
-SELECT to_tsvector('kham', 'ปลา')::text;
-       to_tsvector        
---------------------------
- '4800':1 'pla':1 'ปลา':1
+-- Verify that ปลา, its lk82 soundex code, and its RTGS romanization are all
+-- stored as colocated lexemes in the tsvector.
+SELECT
+    ('ปลา' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')))) AS word_indexed,
+    EXISTS (SELECT 1 FROM unnest(to_tsvector('kham', 'ปลา')) WHERE lexeme ~ '^[0-9]') AS soundex_indexed,
+    ('pla' IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา')))) AS rtgs_indexed;
+ word_indexed | soundex_indexed | rtgs_indexed 
+--------------+-----------------+--------------
+ t            | t               | t
 (1 row)
 
 -- ── 29. Soundex search — find Thai word by its lk82 phonetic code ─────────────

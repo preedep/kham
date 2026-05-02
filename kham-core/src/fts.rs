@@ -39,6 +39,54 @@ use crate::synonym::SynonymMap;
 use crate::token::{NamedEntityKind, TokenKind};
 use crate::Tokenizer;
 
+/// A streaming iterator over [`FtsToken`]s produced by the FTS pipeline.
+///
+/// Returned by [`FtsTokenizer::segment_stream`]. Internally holds the full
+/// `Vec<FtsToken>` as an [`alloc::vec::IntoIter`]; the streaming API is provided
+/// so callers can consume tokens one at a time without materialising a second
+/// collection.
+///
+/// # Example
+///
+/// ```rust
+/// use kham_core::fts::FtsTokenizer;
+///
+/// let fts = FtsTokenizer::new();
+/// let mut stream = fts.segment_stream("กินข้าวกับปลา");
+/// // next_index_token() skips stopwords — กับ is a stopword and is skipped.
+/// while let Some(tok) = stream.next_index_token() {
+///     println!("{} pos={}", tok.text, tok.position);
+/// }
+/// ```
+pub struct FtsTokenStream {
+    inner: alloc::vec::IntoIter<FtsToken>,
+}
+
+impl FtsTokenStream {
+    /// Advance to the next token that should be written into the search index,
+    /// skipping stopwords.
+    ///
+    /// Equivalent to calling [`Iterator::next`] in a loop until a token with
+    /// `is_stop == false` is found, or the stream is exhausted.
+    pub fn next_index_token(&mut self) -> Option<FtsToken> {
+        self.inner.by_ref().find(|t| !t.is_stop)
+    }
+}
+
+impl Iterator for FtsTokenStream {
+    type Item = FtsToken;
+
+    #[inline]
+    fn next(&mut self) -> Option<FtsToken> {
+        self.inner.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
 /// A token produced by the FTS pipeline, ready for lexeme indexing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FtsToken {
@@ -606,6 +654,39 @@ impl FtsTokenizer {
             .collect()
     }
 
+    /// Return a streaming iterator over the FTS tokens for `text`.
+    ///
+    /// Equivalent to [`segment_for_fts`] but wraps the result in an
+    /// [`FtsTokenStream`] so callers can consume tokens one at a time.
+    /// Use [`FtsTokenStream::next_index_token`] to skip stopwords automatically.
+    ///
+    /// The full token list is materialised internally because the NE tagger
+    /// requires multi-token context; this is a streaming *consumer*, not a
+    /// lazy producer.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::fts::FtsTokenizer;
+    ///
+    /// let fts = FtsTokenizer::new();
+    /// let mut stream = fts.segment_stream("กินข้าวกับปลา");
+    /// let mut index_texts: Vec<String> = Vec::new();
+    /// while let Some(tok) = stream.next_index_token() {
+    ///     index_texts.push(tok.text);
+    /// }
+    /// // กับ is a stopword — it should not appear in index_texts
+    /// assert!(!index_texts.contains(&String::from("กับ")));
+    /// assert!(index_texts.iter().any(|t| t == "กิน" || t == "ปลา"));
+    /// ```
+    ///
+    /// [`segment_for_fts`]: FtsTokenizer::segment_for_fts
+    pub fn segment_stream(&self, text: &str) -> FtsTokenStream {
+        FtsTokenStream {
+            inner: self.segment_for_fts(text).into_iter(),
+        }
+    }
+
     /// Collect all lexeme strings to be stored in a `tsvector`.
     ///
     /// Returns one string per non-stop token, plus synonym expansions and
@@ -1000,6 +1081,62 @@ mod tests {
             !texts.contains(&"."),
             "dots should be consumed by abbrev expansion, got: {texts:?}"
         );
+    }
+
+    // ── segment_stream / FtsTokenStream ──────────────────────────────────────
+
+    #[test]
+    fn segment_stream_yields_all_non_whitespace_tokens() {
+        let fts = fts();
+        let via_vec = fts.segment_for_fts("กินข้าวกับปลา");
+        let via_stream: Vec<FtsToken> = fts.segment_stream("กินข้าวกับปลา").collect();
+        assert_eq!(via_vec, via_stream);
+    }
+
+    #[test]
+    fn segment_stream_empty_input() {
+        let mut stream = fts().segment_stream("");
+        assert!(stream.next().is_none());
+    }
+
+    #[test]
+    fn next_index_token_skips_stopwords() {
+        let fts = fts();
+        let mut stream = fts.segment_stream("กินข้าวกับปลา");
+        let mut texts = Vec::new();
+        while let Some(tok) = stream.next_index_token() {
+            texts.push(tok.text);
+        }
+        assert!(
+            !texts.contains(&String::from("กับ")),
+            "stopword กับ must be skipped"
+        );
+        assert!(
+            texts.iter().any(|t| t == "กิน" || t == "ปลา"),
+            "content words must be yielded"
+        );
+    }
+
+    #[test]
+    fn next_index_token_matches_index_tokens() {
+        let fts = fts();
+        let text = "กินข้าวกับปลา";
+        let via_index: Vec<_> = fts.index_tokens(text);
+        let mut stream = fts.segment_stream(text);
+        let mut via_stream = Vec::new();
+        while let Some(tok) = stream.next_index_token() {
+            via_stream.push(tok);
+        }
+        assert_eq!(via_index, via_stream);
+    }
+
+    #[test]
+    fn stream_size_hint_is_correct() {
+        let fts = fts();
+        let via_vec = fts.segment_for_fts("กินข้าวกับปลา");
+        let n = via_vec.len();
+        let stream = fts.segment_stream("กินข้าวกับปลา");
+        assert_eq!(stream.size_hint(), (n, Some(n)));
     }
 
     #[test]

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "kham"
-version = "0.6.0"
+version = "0.7.0"
 description = "Thai word segmentation library (Python bindings for kham-core)"
 requires-python = ">=3.8"
 license = { text = "MIT OR Apache-2.0" }

@@ -63,7 +63,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install extension files
 COPY --from=builder /kham/target/release/libkham_pg.so /tmp/kham_pg.so
 COPY kham-pg/kham_pg.control                           /tmp/kham_pg.control
-COPY kham-pg/sql/kham_pg--0.6.0.sql                   /tmp/kham_pg--0.6.0.sql
+COPY kham-pg/sql/kham_pg--0.7.0.sql                   /tmp/kham_pg--0.7.0.sql
 
 RUN set -e; \
     PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config; \
@@ -71,7 +71,7 @@ RUN set -e; \
     PG_EXTDIR=$($PG_CONFIG --sharedir)/extension; \
     install -m 755 /tmp/kham_pg.so             "$PG_PKGLIBDIR/kham_pg.so"; \
     install -m 644 /tmp/kham_pg.control        "$PG_EXTDIR/kham_pg.control"; \
-    install -m 644 /tmp/kham_pg--0.6.0.sql     "$PG_EXTDIR/kham_pg--0.6.0.sql"
+    install -m 644 /tmp/kham_pg--0.7.0.sql     "$PG_EXTDIR/kham_pg--0.7.0.sql"
 
 COPY kham-pg/bench/bench.sql                    /kham/bench/bench.sql
 COPY kham-pg/bench/bench_setup.sql              /kham/bench/bench_setup.sql

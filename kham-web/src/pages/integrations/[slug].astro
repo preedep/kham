@@ -26,7 +26,7 @@ const integrations: Record<string, IntegrationData> = {
   postgresql: {
     title: 'PostgreSQL FTS',
     icon: '🐘',
-    description: 'kham-pg is a PostgreSQL text-search parser extension. It tokenises Thai text for full-text search, replacing the built-in parser for Thai-script documents.',
+    description: 'kham-pg is a PostgreSQL text-search parser extension. It tokenises Thai text for full-text search, replacing the built-in parser for Thai-script documents. Each Thai token expands to up to six colocated lexemes: the word itself, lk82 soundex code, RTGS romanization, ASCII number form, and a POS tag. Thai stopwords are suppressed automatically.',
     sections: [
       {
         heading: 'Prerequisites',
@@ -47,21 +47,14 @@ ls "$(pg_config --pkglibdir)"/kham*`,
         label: 'shell',
       },
       {
-        heading: 'Load and configure',
-        body: 'Load the parser, create a text search configuration, and add mappings for Thai and other token types.',
-        code: `-- Load the shared library
-LOAD 'kham';
+        heading: 'Load and use',
+        body: 'The extension ships with a ready-to-use kham configuration. Thai stopwords are suppressed automatically; no extra configuration needed.',
+        code: `-- Load the extension
+CREATE EXTENSION kham_pg;
 
--- Create a text search parser backed by kham
-CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
-
--- Map token types to dictionaries
-ALTER TEXT SEARCH CONFIGURATION kham_cfg
-  ADD MAPPING FOR thai    WITH simple;
-ALTER TEXT SEARCH CONFIGURATION kham_cfg
-  ADD MAPPING FOR latin   WITH english_stem;
-ALTER TEXT SEARCH CONFIGURATION kham_cfg
-  ADD MAPPING FOR integer WITH simple;`,
+-- Full-text search with the built-in kham configuration
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'ปลา');
+-- t  (กับ is a stopword and is suppressed; ปลา is indexed)`,
         lang: 'sql',
         label: 'psql',
       },
@@ -76,7 +69,7 @@ ALTER TEXT SEARCH CONFIGURATION kham_cfg
 
 -- Populate the tsvector column
 UPDATE articles
-SET tsv = to_tsvector('kham_cfg', coalesce(title, '') || ' ' || coalesce(body, ''));
+SET tsv = to_tsvector('kham', coalesce(title, '') || ' ' || coalesce(body, ''));
 
 -- GIN index for fast search
 CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);
@@ -85,7 +78,7 @@ CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);
 CREATE TRIGGER articles_tsv_update
   BEFORE INSERT OR UPDATE ON articles
   FOR EACH ROW EXECUTE FUNCTION
-    tsvector_update_trigger(tsv, 'public.kham_cfg', title, body);`,
+    tsvector_update_trigger(tsv, 'public.kham', title, body);`,
         lang: 'sql',
         label: 'psql',
       },
@@ -94,13 +87,13 @@ CREATE TRIGGER articles_tsv_update
         code: `SELECT
   id,
   ts_headline(
-    'kham_cfg',
+    'kham',
     body,
     query,
     'StartSel=<mark>, StopSel=</mark>, MaxWords=20'
   ) AS snippet
 FROM articles,
-     to_tsquery('kham_cfg', 'ข้าว & ปลา') AS query
+     to_tsquery('kham', 'ข้าว & ปลา') AS query
 WHERE tsv @@ query
 ORDER BY ts_rank(tsv, query) DESC
 LIMIT 10;`,
@@ -108,17 +101,78 @@ LIMIT 10;`,
         label: 'psql',
       },
       {
+        heading: 'Phonetic and romanization search',
+        body: 'Every Thai token is expanded with its lk82 soundex code and RTGS romanization. Near-homophones and Latin-script queries match automatically.',
+        code: `-- Latin-script query matches Thai document (RTGS romanization)
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'pla');
+-- t  (ปลา → 'pla' stored as colocated lexeme)
+
+-- Phonetic query using the lk82 code for ปลา (4800)
+SELECT title FROM articles
+WHERE tsv @@ to_tsquery('kham', '4800');`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
+        heading: 'Thai number normalization',
+        body: 'Thai digit strings are indexed alongside their ASCII equivalent, enabling cross-script numeric queries.',
+        code: `-- ๑๒๓ is stored as both ๑๒๓ and 123 in the same tsvector position
+SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '123') AS found;
+-- t
+
+-- Search documents containing ๑๒๓ using ASCII digits
+SELECT title FROM articles WHERE tsv @@ plainto_tsquery('kham', '123');`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
+        heading: 'POS lexeme filtering',
+        body: 'Tokens with a known part of speech emit a colocated pos_<tag> lexeme. Use the ::tsquery cast so the underscore is treated as part of the lexeme.',
+        code: `-- Find documents containing a verb
+SELECT title FROM articles WHERE tsv @@ 'pos_verb'::tsquery;
+
+-- Combine POS filter with a content query
+SELECT title FROM articles
+WHERE tsv @@ ('pos_noun'::tsquery && plainto_tsquery('kham', 'กิน'));
+
+-- Inspect which POS tags are stored for a word
+SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา'))
+WHERE lexeme LIKE 'pos_%';
+-- pos_noun`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
+        heading: 'Alternative soundex dictionaries',
+        body: 'Two additional dictionary variants are available for finer phonetic discrimination. Create a custom configuration to use them.',
+        code: `-- udom83 soundex — finer sibilant and liquid distinctions
+CREATE TEXT SEARCH CONFIGURATION kham_udom83 (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR thai, named WITH kham_fts_dict_udom83;
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR latin, number, unknown WITH kham_dict;
+
+-- MetaSound — per-syllable encoding, most discriminating
+CREATE TEXT SEARCH CONFIGURATION kham_metasound (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_metasound
+    ADD MAPPING FOR thai, named WITH kham_fts_dict_metasound;
+ALTER TEXT SEARCH CONFIGURATION kham_metasound
+    ADD MAPPING FOR latin, number, unknown WITH kham_dict;`,
+        lang: 'sql',
+        label: 'psql',
+      },
+      {
         heading: 'Ranking and field boosting',
-        body: 'Use ts_rank() or ts_rank_cd() to order results by relevance. Boost individual fields with setweight() — weights A (1.0) > B (0.4) > C (0.2) > D (0.1). Store separate weighted tsvectors per field for the best precision.',
+        body: 'Use ts_rank() or ts_rank_cd() to order results by relevance. Boost individual fields with setweight() — weights A (1.0) > B (0.4) > C (0.2) > D (0.1).',
         code: `-- Basic rank (higher = more relevant)
 SELECT id, ts_rank(tsv, query) AS rank
-FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+FROM articles, to_tsquery('kham', 'ข้าว') query
 WHERE tsv @@ query
 ORDER BY rank DESC;
 
 -- Cover-density rank — penalises scattered token matches, better for Thai
 SELECT id, ts_rank_cd(tsv, query) AS rank
-FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+FROM articles, to_tsquery('kham', 'ข้าว') query
 WHERE tsv @@ query
 ORDER BY rank DESC;
 
@@ -126,19 +180,8 @@ ORDER BY rank DESC;
 -- Weight A tokens score ~5× higher than weight C
 UPDATE articles
 SET tsv =
-  setweight(to_tsvector('kham_cfg', coalesce(title, '')), 'A') ||
-  setweight(to_tsvector('kham_cfg', coalesce(body,  '')), 'C');
-
--- Custom weight vector {D, C, B, A} — tune to taste
-SELECT id, ts_rank(tsv, query, '{0.1, 0.2, 0.4, 1.0}') AS rank
-FROM articles, to_tsquery('kham_cfg', 'กรุงเทพ') query
-WHERE tsv @@ query
-ORDER BY rank DESC;
-
--- Phonetic synonyms (RTGS/soundex) are indexed at the same tsvector position
--- as the original token, so ts_rank weights them equally.
--- To downweight phonetic matches, rerank in application code after fetching
--- FTS candidates: multiply score × 0.3 if the query term is not an exact token.`,
+  setweight(to_tsvector('kham', coalesce(title, '')), 'A') ||
+  setweight(to_tsvector('kham', coalesce(body,  '')), 'C');`,
         lang: 'sql',
         label: 'psql',
       },
@@ -497,19 +540,19 @@ const data = integrations[slug as keyof typeof integrations];
 <Layout title={`${data.title} Integration — kham`} description={data.description} lang="en">
   <div class="max-w-4xl mx-auto px-6 py-16">
     <!-- Breadcrumb -->
-    <nav class="text-sm text-slate-500 mb-8" aria-label="Breadcrumb">
-      <a href="/getting-started" class="hover:text-slate-800 transition-colors">Getting Started</a>
+    <nav class="text-sm text-slate-500 dark:text-slate-400 mb-8" aria-label="Breadcrumb">
+      <a href="/getting-started" class="hover:text-slate-800 dark:hover:text-slate-200 transition-colors">Getting Started</a>
       <span class="mx-2">/</span>
-      <span class="text-slate-800 font-medium">{data.title}</span>
+      <span class="text-slate-800 dark:text-slate-200 font-medium">{data.title}</span>
     </nav>
 
     <!-- Header -->
     <div class="mb-12">
       <div class="flex items-center gap-3 mb-3">
         <span class="text-4xl">{data.icon}</span>
-        <h1 class="text-4xl font-bold text-slate-900">{data.title}</h1>
+        <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100">{data.title}</h1>
       </div>
-      <p class="text-lg text-slate-600 max-w-2xl">{data.description}</p>
+      <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">{data.description}</p>
     </div>
 
     <!-- Sections -->
@@ -517,13 +560,13 @@ const data = integrations[slug as keyof typeof integrations];
       {data.sections.map((section, i) => (
         <section>
           <div class="flex items-center gap-3 mb-3">
-            <span class="flex-none w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center">
+            <span class="flex-none w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 text-xs font-bold flex items-center justify-center">
               {i + 1}
             </span>
-            <h2 class="text-xl font-semibold text-slate-900">{section.heading}</h2>
+            <h2 class="text-xl font-semibold text-slate-900 dark:text-slate-100">{section.heading}</h2>
           </div>
           {section.body && (
-            <p class="text-slate-600 mb-4 ml-10">{section.body}</p>
+            <p class="text-slate-600 dark:text-slate-400 mb-4 ml-10">{section.body}</p>
           )}
           <div class="ml-10">
             {section.tabs ? (
@@ -537,11 +580,11 @@ const data = integrations[slug as keyof typeof integrations];
     </div>
 
     <!-- Footer nav -->
-    <div class="mt-16 pt-8 border-t border-slate-200 flex justify-between text-sm">
-      <a href="/getting-started" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+    <div class="mt-16 pt-8 border-t border-slate-200 dark:border-slate-700 flex justify-between text-sm">
+      <a href="/getting-started" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">
         ← All targets
       </a>
-      <a href="/demo" class="text-blue-600 hover:text-blue-800 font-medium transition-colors">
+      <a href="/demo" class="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-medium transition-colors">
         Try the live demo →
       </a>
     </div>

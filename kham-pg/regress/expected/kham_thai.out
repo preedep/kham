@@ -142,10 +142,10 @@ ORDER BY tokid, token;
      1 | ของ
 (1 row)
 
--- ── 15. Stopwords appear in tsvector (kham_dict=simple, no PG-level filtering)
-SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'กับ') AS stopword_indexed;
- stopword_indexed 
-------------------
+-- ── 15. Stopword suppression — กับ absent from tsvector in 0.7.0 ─────────────
+SELECT 'กับ' NOT IN (SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา'))) AS stopword_suppressed;
+ stopword_suppressed 
+---------------------
  t
 (1 row)
 
