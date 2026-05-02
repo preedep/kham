@@ -15,23 +15,79 @@ to three lexemes at the same `tsvector` position:
 
 Named entities (persons, places, organisations) are tagged automatically.
 
-## Requirements
+## Install
+
+Choose the path that fits your environment.
+
+---
+
+### Option 1 — Pre-built binary (no Rust required)
+
+Pre-compiled `.so` files are available for **Linux x86_64** and **Linux aarch64**
+(AWS Graviton, Ampere) for PostgreSQL 14–18 on the
+[GitHub Releases page](https://github.com/preedep/kham/releases/latest).
+
+**Prerequisites**
+
+| Requirement | Notes |
+|-------------|-------|
+| PostgreSQL 14–18 | Server must be installed; `pg_config` must be in `PATH` |
+| Linux x86\_64 or aarch64 | Pre-built binaries are Linux-only |
+
+**Steps**
+
+```bash
+# 1. Unzip the PGXN distribution (provides control + SQL files)
+unzip kham_pg-0.6.0.zip
+cd kham_pg-0.6.0
+
+# 2. Download the pre-built .so for your PG version and architecture
+#    Replace PG=17 and ARCH=x86_64 as needed (14–18, x86_64 or aarch64)
+PG=17
+ARCH=x86_64
+VERSION=0.6.0
+curl -fsSL \
+  "https://github.com/preedep/kham/releases/download/v${VERSION}/kham-pg-v${VERSION}-pg${PG}-${ARCH}-unknown-linux-gnu.tar.gz" \
+  | tar xz   # extracts libkham_pg.so
+
+# 3. Install the .so and extension files
+PG_CONFIG=/usr/lib/postgresql/${PG}/bin/pg_config
+install -m 755 libkham_pg.so          "$($PG_CONFIG --pkglibdir)/kham_pg.so"
+install -m 644 kham_pg.control        "$($PG_CONFIG --sharedir)/extension/"
+install -m 644 sql/kham_pg--${VERSION}.sql "$($PG_CONFIG --sharedir)/extension/"
+
+# 4. Load the extension in psql
+psql -c "CREATE EXTENSION kham_pg;"
+```
+
+---
+
+### Option 2 — Build from source
+
+Builds the extension from source using your local `pg_config` and Rust toolchain.
+Supports any platform where PostgreSQL and Rust are available (Linux, macOS).
+
+**Prerequisites**
 
 | Requirement | Notes |
 |-------------|-------|
 | PostgreSQL 14–18 | `pg_config` must be in `PATH` or set via `PG_CONFIG` env var |
 | Rust 1.85+ | Install via [rustup.rs](https://rustup.rs) |
-| C compiler | `clang` or `gcc` — standard on Linux and macOS |
+| C compiler | `clang` or `gcc` |
+| Linux system packages | `build-essential postgresql-server-dev-N` (replace N with your PG major version) |
 | `brew install gettext` | **macOS only** — PostgreSQL headers require `libintl.h` |
 
-## Install
+**Steps**
 
 ```bash
+# Linux — install system packages first
+sudo apt-get install -y build-essential postgresql-server-dev-17
+
 # 1. Unzip the distribution
 unzip kham_pg-0.6.0.zip
 cd kham_pg-0.6.0
 
-# 2. Build and install into your PostgreSQL installation
+# 2. Build and install
 make install
 
 # 3. Load the extension in psql
@@ -43,6 +99,8 @@ To target a specific PostgreSQL installation:
 ```bash
 PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config make install
 ```
+
+---
 
 ## Token types
 
@@ -150,5 +208,6 @@ MIT OR Apache-2.0
 ## Links
 
 - Source: <https://github.com/preedep/kham>
+- Releases: <https://github.com/preedep/kham/releases>
 - Issues: <https://github.com/preedep/kham/issues>
 - PGXN: <https://pgxn.org/dist/kham_pg/>
