@@ -16,7 +16,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.5.1 | WASM u32 overflow fix for large numbers, NE tag correction (ประเทศไทย PERSON→PLACE), kham-web dark mode |
 | v0.6.0 | SpellChecker, KeyExtractor, spell/keyword bindings (WASM/Python/CAPI), kham-sqlite custom synonyms/dict/Windows/Android, CI pytest + wasm tests |
 | v0.7.0 | Stopword suppression, Thai number normalization, udom83/MetaSound soundex dict variants, POS lexeme expansion (`pos_verb`, `pos_noun`, …), `kham_features` regress suite |
-| v0.8.0 | `Token::confidence: f32` — segmentation confidence derived from DP ambiguity (edge count + TNC frequency); propagated to FtsToken and all bindings |
+| v0.8.0 | `Token::confidence: f32`, `TokenStream` streaming iterator, `SpellChecker::correct_text` / `did_you_mean`, `RomanizationMap::romanize_sentence`, `KeyExtractor::extract_phrases`, CLI `--format` / `--confidence` / `--min-confidence` / `--romanize` |
 
 ---
 

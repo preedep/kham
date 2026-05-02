@@ -31,6 +31,8 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 - Custom dict (full rebuild): `Tokenizer::builder().dict_words(words_str)` / `.dict_file("path")` — concatenates BUILTIN_WORDS + custom words and rebuilds trie; O(N) startup
 - Custom dict (fast overlay): `Tokenizer::builder().dict_merge(words_str)` — keeps prebuilt binary, stores custom words in a sorted `Vec`; O(k log k) for k words; use for small domain-specific additions
 - `Dict::with_overlay(words_str)` — same fast path, available directly on a `Dict` instance
+- `tok.segment(text: &str) -> Vec<Token>` — tokenize text into a Vec of tokens
+- `tok.segment_stream(text: &'t str) -> TokenStream<'t>` — streaming; `.next_word()` / `.next_known()` / `.next_above_confidence(f32)`
 - Trie: Double-Array Trie, O(n) lookup — no external trie-building utilities
 - Never ship BEST corpus or non-CC0 data
 - Frequency data: `tnc_freq.txt` (Apache-2.0, PyThaiNLP) embedded separately — loaded into `FreqMap`, used by newmm DP scorer as tiebreaker; do not merge into the trie binary
@@ -247,6 +249,7 @@ map.romanize_or_raw(word: &str) -> &str          // table only; returns raw word
 map.romanize_or_rule(word: &str) -> String       // table → rule engine → raw passthrough
 map.romanize_owned(word: &str) -> Option<String> // table → rule engine; None for non-Thai
 map.romanize_tokens(tokens: &[&str]) -> Vec<String>
+map.romanize_sentence(text: &str) -> String           // segment + romanize whole sentence
 
 // Rule engine (public, usable standalone):
 romanize_word(word: &str) -> String  // in kham_core::romanizer
@@ -264,6 +267,8 @@ checker.suggestions(word: &str, max_n: usize) -> Vec<Suggestion>
 // Suggestion { word, edit_distance: u8, soundex_match: bool, freq_score: u32 }
 // Filters: edit_distance ≤ 2, length pre-filter ±2 chars
 // Sort: soundex_match DESC → edit_distance ASC → freq_score DESC
+checker.did_you_mean(word: &str) -> Option<String>   // None if in dict; Some(best) otherwise
+checker.correct_text(text: &str) -> String            // segment + replace Unknown tokens
 ```
 
 ### `keyword` — `KeyExtractor`
@@ -275,6 +280,7 @@ extractor.extract(text: &str, max_n: usize) -> Vec<Keyword>
 // score = TF × (max_tnc_freq + 1) / (tnc_freq + 1)
 // Filters: kind ∈ {Thai, Latin, Number, Named}, char_len ≥ 2, not a stopword
 // Sort: score DESC (ties broken alphabetically)
+kex.extract_phrases(text: &str, max_n: usize) -> Vec<Keyword>  // bigram/trigram keyphrases
 ```
 
 ## Testing

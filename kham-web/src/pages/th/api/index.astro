@@ -22,7 +22,7 @@ const modules = [
 ---
 
 <Layout title="อ้างอิง API — kham" lang="th" description={t('api.desc')}
-  keywords="kham API, kham-core Rust API, NLP ภาษาไทย API, Tokenizer, FtsTokenizer, SpellChecker, KeyExtractor, soundex ไทย, RTGS romanization, kham Python API, kham WASM API"
+  keywords="kham API, kham-core Rust API, NLP ภาษาไทย API, Tokenizer, TokenStream, FtsTokenizer, SpellChecker, KeyExtractor, soundex ไทย, RTGS romanization, kham Python API, kham WASM API"
   jsonLd={{
     '@context': 'https://schema.org',
     '@type': 'TechArticle',
@@ -40,7 +40,7 @@ const modules = [
     <div class="mb-10">
       <div class="flex items-center gap-3 mb-2">
         <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100">{t('api.title')}</h1>
-        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.7.0</span>
+        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.8.0</span>
       </div>
       <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mb-3">
         {t('api.desc')}
@@ -132,6 +132,27 @@ let tok2 = Tokenizer::builder()
     .build();`,
             },
             {
+              label: 'segment_stream',
+              lang: 'rust',
+              code: `use kham_core::{Tokenizer, TokenStream};
+
+let tok = Tokenizer::new();
+
+// Streaming — consume one token at a time
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+
+// next_word() — skip whitespace
+while let Some(t) = stream.next_word() {
+    println!("{} ({:?})", t.text, t.kind);
+}
+
+// next_above_confidence(0.8) — skip low-confidence tokens
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+while let Some(t) = stream.next_above_confidence(0.8) {
+    println!("{} conf={:.2}", t.text, t.confidence);
+}`,
+            },
+            {
               label: 'Python',
               lang: 'python',
               code: `import kham
@@ -149,12 +170,16 @@ for t in kham.segment_tokens("ธนาคาร100แห่ง"):
 
 # normalize ก่อน segment
 text = kham.normalize("ข้้าว")   # "ข้าว"
-words = kham.segment(text)`,
+words = kham.segment(text)
+
+# segment_above_confidence — เฉพาะ token ที่มี confidence ≥ threshold
+for t in kham.segment_above_confidence("ธนาคาร100แห่ง", 0.8):
+    print(t.text, t.confidence)`,
             },
             {
               label: 'WASM',
               lang: 'js',
-              code: `import init, { segment, segment_tokens, normalize } from '/wasm/kham_wasm.js';
+              code: `import init, { segment, segment_tokens, normalize, segment_above_confidence } from '/wasm/kham_wasm.js';
 await init(); // เรียกครั้งเดียวตอน load
 
 // ง่าย — JS Array ของ string
@@ -169,7 +194,11 @@ for (const t of tokens) {
 
 // normalize ก่อน segment
 const clean = normalize("ข้้าว");   // "ข้าว"
-const toks  = segment(clean);`,
+const toks  = segment(clean);
+
+// segment_above_confidence — เฉพาะ token ที่มี confidence ≥ threshold
+const high = segment_above_confidence("ธนาคาร100แห่ง", 0.8);
+for (const t of high) console.log(t.text, t.confidence);`,
             },
             {
               label: 'C',
@@ -748,7 +777,11 @@ println!("{}", rom.romanize_or_raw("zzz"));   // "zzz"  (OOV → passthrough)
 
 // lookup แบบ batch
 let roman = rom.romanize_tokens(&["กรุงเทพ", "ประเทศ", "ไทย"]);
-println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]`,
+println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]
+
+// Whole sentence romanization
+let sentence = rom.romanize_sentence("กินข้าวกับปลา 100 บาท");
+println!("{sentence}"); // kinkhaokapla 100 bat`,
             },
             {
               label: 'Python',
@@ -1172,7 +1205,17 @@ assert_eq!(exact[0].edit_distance, 0);
 // s.word          — String   คำ candidate จาก dictionary
 // s.edit_distance — u8       Levenshtein distance (0–2)
 // s.soundex_match — bool     lk82 code ตรงกัน
-// s.freq_score    — u32      TNC corpus frequency (0 ถ้าไม่มีในตาราง)`,
+// s.freq_score    — u32      TNC corpus frequency (0 ถ้าไม่มีในตาราง)
+
+// Single best correction
+let checker = SpellChecker::builtin();
+if let Some(corrected) = checker.did_you_mean("กีนข้าว") {
+    println!("Did you mean: {corrected}");  // กินข้าว
+}
+// Correct whole text
+let text = "กีนข้าวกับปลา";
+let out = checker.correct_text(text);
+println!("{out}");`,
             },
             {
               label: 'Python',
@@ -1281,6 +1324,16 @@ for kw in &keywords {
 // kw.word  — String  คำสำคัญ
 // kw.score — f32     TF × (max_freq+1) / (corpus_freq+1)
 // kw.count — usize   จำนวนครั้งที่ปรากฏในเอกสาร`,
+            },
+            {
+              label: 'extract_phrases',
+              lang: 'rust',
+              code: `let extractor = KeyExtractor::builtin();
+let text = "นักพัฒนาซอฟต์แวร์เขียนโค้ดทุกวัน นักพัฒนาซอฟต์แวร์ใช้ภาษาต่าง ๆ";
+let phrases = extractor.extract_phrases(text, 5);
+for p in &phrases {
+    println!("{:20} score={:.4} count={}", p.word, p.score, p.count);
+}`,
             },
             {
               label: 'Python',
