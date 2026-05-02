@@ -90,6 +90,12 @@ const SQLITE_ERROR: c_int = 1;
 /// Flag passed to `xToken` to emit a colocated synonym at the same position.
 const FTS5_TOKEN_COLOCATED: c_int = 0x0001;
 
+/// `xTokenize` flags set by FTS5 to indicate the tokenization context.
+/// POS lexemes must only be emitted during document indexing, not query
+/// tokenization — otherwise a query for any noun would expand to `posnoun`
+/// and match every document that contains any noun token.
+const FTS5_TOKENIZE_QUERY: c_int = 0x0001;
+
 // ---------------------------------------------------------------------------
 // FTS5 type definitions — must match sqlite3.h layout exactly.
 // ---------------------------------------------------------------------------
@@ -459,7 +465,7 @@ unsafe extern "C" fn kham_fts5_delete(p: *mut KhamFts5Tokenizer) {
 unsafe extern "C" fn kham_fts5_tokenize(
     p: *mut KhamFts5Tokenizer,
     p_ctx: *mut c_void,
-    _flags: c_int,
+    flags: c_int,
     p_text: *const c_char,
     n_text: c_int,
     x_token: XTokenFn,
@@ -581,27 +587,29 @@ unsafe extern "C" fn kham_fts5_tokenize(
                 }
             }
 
-            // Emit POS lexeme as colocated token (e.g. "posnoun", "posverb").
-            // Uses concatenated form (no underscore) so the kham tokenizer treats it
-            // as a single Latin token in queries: WHERE docs MATCH 'posverb'.
-            // Note: kham-pg uses pos_noun (tsquery doesn't re-tokenize terms), but
-            // FTS5 tokenizes the MATCH argument with the same kham tokenizer, so
-            // pos_noun would split into three tokens — concatenated form avoids this.
-            if let Some(pos) = ft.pos {
-                let pos_lexeme = format!("pos{}", pos.as_tag().to_ascii_lowercase());
-                let pos_bytes = pos_lexeme.as_bytes();
-                let rc = unsafe {
-                    x_token(
-                        p_ctx,
-                        FTS5_TOKEN_COLOCATED,
-                        pos_bytes.as_ptr() as *const c_char,
-                        pos_bytes.len() as c_int,
-                        i_start,
-                        i_end,
-                    )
-                };
-                if rc != SQLITE_OK {
-                    return rc;
+            // Emit POS lexeme as colocated token ONLY during document indexing.
+            // If emitted during query tokenization, `MATCH 'หมา'` would expand to
+            // "หมา OR posnoun", matching every document that contains any noun —
+            // because FTS5 treats xTokenize colocated tokens as OR alternatives in
+            // queries.  The flag FTS5_TOKENIZE_QUERY (0x0001) is set by FTS5 when
+            // tokenizing a MATCH expression; it is NOT set when indexing documents.
+            if (flags & FTS5_TOKENIZE_QUERY) == 0 {
+                if let Some(pos) = ft.pos {
+                    let pos_lexeme = format!("pos{}", pos.as_tag().to_ascii_lowercase());
+                    let pos_bytes = pos_lexeme.as_bytes();
+                    let rc = unsafe {
+                        x_token(
+                            p_ctx,
+                            FTS5_TOKEN_COLOCATED,
+                            pos_bytes.as_ptr() as *const c_char,
+                            pos_bytes.len() as c_int,
+                            i_start,
+                            i_end,
+                        )
+                    };
+                    if rc != SQLITE_OK {
+                        return rc;
+                    }
                 }
             }
         }
