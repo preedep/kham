@@ -181,6 +181,10 @@ done
 
 - **pg_regress output format** — Column headers have a trailing space (` is_emoji `, not ` is_emoji`). Single-line DDL (`CREATE TABLE foo (...);`) produces no command tag; multi-line DDL produces `CREATE TABLE` / `INSERT 0 N`. The second and later `CREATE EXTENSION IF NOT EXISTS` calls emit a `NOTICE` line. These are invisible when editing by hand — capture from Docker instead.
 
+- **MetaSound code format** — MetaSound initial-consonant groups 10+ use uppercase letters (A–J), not digits. `metasound("ปลา") = "B06G16"` (ป → group B). The pattern `'^[0-9]'` misses these codes; use `'^[0-9A-J]{3}'` to match any MetaSound code regardless of initial-consonant group.
+
+- **Stopword position collapsing** — When `kham_fts_dict` returns NULL for a stopword, PostgreSQL does NOT reserve a position slot for it. Subsequent tokens shift down: in `'กินข้าวกับปลา'` with กับ suppressed, กินข้าว=pos1 and ปลา=pos2 (not pos3). `phraseto_tsquery('กินข้าว ปลา')` therefore matches as adjacent. Write phrase-distance tests against sentences with no stopwords between the tokens of interest, or account for this shift explicitly.
+
 ## Benchmark suite
 
 `kham-pg/bench/` contains a Docker-based benchmark with two sections:
