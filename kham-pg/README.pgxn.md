@@ -52,11 +52,11 @@ curl -fsSL \
   "https://github.com/preedep/kham/releases/download/v${VERSION}/kham-pg-v${VERSION}-pg${PG}-${ARCH}-unknown-linux-gnu.tar.gz" \
   | tar xz   # extracts libkham_pg.so
 
-# 3. Install the .so and extension files
+# 3. Install the .so and extension files (sudo required for system PG)
 PG_CONFIG=/usr/lib/postgresql/${PG}/bin/pg_config
-install -m 755 libkham_pg.so          "$($PG_CONFIG --pkglibdir)/kham_pg.so"
-install -m 644 kham_pg.control        "$($PG_CONFIG --sharedir)/extension/"
-install -m 644 sql/kham_pg--${VERSION}.sql "$($PG_CONFIG --sharedir)/extension/"
+sudo install -m 755 libkham_pg.so          "$($PG_CONFIG --pkglibdir)/kham_pg.so"
+sudo install -m 644 kham_pg.control        "$($PG_CONFIG --sharedir)/extension/"
+sudo install -m 644 sql/kham_pg--${VERSION}.sql "$($PG_CONFIG --sharedir)/extension/"
 
 # 4. Load the extension in psql
 psql -c "CREATE EXTENSION kham_pg;"
@@ -82,25 +82,30 @@ available (Linux, macOS).
 
 **Steps**
 
-```bash
-# Linux — install system packages first
-sudo apt-get install -y build-essential postgresql-server-dev-17
+**Linux (Debian / Ubuntu)**
 
-# 1. Unzip the distribution
+```bash
+# Replace 17 with your PostgreSQL major version (14–18)
+PG=17
+sudo apt-get install -y build-essential postgresql-server-dev-${PG}
+
 unzip kham_pg-0.6.0.zip
 cd kham_pg-0.6.0
-
-# 2. Build and install
-make install
-
-# 3. Load the extension in psql
+PG_CONFIG=/usr/lib/postgresql/${PG}/bin/pg_config make install
 psql -c "CREATE EXTENSION kham_pg;"
 ```
 
-To target a specific PostgreSQL installation:
+**macOS (Homebrew)**
 
 ```bash
-PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config make install
+# Replace 17 with your PostgreSQL major version (14–18)
+PG=17
+brew install postgresql@${PG} gettext
+
+unzip kham_pg-0.6.0.zip
+cd kham_pg-0.6.0
+PG_CONFIG=$(brew --prefix postgresql@${PG})/bin/pg_config make install
+psql -c "CREATE EXTENSION kham_pg;"
 ```
 
 ---
