@@ -63,6 +63,21 @@ class TestTokenAttributes:
         assert hasattr(t, "char_start")
         assert hasattr(t, "char_end")
         assert hasattr(t, "kind")
+        assert hasattr(t, "confidence")
+
+    def test_confidence_is_float(self):
+        for t in tokens("กินข้าว"):
+            assert isinstance(t.confidence, float), f"confidence should be float, got {type(t.confidence)}"
+
+    def test_confidence_range(self):
+        for t in tokens("กินข้าวกับปลา"):
+            assert 0.0 <= t.confidence <= 1.0, f"confidence {t.confidence} out of [0, 1]"
+
+    def test_unknown_token_confidence_zero(self):
+        toks = tokens("xyzqqqบบบ")
+        unknowns = [t for t in toks if t.kind == "Unknown"]
+        for t in unknowns:
+            assert t.confidence == 0.0, f"Unknown token {t.text!r} should have confidence=0.0"
 
     def test_text_is_str(self):
         for t in tokens("กินข้าว"):
@@ -337,3 +352,45 @@ class TestExtractPhrases:
         phrases = kham.extract_phrases(text, 10)
         scores = [p.score for p in phrases]
         assert scores == sorted(scores, reverse=True), "phrases must be sorted by score descending"
+
+
+# ---------------------------------------------------------------------------
+# segment_above_confidence
+# ---------------------------------------------------------------------------
+
+class TestSegmentAboveConfidence:
+    def test_returns_list(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 0.5)
+        assert isinstance(result, list)
+
+    def test_all_tokens_meet_threshold(self):
+        threshold = 0.5
+        result = kham.segment_above_confidence("กินข้าวกับปลา", threshold)
+        for t in result:
+            assert t.confidence >= threshold, (
+                f"token {t.text!r} has confidence {t.confidence} < threshold {threshold}"
+            )
+
+    def test_threshold_zero_returns_all_non_unknown(self):
+        all_toks  = kham.segment_tokens("กินข้าวกับปลา")
+        above_toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.0)
+        non_unknown = [t for t in all_toks if t.confidence >= 0.0]
+        assert len(above_toks) == len(non_unknown)
+
+    def test_threshold_one_returns_only_high_confidence(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 1.0)
+        for t in result:
+            assert t.confidence == 1.0
+
+    def test_high_threshold_filters_out_tokens(self):
+        all_toks   = kham.segment_tokens("กินข้าวกับปลา")
+        above_toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.99)
+        assert len(above_toks) <= len(all_toks)
+
+    def test_empty_input_returns_empty(self):
+        assert kham.segment_above_confidence("", 0.5) == []
+
+    def test_returned_tokens_have_confidence_field(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 0.0)
+        for t in result:
+            assert hasattr(t, "confidence")

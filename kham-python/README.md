@@ -51,10 +51,20 @@ Segment and return [`Token`](#token) objects with span information.
 
 ```python
 for t in kham.segment_tokens("ธนาคาร100แห่ง"):
-    print(t.text, t.char_start, t.char_end, t.kind)
-# ธนาคาร  0   6  Thai
-# 100     6   9  Number
-# แห่ง    9  13  Thai
+    print(t.text, t.char_start, t.char_end, t.kind, t.confidence)
+# ธนาคาร  0   6  Thai    0.95
+# 100     6   9  Number  1.0
+# แห่ง    9  13  Thai    1.0
+```
+
+#### `segment_above_confidence(text: str, min_confidence: float) → list[Token]`
+
+Convenience wrapper around `segment_stream`: returns only tokens whose confidence meets the threshold. Equivalent to filtering `segment_tokens` by `t.confidence >= min_confidence` but uses the streaming iterator internally.
+
+```python
+toks = kham.segment_above_confidence("ธนาคาร100แห่ง", 0.9)
+for t in toks:
+    print(t.text, t.confidence)
 ```
 
 #### `segment_fts(text: str) → list[FtsToken]`
@@ -80,6 +90,16 @@ for t in kham.romanize("กินข้าว"):
     print(t.text, "→", t.roman)
 # กิน  → kin
 # ข้าว → khao
+```
+
+#### `romanize_sentence(text: str) → str`
+
+Segment and romanize the entire text in one call. Thai and Named tokens are converted to RTGS; numbers, Latin, punctuation, and whitespace pass through unchanged.
+
+```python
+kham.romanize_sentence("กินข้าวกับปลา")      # 'kin khao kap pla'
+kham.romanize_sentence("กินข้าว 100 บาท")    # 'kin khao 100 baht'
+kham.romanize_sentence("hello โลก")          # 'hello lok'
 ```
 
 ---
@@ -126,6 +146,25 @@ for s in kham.spell_suggestions("กีนข้าว"):
 # กินข้าว  1  True  1342
 ```
 
+#### `spell_did_you_mean(word: str) → str | None`
+
+Return the single best correction for `word`, or `None` if the word is already in the dictionary.
+
+```python
+kham.spell_did_you_mean("กีนข้าว")  # 'กินข้าว'
+kham.spell_did_you_mean("กินข้าว")  # None  (already correct)
+kham.spell_did_you_mean("")          # None
+```
+
+#### `spell_correct_text(text: str) → str`
+
+Segment `text` and replace every Unknown token (≥ 2 characters) with its best spelling correction. Known tokens pass through unchanged.
+
+```python
+kham.spell_correct_text("ผมกีนข้าวกับปลา")  # 'ผมกินข้าวกับปลา'
+kham.spell_correct_text("กินข้าว")           # 'กินข้าว'  (no change)
+```
+
 ---
 
 ### Keyword extraction
@@ -137,6 +176,17 @@ Extract the top `max_n` keywords from `text` by TF × IDF-proxy score. Stopwords
 ```python
 for kw in kham.extract_keywords("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจ", 5):
     print(kw.word, kw.score, kw.count)
+```
+
+#### `extract_phrases(text: str, max_n: int = 10) → list[Keyword]`
+
+Extract the top `max_n` bigram and trigram keyphrases from adjacent content tokens, scored by TF × average-IDF. Returns the same `Keyword` type as `extract_keywords`.
+
+```python
+text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล"
+for p in kham.extract_phrases(text, 5):
+    print(p.word, p.score, p.count)
+# การพัฒนาซอฟต์แวร์  0.842  1
 ```
 
 ---
@@ -247,6 +297,7 @@ if amt:
 | `byte_start` / `byte_end` | `int` | UTF-8 byte offsets |
 | `char_start` / `char_end` | `int` | Unicode scalar-value offsets (use for string slicing) |
 | `kind` | `str` | `"Thai"` \| `"Latin"` \| `"Number"` \| `"Punctuation"` \| `"Emoji"` \| `"Whitespace"` \| `"Unknown"` \| `"Person"` \| `"Place"` \| `"Org"` |
+| `confidence` | `float` | `0.0` (Unknown token) … `1.0` (unambiguous dict match) |
 
 ### `FtsToken`
 

@@ -53,11 +53,22 @@ Segment and return [`Token`](#token) objects with span information.
 
 ```js
 for (const t of segment_tokens("ธนาคาร100แห่ง")) {
-    console.log(t.text, t.char_start, t.char_end, t.kind);
+    console.log(t.text, t.char_start, t.char_end, t.kind, t.confidence);
 }
-// ธนาคาร  0   6  Thai
-// 100     6   9  Number
-// แห่ง    9  13  Thai
+// ธนาคาร  0   6  Thai    0.95
+// 100     6   9  Number  1
+// แห่ง    9  13  Thai    1
+```
+
+#### `segment_above_confidence(text: string, min_confidence: number) → Token[]`
+
+Returns only tokens whose confidence meets the threshold. Uses the streaming iterator internally.
+
+```js
+const toks = segment_above_confidence("ธนาคาร100แห่ง", 0.9);
+for (const t of toks) {
+    console.log(t.text, t.confidence);
+}
 ```
 
 #### `segment_fts(text: string) → FtsToken[]`
@@ -85,6 +96,16 @@ for (const t of romanize("กินข้าว")) {
 }
 // กิน  → kin
 // ข้าว → khao
+```
+
+#### `romanize_sentence(text: string) → string`
+
+Segment and romanize the entire text in one call. Thai and Named tokens are converted to RTGS; numbers, Latin, punctuation, and whitespace pass through unchanged.
+
+```js
+romanize_sentence("กินข้าวกับปลา");      // "kin khao kap pla"
+romanize_sentence("กินข้าว 100 บาท");    // "kin khao 100 baht"
+romanize_sentence("hello โลก");          // "hello lok"
 ```
 
 ---
@@ -132,6 +153,25 @@ for (const s of spell_suggestions("กีนข้าว")) {
 // กินข้าว  1  true  1342
 ```
 
+#### `spell_did_you_mean(word: string) → string`
+
+Return the single best correction for `word`, or `""` (empty string) if the word is already in the dictionary.
+
+```js
+spell_did_you_mean("กีนข้าว");  // "กินข้าว"
+spell_did_you_mean("กินข้าว");  // ""  (already correct)
+spell_did_you_mean("");          // ""
+```
+
+#### `spell_correct_text(text: string) → string`
+
+Segment `text` and replace every Unknown token (≥ 2 characters) with its best spelling correction. Known tokens pass through unchanged.
+
+```js
+spell_correct_text("ผมกีนข้าวกับปลา");  // "ผมกินข้าวกับปลา"
+spell_correct_text("กินข้าว");           // "กินข้าว"  (no change)
+```
+
 ---
 
 ### Keyword extraction
@@ -144,6 +184,18 @@ Extract the top `max_n` keywords from `text` by TF × IDF-proxy score. Stopwords
 for (const kw of extract_keywords("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจ", 5)) {
     console.log(kw.word, kw.score, kw.count);
 }
+```
+
+#### `extract_phrases(text: string, max_n?: number) → Keyword[]`
+
+Extract the top `max_n` bigram and trigram keyphrases from adjacent content tokens, scored by TF × average-IDF. Returns the same `Keyword` type as `extract_keywords`.
+
+```js
+const text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล";
+for (const p of extract_phrases(text, 5)) {
+    console.log(p.word, p.score, p.count);
+}
+// การพัฒนาซอฟต์แวร์  0.842  1
 ```
 
 ---
@@ -256,6 +308,7 @@ if (r.valid) {
 | `byte_start` / `byte_end` | `number` | UTF-8 byte offsets |
 | `char_start` / `char_end` | `number` | Unicode scalar-value offsets (use for string slicing) |
 | `kind` | `string` | `"Thai"` \| `"Latin"` \| `"Number"` \| `"Punctuation"` \| `"Emoji"` \| `"Whitespace"` \| `"Unknown"` \| `"Person"` \| `"Place"` \| `"Org"` |
+| `confidence` | `number` | `0` (Unknown token) … `1` (unambiguous dict match) |
 
 ### `FtsToken`
 

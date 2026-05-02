@@ -27,6 +27,12 @@ const keywordSamples = [
   'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย ทีมนักวิจัยกำลังศึกษาข้อมูลเพิ่มเติมเกี่ยวกับดาวดวงนี้',
   'อาหารไทยมีชื่อเสียงไปทั่วโลก ต้มยำกุ้งและผัดไทยเป็นอาหารที่คนต่างชาติชื่นชอบ รสชาติเผ็ดและหอมของสมุนไพรไทยทำให้อาหารไทยแตกต่างจากอาหารชาติอื่น',
 ];
+
+const romanizeSamples = [
+  'กินข้าวกับปลา',
+  'กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย',
+  'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่',
+];
 ---
 
 <div class="live-demo-root font-sans" data-compact={compact.toString()}>
@@ -111,6 +117,18 @@ const keywordSamples = [
         {s.length > 18 ? s.slice(0, 18) + '…' : s}
       </button>
     ))}
+    {!compact && romanizeSamples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample hidden text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[180px]"
+        data-text={s}
+        data-mode="romanize"
+        title={s}
+        aria-label={`Use romanize sample: ${s}`}
+      >
+        {s.length > 14 ? s.slice(0, 14) + '…' : s}
+      </button>
+    ))}
   </div>
 
   <!-- Controls row -->
@@ -137,6 +155,7 @@ const keywordSamples = [
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="sentences" aria-pressed="false">Sentences</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="spell"     aria-pressed="false">Spell</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="keywords"  aria-pressed="false">Keywords</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="romanize"  aria-pressed="false">Romanize</button>
       </div>
     )}
 
@@ -281,7 +300,7 @@ const keywordSamples = [
   let wasmMod      = null;
   let lastTokens   = [];
   let activeFilter = 'All';
-  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences' | 'spell' | 'keywords'
+  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences' | 'spell' | 'keywords' | 'romanize'
   let showRoman    = false;
 
   // ── wasm ──────────────────────────────────────────────────────────────────
@@ -426,6 +445,26 @@ const keywordSamples = [
         <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">freq ${s.freq_score}</span>
       </div>`;
     }).join('');
+  }
+
+  // ── render romanization result ────────────────────────────────────────────
+  function renderRomanizeResult(romanized) {
+    const pills     = document.getElementById('demo-pills');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    const filterRow = document.getElementById('demo-filter-row');
+    const sentHint  = document.getElementById('demo-sent-hint');
+
+    if (tableWrap) tableWrap.classList.add('hidden');
+    if (filterRow) filterRow.classList.add('hidden');
+    if (sentHint)  sentHint.classList.add('hidden');
+
+    pills.className = 'flex flex-col gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'region');
+    pills.setAttribute('aria-label', 'Romanized text');
+
+    pills.innerHTML = romanized
+      ? `<p class="text-base font-mono text-indigo-700 dark:text-indigo-300 leading-relaxed break-words">${romanized}</p>`
+      : '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No output.</p>';
   }
 
   // ── render keyword extraction ─────────────────────────────────────────────
@@ -579,7 +618,7 @@ const keywordSamples = [
     const tableWrap  = document.getElementById('demo-table-wrap');
     const sentHint   = document.getElementById('demo-sent-hint');
     const inputHint  = document.getElementById('demo-input-hint');
-    const tokenOnlyMode = mode === 'sentences' || mode === 'spell' || mode === 'keywords';
+    const tokenOnlyMode = mode === 'sentences' || mode === 'spell' || mode === 'keywords' || mode === 'romanize';
     if (romanBtn)  romanBtn.classList.toggle('hidden', mode !== 'fts');
     if (filterRow) filterRow.classList.toggle('hidden', tokenOnlyMode);
     if (tableWrap) tableWrap.classList.toggle('hidden', tokenOnlyMode);
@@ -598,7 +637,7 @@ const keywordSamples = [
     });
 
     // Update run button label
-    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract', romanize: 'Romanize' };
     const label = document.getElementById('demo-btn-label');
     if (label) label.textContent = labelMap[mode] || 'Segment';
   }
@@ -636,7 +675,7 @@ const keywordSamples = [
     btn.disabled = loading;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
     spinner.classList.toggle('hidden', !loading);
-    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract', romanize: 'Romanize' };
     label.textContent = loading ? 'Loading…' : (labelMap[mode] || 'Segment');
     if (status) { status.classList.toggle('hidden', !loading); status.textContent = loading ? 'Initialising WebAssembly…' : ''; }
   }
@@ -754,6 +793,40 @@ const keywordSamples = [
     }
   }
 
+  async function runRomanize() {
+    const text = document.getElementById('demo-input').value.trim();
+    if (!text) return;
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const t0 = performance.now();
+      const romanized = mod.romanize_sentence(text);
+      const elapsed = performance.now() - t0;
+
+      renderRomanizeResult(romanized);
+
+      const stats = document.getElementById('demo-stats');
+      if (stats) stats.innerHTML = `<span>Input: <strong>${text.length}</strong> chars → Romanized: <strong>${romanized.length}</strong> chars</span>`;
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = romanized ? '1 result' : 'no output';
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function runKeywords() {
     const text = document.getElementById('demo-input').value.trim();
     if (!text) return;
@@ -792,6 +865,7 @@ const keywordSamples = [
     if (mode === 'sentences') runSentences();
     else if (mode === 'spell') runSpell();
     else if (mode === 'keywords') runKeywords();
+    else if (mode === 'romanize') runRomanize();
     else runTokens();
   }
 
