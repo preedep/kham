@@ -15,7 +15,7 @@ interface Props {
 
 const {
   title,
-  description = 'kham — Fast Thai word segmentation in Rust. Zero-dependency, no_std core. Rust, WASM, Python, C FFI, CLI, PostgreSQL FTS, SQLite FTS.',
+  description = 'Open-source Thai NLP in Rust. 33 MiB/s word segmentation, POS tagging, NER, spell correction, phonetic search. Rust, Python, WASM, PostgreSQL, SQLite.',
   lang = 'en',
   keywords,
   jsonLd,
@@ -59,6 +59,7 @@ const allSchemas = [websiteSchema, ...(jsonLd ? (Array.isArray(jsonLd) ? jsonLd 
     {keywords && <meta name="keywords" content={keywords} />}
     <meta name="robots" content={noindex ? 'noindex, nofollow' : 'index, follow'} />
     <meta name="author" content="kham contributors" />
+    <meta name="application-name" content="kham" />
     <meta name="theme-color" content="#0f172a" />
     <link rel="canonical" href={canonicalUrl} />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -80,6 +81,7 @@ const allSchemas = [websiteSchema, ...(jsonLd ? (Array.isArray(jsonLd) ? jsonLd 
 
     <!-- Twitter / X card -->
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@kham_io" />
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={ogImage} />

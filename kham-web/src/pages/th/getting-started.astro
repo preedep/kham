@@ -9,7 +9,7 @@ const sections = [
   {
     id: 'rust', icon: '🦀', title: 'Rust',
     subtitle: 'Native crate — zero-copy, no_std core',
-    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.7"' },
+    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.8"' },
     example: { lang: 'rust', label: 'main.rs', code: `use kham_core::Tokenizer;
 
 fn main() {
@@ -62,17 +62,29 @@ tokens.forEach(t => console.log(t.text, t.kind, t.char_start, t.char_end));` },
   },
   {
     id: 'cli', icon: '💻', title: 'CLI',
-    subtitle: 'โปรแกรมตัดคำจาก command line',
+    subtitle: 'โปรแกรมตัดคำ ตรวจสอบการสะกด ดึงคำสำคัญ และแปลงเป็น RTGS จาก command line',
     install: { lang: 'bash', label: 'shell', code: 'cargo install kham-cli' },
     example: { lang: 'bash', label: 'shell', code: `# ตัดคำภาษาไทย
 kham "กินข้าวกับปลา"
 # กิน|ข้าว|กับ|ปลา
 
+# แสดง kind และ confidence score
+kham --kind --confidence "กินข้าวกับปลา"
+# กิน:Thai:conf=0.92|ข้าว:Thai:conf=0.98|…
+
 # โหมด FTS — kind, POS, NE, stop, syn ต่อ token
 kham --fts "กินข้าวกับปลา"
 
-# FTS + phonetic code ในช่อง syn=
-kham --fts --soundex lk82 "กินข้าวกับปลา"` },
+# ตรวจสอบการสะกด
+kham --spell "กีนข้าว"
+
+# ดึงคำสำคัญ
+kham --keywords "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่"
+
+# แปลงเป็น RTGS
+kham --romanize "กินข้าวกับปลา"
+# kin khao kap pla` },
+    link: '/integrations/cli',
   },
   {
     id: 'postgresql', icon: '🐘', title: 'PostgreSQL FTS',
