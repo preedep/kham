@@ -1,0 +1,25 @@
+# Dockerfile.hub — PostgreSQL with kham_pg Thai FTS extension pre-installed.
+#
+# Build context must contain:
+#   libkham_pg.so   — compiled extension binary (arch-specific)
+#   kham_pg.control — extension control file
+#   sql/            — SQL install + upgrade scripts
+#
+# Built by CI (release.yml build_docker job); not intended for local use.
+# Local development: use kham-pg/docker/Dockerfile.test instead.
+
+ARG PG_VERSION=17
+FROM postgres:${PG_VERSION}-bookworm
+
+ARG PG_VERSION=17
+ARG KHAM_VERSION=unknown
+
+LABEL org.opencontainers.image.title="kham-pg" \
+      org.opencontainers.image.description="PostgreSQL with kham Thai FTS extension pre-installed" \
+      org.opencontainers.image.version="${KHAM_VERSION}" \
+      org.opencontainers.image.source="https://github.com/preedep/kham" \
+      org.opencontainers.image.licenses="MIT OR Apache-2.0"
+
+COPY libkham_pg.so   /usr/lib/postgresql/${PG_VERSION}/lib/kham_pg.so
+COPY kham_pg.control /usr/share/postgresql/${PG_VERSION}/extension/
+COPY sql/            /usr/share/postgresql/${PG_VERSION}/extension/

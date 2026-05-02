@@ -403,11 +403,103 @@ jobs:
           path: kham-pg/kham_pg-*.zip
 
   # ---------------------------------------------------------------------------
+  # Build and push postgres+kham-pg Docker images to Docker Hub
+  #
+  # Requires GitHub secrets: DOCKERHUB_USERNAME, DOCKERHUB_TOKEN
+  #
+  # Per-arch images are built on native runners (no QEMU), then combined
+  # into a multi-arch manifest by the docker_manifest job.
+  #
+  # Tags produced:
+  #   <user>/kham-pg:<version>-pg<N>   — multi-arch (amd64 + arm64), PG 14–18
+  #   <user>/kham-pg:latest            — alias for <version>-pg17
+  # ---------------------------------------------------------------------------
+  build_docker:
+    name: Docker / PG ${{ matrix.pg }} / ${{ matrix.arch }}
+    needs: build_pg
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { pg: 14, arch: amd64, runner: ubuntu-latest,     artifact_arch: x86_64  }
+          - { pg: 14, arch: arm64, runner: ubuntu-24.04-arm,  artifact_arch: aarch64 }
+          - { pg: 15, arch: amd64, runner: ubuntu-latest,     artifact_arch: x86_64  }
+          - { pg: 15, arch: arm64, runner: ubuntu-24.04-arm,  artifact_arch: aarch64 }
+          - { pg: 16, arch: amd64, runner: ubuntu-latest,     artifact_arch: x86_64  }
+          - { pg: 16, arch: arm64, runner: ubuntu-24.04-arm,  artifact_arch: aarch64 }
+          - { pg: 17, arch: amd64, runner: ubuntu-latest,     artifact_arch: x86_64  }
+          - { pg: 17, arch: arm64, runner: ubuntu-24.04-arm,  artifact_arch: aarch64 }
+          - { pg: 18, arch: amd64, runner: ubuntu-latest,     artifact_arch: x86_64  }
+          - { pg: 18, arch: arm64, runner: ubuntu-24.04-arm,  artifact_arch: aarch64 }
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download kham-pg artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: kham-pg-pg${{ matrix.pg }}-${{ matrix.artifact_arch }}
+          path: docker-build/
+      - name: Prepare build context
+        run: |
+          cd docker-build
+          tar xzf kham-pg-*.tar.gz
+          cp ../kham-pg/kham_pg.control .
+          mkdir -p sql
+          cp ../kham-pg/sql/*.sql sql/
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: docker-build/
+          file: kham-pg/Dockerfile.hub
+          platforms: linux/${{ matrix.arch }}
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/kham-pg:${{ github.ref_name }}-pg${{ matrix.pg }}-${{ matrix.arch }}
+          build-args: |
+            PG_VERSION=${{ matrix.pg }}
+            KHAM_VERSION=${{ github.ref_name }}
+
+  docker_manifest:
+    name: Docker manifest / PG ${{ matrix.pg }}
+    needs: build_docker
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [14, 15, 16, 17, 18]
+    steps:
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Create multi-arch manifest
+        run: |
+          VERSION="${{ github.ref_name }}"
+          PG="${{ matrix.pg }}"
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/kham-pg"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:${VERSION}-pg${PG}" \
+            "${IMAGE}:${VERSION}-pg${PG}-amd64" \
+            "${IMAGE}:${VERSION}-pg${PG}-arm64"
+      - name: Update latest tag (PG 17 only)
+        if: matrix.pg == 17
+        run: |
+          VERSION="${{ github.ref_name }}"
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/kham-pg"
+          docker buildx imagetools create \
+            --tag "${IMAGE}:latest" \
+            "${IMAGE}:${VERSION}-pg17-amd64" \
+            "${IMAGE}:${VERSION}-pg17-arm64"
+
+  # ---------------------------------------------------------------------------
   # GitHub Release — auto-generate notes and attach all artifacts as assets
   # ---------------------------------------------------------------------------
   github_release:
     name: GitHub Release
-    needs: [publish_crates, publish_pypi, publish_npm, publish_pgxn, build_binaries, build_pg, build_android]
+    needs: [publish_crates, publish_pypi, publish_npm, publish_pgxn, build_binaries, build_pg, build_android, docker_manifest]
     runs-on: ubuntu-latest
     permissions:
       contents: write

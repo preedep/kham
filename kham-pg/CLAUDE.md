@@ -86,6 +86,27 @@ Punctuation and emoji have no mapping — PG discards those token types at index
 - POS lexemes: tokens with known POS emit `pos_<tag>` (e.g. `pos_noun`, `pos_verb`) as an extra colocated lexeme.
 - Two new soundex dict alternatives: `kham_fts_dict_udom83` and `kham_fts_dict_metasound`.
 
+## Docker Hub image
+
+`Dockerfile.hub` builds a ready-to-use `postgres + kham_pg` image published to Docker Hub by the `build_docker` / `docker_manifest` CI jobs on every release tag.
+
+```
+<DOCKERHUB_USERNAME>/kham-pg:<version>-pg<N>   # multi-arch (amd64 + arm64), PG 14–18
+<DOCKERHUB_USERNAME>/kham-pg:latest            # alias for <version>-pg17
+```
+
+The image is built from a pre-compiled `.so` (produced by `build_pg`), so no Rust toolchain is needed inside the Docker build. The build context contains:
+
+```
+libkham_pg.so       — from build_pg artifact (arch-specific)
+kham_pg.control     — copied from kham-pg/ in the repo
+sql/                — all *.sql files from kham-pg/sql/
+```
+
+Requires GitHub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
+
+**`Dockerfile.hub` is for distribution only.** For local regress testing use `docker/Dockerfile.test` via `make regress`.
+
 ## README files — two separate documents
 
 | File | Purpose |
