@@ -198,22 +198,29 @@ jobs:
   # because pg_config availability is not guaranteed on those runners.
   # ---------------------------------------------------------------------------
   build_pg:
-    name: kham-pg / PG ${{ matrix.pg }} / Linux x86_64
+    name: kham-pg / PG ${{ matrix.pg }} / ${{ matrix.arch }}
     needs: ci_check
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         pg: [14, 15, 16, 17, 18]
+        include:
+          - arch: x86_64
+            runner: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          key: pg${{ matrix.pg }}
+          key: pg${{ matrix.pg }}-${{ matrix.arch }}
       - name: Add PostgreSQL apt repository
         run: |
-          sudo apt-get install -y curl ca-certificates gnupg
+          sudo apt-get install -y curl ca-certificates gnupg lsb-release
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
             | sudo gpg --dearmor -o /usr/share/keyrings/pgdg.gpg
           echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
@@ -231,13 +238,14 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME}"
           PG="${{ matrix.pg }}"
+          TARGET="${{ matrix.target }}"
           mkdir -p dist
           cp target/release/libkham_pg.so dist/
-          (cd dist && tar czf "kham-pg-${VERSION}-pg${PG}-x86_64-unknown-linux-gnu.tar.gz" \
+          (cd dist && tar czf "kham-pg-${VERSION}-pg${PG}-${TARGET}.tar.gz" \
             libkham_pg.so && rm libkham_pg.so)
       - uses: actions/upload-artifact@v4
         with:
-          name: kham-pg-pg${{ matrix.pg }}
+          name: kham-pg-pg${{ matrix.pg }}-${{ matrix.arch }}
           path: dist/
 
   # ---------------------------------------------------------------------------
@@ -418,7 +426,7 @@ jobs:
           path: dist
       - uses: actions/download-artifact@v4
         with:
-          pattern: kham-pg-*
+          pattern: kham-pg-pg*
           merge-multiple: true
           path: dist
       - uses: actions/download-artifact@v4
