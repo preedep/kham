@@ -126,7 +126,11 @@ pub unsafe extern "C" fn kham_start_impl(text: *const c_char, len: c_int) -> *mu
             tokens.push((offset, len, kind_to_pg_type(ft.kind)));
         }
 
-        Box::into_raw(Box::new(KhamState { text_buf, tokens, cursor: 0 })) as *mut c_void
+        Box::into_raw(Box::new(KhamState {
+            text_buf,
+            tokens,
+            cursor: 0,
+        })) as *mut c_void
     });
 
     result.unwrap_or(std::ptr::null_mut())
@@ -245,7 +249,10 @@ struct DictFts {
 impl DictFts {
     fn new(fts: FtsTokenizer) -> Self {
         let cap = NonZeroUsize::new(DICT_CACHE_CAP).unwrap();
-        Self { fts, cache: Mutex::new(LruCache::new(cap)) }
+        Self {
+            fts,
+            cache: Mutex::new(LruCache::new(cap)),
+        }
     }
 }
 
