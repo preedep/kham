@@ -30,7 +30,7 @@ EXT_DIR         = $(PG_SHAREDIR)/extension
 LIBNAME        := libkham_pg.so
 RELEASE_LIB    := ../target/release/$(LIBNAME)
 
-.PHONY: build install regress regress-matrix regress-update-expected bench dist clean
+.PHONY: build install regress regress-matrix regress-update-expected bench dist print-version clean
 
 # ── build ─────────────────────────────────────────────────────────────────────
 
@@ -137,6 +137,11 @@ cc = "1"\n' > $(DIST_NAME)/Cargo.toml
 	zip -r $(DIST_NAME).zip $(DIST_NAME)
 	rm -rf $(DIST_NAME)
 	@echo "Created $(DIST_NAME).zip — ready for PGXN upload"
+
+# ── print-version — used by CI to get the zip filename ───────────────────────
+
+print-version:
+	@echo $(EXT_VERSION)
 
 # ── clean ─────────────────────────────────────────────────────────────────────
 
