@@ -74,6 +74,15 @@ Created in this order:
 
 Punctuation and emoji have no mapping — PG discards those token types at index time.
 
+## README files — two separate documents
+
+| File | Purpose |
+|------|---------|
+| `README.md` | Workspace-facing developer README. May reference `make -C kham-pg`, Docker regress, CLAUDE.md, and other workspace concepts. |
+| `README.pgxn.md` | **PGXN distribution README.** Standalone — zero references to the workspace, CLAUDE.md, Docker regress, or any path prefixes. Bundled as `README.md` inside the PGXN zip by `make dist`, and rendered as the extension detail page on pgxn.org. |
+
+**Rule:** keep `README.pgxn.md` pure — only build requirements, `make install`, SQL usage examples, and public links. Never add workspace-specific commands or internal developer notes to it.
+
 ## Build requirements
 
 - `pg_config` in `PATH` **or** `PG_CONFIG=/path/to/pg_config`

@@ -106,6 +106,7 @@ dist:
 	mkdir -p $(DIST_NAME)/sql $(DIST_NAME)/src
 	# Control and SQL
 	cp META.json kham_pg.control $(DIST_NAME)/
+	cp README.pgxn.md $(DIST_NAME)/README.md
 	cp sql/kham_pg--$(EXT_VERSION).sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.1.0--0.2.0.sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.1.3--0.2.0.sql $(DIST_NAME)/sql/
