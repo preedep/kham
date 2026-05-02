@@ -19,7 +19,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 
 ---
 
-## v0.6.0 — Planned
+## v0.6.0 — Released
 
 | Feature | Module | Priority |
 |---------|--------|----------|
@@ -144,5 +144,5 @@ with zero schema change.
 - [x] **kham-sqlite stopword suppression** — `stopwords on` xCreate argument; stopword tokens skipped in `xTokenize`; default off (backward-compatible)
 - [x] **kham-sqlite ngram_size** — `ngram_size N` xCreate argument; controls char n-gram size for Unknown tokens; default 3; 0 disables n-grams
 - [x] **Android build** — kham-sqlite built for arm64-v8a, armeabi-v7a, x86_64, x86 via NDK in release CI; iOS static lib deferred
-- [ ] **Spelling correction** — moved to v0.6.0; see v0.6.0 section above
+- [x] **Spelling correction** — shipped in v0.6.0; see v0.6.0 section above
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely
