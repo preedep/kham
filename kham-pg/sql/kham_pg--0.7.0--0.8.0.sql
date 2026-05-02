@@ -1,0 +1,10 @@
+-- kham_pg--0.7.0--0.8.0.sql
+--
+-- Upgrade kham_pg from 0.7.0 to 0.8.0.
+--
+-- No schema changes in 0.8.0. The underlying kham-core library gains
+-- spell correction, romanize_sentence, extract_phrases, TokenStream,
+-- and per-token confidence scores — none of which affect the PostgreSQL
+-- SQL objects created by this extension.
+--
+-- The .so is replaced by the build system; no SQL DDL is required.
