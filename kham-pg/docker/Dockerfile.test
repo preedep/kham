@@ -1,7 +1,14 @@
 # Dockerfile.test — multi-stage build for kham-pg pg_regress tests.
 #
-# Stage 1 (builder): Debian slim + postgresql-server-dev-17 + Rust → libkham_pg.so
-# Stage 2 (runner):  Debian slim + postgresql-17 only             → pg_regress
+# PG_VERSION selects the PostgreSQL major version (14–18, default 17).
+# Pass it at build time:
+#   docker build --build-arg PG_VERSION=16 -f kham-pg/docker/Dockerfile.test .
+# Or via Makefile:
+#   make -C kham-pg regress PG_VERSION=16
+#   make -C kham-pg regress-matrix          # tests PG 14–18 in sequence
+#
+# Stage 1 (builder): Debian slim + postgresql-server-dev-N + Rust → libkham_pg.so
+# Stage 2 (runner):  Debian slim + postgresql-N only              → pg_regress
 #
 # Alpine/musl is NOT used: Rust's musl targets are static-only and do not
 # support cdylib (required for PostgreSQL shared-library extensions).
@@ -10,7 +17,9 @@
 # Build context: repository root (full Cargo workspace must be available).
 
 # ── Stage 1: builder ─────────────────────────────────────────────────────────
+ARG PG_VERSION=17
 FROM debian:bookworm-slim AS builder
+ARG PG_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -27,7 +36,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
        > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update && apt-get install -y --no-install-recommends \
-        postgresql-server-dev-17 \
+        postgresql-server-dev-${PG_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Rust stable
@@ -42,7 +51,7 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
 WORKDIR /kham
 COPY . .
 
-ENV PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+ENV PG_CONFIG=/usr/lib/postgresql/${PG_VERSION}/bin/pg_config
 RUN cargo build -p kham-pg --release
 
 # Smoke-test: verify PG-facing symbols are in the dynamic table.
@@ -53,7 +62,9 @@ RUN echo "=== exported PG symbols ===" \
     || { echo "ERROR: expected PG symbols missing from dynamic table"; exit 1; }
 
 # ── Stage 2: runner ───────────────────────────────────────────────────────────
+ARG PG_VERSION=17
 FROM debian:bookworm-slim AS runner
+ARG PG_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -69,22 +80,22 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
        > /etc/apt/sources.list.d/pgdg.list \
     && apt-get update && apt-get install -y --no-install-recommends \
-        postgresql-17 \
-        postgresql-server-dev-17 \
+        postgresql-${PG_VERSION} \
+        postgresql-server-dev-${PG_VERSION} \
     && rm -rf /var/lib/apt/lists/*
 
 # Install extension files into PG's directories (paths via pg_config)
 COPY --from=builder /kham/target/release/libkham_pg.so /tmp/kham_pg.so
 COPY kham-pg/kham_pg.control                           /tmp/kham_pg.control
-COPY kham-pg/sql/kham_pg--0.3.0.sql                   /tmp/kham_pg--0.3.0.sql
+COPY kham-pg/sql/kham_pg--0.6.0.sql                   /tmp/kham_pg--0.6.0.sql
 
 RUN set -e; \
-    PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config; \
+    PG_CONFIG=/usr/lib/postgresql/${PG_VERSION}/bin/pg_config; \
     PG_PKGLIBDIR=$($PG_CONFIG --pkglibdir); \
     PG_EXTDIR=$($PG_CONFIG --sharedir)/extension; \
     install -m 755 /tmp/kham_pg.so             "$PG_PKGLIBDIR/kham_pg.so"; \
     install -m 644 /tmp/kham_pg.control        "$PG_EXTDIR/kham_pg.control"; \
-    install -m 644 /tmp/kham_pg--0.3.0.sql     "$PG_EXTDIR/kham_pg--0.3.0.sql"
+    install -m 644 /tmp/kham_pg--0.6.0.sql     "$PG_EXTDIR/kham_pg--0.6.0.sql"
 
 # Regression test input files
 COPY kham-pg/regress /kham/kham-pg/regress

@@ -204,7 +204,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pg: [16, 17]
+        pg: [14, 15, 16, 17, 18]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -367,11 +367,38 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   # ---------------------------------------------------------------------------
+  # Publish kham-pg to PGXN
+  #
+  # Requires GitHub secrets: PGXN_USERNAME, PGXN_PASSWORD
+  # PGXN Manager upload API: POST https://manager.pgxn.org/upload (Basic Auth)
+  # ---------------------------------------------------------------------------
+  publish_pgxn:
+    name: Publish to PGXN
+    needs: ci_check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get install -y zip
+      - name: Build PGXN distribution zip
+        run: make -C kham-pg dist
+      - name: Upload to PGXN
+        run: |
+          curl -fsSL \
+            -u "${{ secrets.PGXN_USERNAME }}:${{ secrets.PGXN_PASSWORD }}" \
+            -F "distribution=@kham-pg/kham_pg-$(make -C kham-pg -s print-version).zip" \
+            https://manager.pgxn.org/upload
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pgxn-dist
+          path: kham-pg/kham_pg-*.zip
+
+  # ---------------------------------------------------------------------------
   # GitHub Release — auto-generate notes and attach all artifacts as assets
   # ---------------------------------------------------------------------------
   github_release:
     name: GitHub Release
-    needs: [publish_crates, publish_pypi, publish_npm, build_binaries, build_pg, build_android]
+    needs: [publish_crates, publish_pypi, publish_npm, publish_pgxn, build_binaries, build_pg, build_android]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -393,6 +420,10 @@ jobs:
         with:
           pattern: kham-pg-*
           merge-multiple: true
+          path: dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: pgxn-dist
           path: dist
       - uses: actions/download-artifact@v4
         with:

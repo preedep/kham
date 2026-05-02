@@ -5,8 +5,10 @@ PostgreSQL text-search extension for Thai. Registers a custom text-search parser
 ## Install
 
 ```bash
-# Build + run pg_regress in Docker (PostgreSQL 17) — no local PG needed
-make -C kham-pg regress
+# Build + run pg_regress in Docker — no local PG needed
+make -C kham-pg regress                  # default PG 17
+make -C kham-pg regress PG_VERSION=16   # single-version override
+make -C kham-pg regress-matrix          # PG 14–18 in sequence
 
 # Install into a local PostgreSQL (requires pg_config in PATH)
 make -C kham-pg install

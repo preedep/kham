@@ -48,7 +48,9 @@ cargo build -p kham-capi --release
 # kham-pg (requires pg_config in PATH or PG_CONFIG env var)
 cargo build -p kham-pg --release
 make -C kham-pg install
-make -C kham-pg regress              # pg_regress in Docker (PG 17)
+make -C kham-pg regress                       # pg_regress in Docker (PG 17, default)
+make -C kham-pg regress PG_VERSION=16         # single-version override
+make -C kham-pg regress-matrix                # PG 14–18 in sequence
 
 # kham-sqlite (requires SQLite headers: macOS SDK or libsqlite3-dev on Linux)
 cargo build -p kham-sqlite --release
