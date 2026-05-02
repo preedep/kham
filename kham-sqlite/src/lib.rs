@@ -7,6 +7,8 @@
 //! - Synonym expansion via `FTS5_TOKEN_COLOCATED` (configurable TSV map)
 //! - RTGS romanization added as colocated synonyms (กิน → "kin")
 //! - Thai phonetic soundex codes as colocated synonyms for fuzzy matching
+//! - Thai digit → ASCII normalization (๑๒๓ indexed as "123" via colocated synonym)
+//! - POS lexeme colocated tokens (e.g. `posnoun`, `posverb`) for POS filtering
 //!
 //! ```sql
 //! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
@@ -402,6 +404,7 @@ unsafe extern "C" fn kham_fts5_create(
     let ngram_size = parse_ngram_size_arg(az_arg, n_arg);
     let mut builder = FtsTokenizer::builder()
         .romanization(RomanizationMap::builtin())
+        .number_normalize(true)
         .ngram_size(ngram_size);
     if let Some(algo) = soundex_algo {
         builder = builder.soundex(algo);
@@ -447,9 +450,12 @@ unsafe extern "C" fn kham_fts5_delete(p: *mut KhamFts5Tokenizer) {
 /// Pipeline per call:
 /// 1. Normalise input (สระลอย, วรรณยุกต์ dedup, Sara Am) — offsets reference normalized text.
 /// 2. Run the full FTS pipeline (`segment_for_fts`): segment → NE tag → stopword → POS →
-///    synonym expand → RTGS romanization.
+///    synonym expand → RTGS romanization → number normalization.
 /// 3. For each non-whitespace token, call `x_token(flags=0, iStart, iEnd)`.
-/// 4. For each synonym/RTGS form, call `x_token(FTS5_TOKEN_COLOCATED, iStart, iEnd)`.
+/// 4. For each synonym/RTGS/soundex/number form, call `x_token(FTS5_TOKEN_COLOCATED, …)`.
+/// 5. For n-grams (Unknown tokens), call `x_token(FTS5_TOKEN_COLOCATED, …)` for each gram.
+/// 6. For POS-tagged tokens, call `x_token(FTS5_TOKEN_COLOCATED, …)` with `"pos<tag>"`.
+///    Enables: `WHERE docs MATCH 'กิน AND posverb'`.
 unsafe extern "C" fn kham_fts5_tokenize(
     p: *mut KhamFts5Tokenizer,
     p_ctx: *mut c_void,
@@ -566,6 +572,30 @@ unsafe extern "C" fn kham_fts5_tokenize(
                         FTS5_TOKEN_COLOCATED,
                         tri_bytes.as_ptr() as *const c_char,
                         tri_bytes.len() as c_int,
+                        i_start,
+                        i_end,
+                    )
+                };
+                if rc != SQLITE_OK {
+                    return rc;
+                }
+            }
+
+            // Emit POS lexeme as colocated token (e.g. "posnoun", "posverb").
+            // Uses concatenated form (no underscore) so the kham tokenizer treats it
+            // as a single Latin token in queries: WHERE docs MATCH 'posverb'.
+            // Note: kham-pg uses pos_noun (tsquery doesn't re-tokenize terms), but
+            // FTS5 tokenizes the MATCH argument with the same kham tokenizer, so
+            // pos_noun would split into three tokens — concatenated form avoids this.
+            if let Some(pos) = ft.pos {
+                let pos_lexeme = format!("pos{}", pos.as_tag().to_ascii_lowercase());
+                let pos_bytes = pos_lexeme.as_bytes();
+                let rc = unsafe {
+                    x_token(
+                        p_ctx,
+                        FTS5_TOKEN_COLOCATED,
+                        pos_bytes.as_ptr() as *const c_char,
+                        pos_bytes.len() as c_int,
                         i_start,
                         i_end,
                     )
