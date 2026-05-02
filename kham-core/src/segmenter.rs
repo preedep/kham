@@ -250,6 +250,12 @@ struct DpTable {
     from: Vec<usize>,
     /// Whether the incoming edge at index `i` was a dictionary match.
     is_dict: Vec<bool>,
+    /// TNC frequency of the winning dict edge that arrived at boundary `i`.
+    /// `0` for unknown edges or dict words with zero corpus frequency.
+    edge_freq: Vec<u32>,
+    /// Number of edges (dict + unknown fallback) that were considered when
+    /// trying to arrive at boundary `i`. Capped at 255.
+    competing: Vec<u8>,
 }
 
 /// Forward DP over TCC boundary indices for a single Thai slice.
@@ -260,6 +266,8 @@ fn forward_dp(dict: &Dict, freqs: &FreqMap, slice: &str, bounds: &[usize]) -> Dp
     let mut best: Vec<Option<DpScore>> = vec![None; nb];
     let mut from = vec![0usize; nb];
     let mut is_dict = vec![false; nb];
+    let mut edge_freq = vec![0u32; nb];
+    let mut competing = vec![0u8; nb];
 
     best[0] = Some(DpScore::ZERO);
 
@@ -276,27 +284,38 @@ fn forward_dp(dict: &Dict, freqs: &FreqMap, slice: &str, bounds: &[usize]) -> Dp
         for prefix in dict.prefixes(remaining) {
             let end_pos = pos + prefix.len();
             if let Ok(j) = bounds.binary_search(&end_pos) {
+                // Count every dict edge considered at this boundary.
+                competing[j] = competing[j].saturating_add(1);
                 let freq = freqs.get(prefix);
                 let candidate = Some(score.dict_edge(freq));
                 if candidate > best[j] {
                     best[j] = candidate;
                     from[j] = i;
                     is_dict[j] = true;
+                    edge_freq[j] = freq;
                 }
             }
         }
 
         // Fallback edge: advance one TCC as an unknown token.
         let j = i + 1;
+        // Count the unknown fallback edge as a competing edge too.
+        competing[j] = competing[j].saturating_add(1);
         let candidate = Some(score.unknown_edge());
         if candidate > best[j] {
             best[j] = candidate;
             from[j] = i;
             is_dict[j] = false;
+            edge_freq[j] = 0;
         }
     }
 
-    DpTable { from, is_dict }
+    DpTable {
+        from,
+        is_dict,
+        edge_freq,
+        competing,
+    }
 }
 
 /// Reconstruct the winning boundary-index path by following `from` pointers
@@ -314,6 +333,33 @@ fn backtrack_path(from: &[usize]) -> Vec<usize> {
     }
     path.reverse();
     path
+}
+
+/// Compute the segmentation confidence for a single token boundary.
+///
+/// - `is_dict`: whether the winning edge at this boundary was a dictionary match.
+/// - `freq`: TNC corpus frequency of the winning dict edge (`0` for unknown edges
+///   or dict words absent from the frequency table).
+/// - `competing`: total number of edges (dict + unknown fallback) that were
+///   considered when arriving at this boundary.
+///
+/// Returns a value in `[0.0, 1.0]` following the design:
+/// - Unknown token → `0.0`
+/// - Dict match, zero freq → base `0.7`
+/// - Dict match, nonzero freq → base `1.0`
+/// - Ambiguity penalty applied multiplicatively: 2 edges → ×0.9, 3 → ×0.8, 4+ → ×0.7
+fn compute_confidence(is_dict: bool, freq: u32, competing: u8) -> f32 {
+    if !is_dict {
+        return 0.0;
+    }
+    let base = if freq > 0 { 1.0_f32 } else { 0.7_f32 };
+    let amb = match competing {
+        0 | 1 => 1.0,
+        2 => 0.9,
+        3 => 0.8,
+        _ => 0.7,
+    };
+    base * amb
 }
 
 /// Segment a single Thai span using the newmm DAG algorithm and append tokens
@@ -351,11 +397,14 @@ fn segment_thai<'t>(
         } else {
             TokenKind::Unknown
         };
+        let confidence =
+            compute_confidence(dp.is_dict[w[1]], dp.edge_freq[w[1]], dp.competing[w[1]]);
         out.push(Token::new(
             token_text,
             start_byte..end_byte,
             char_start..char_cursor,
             kind,
+            confidence,
         ));
     }
 }
@@ -872,5 +921,62 @@ mod tests {
         let tokens = tok().segment("สวัสดีชาวโลก");
         let rebuilt: alloc::string::String = tokens.iter().map(|t| t.text).collect();
         assert_eq!(rebuilt, "สวัสดีชาวโลก");
+    }
+
+    // ── confidence ────────────────────────────────────────────────────────────
+
+    #[test]
+    fn confidence_unknown_token_is_zero() {
+        // A token not in the dict should get confidence 0.0
+        let tokens = tok().segment("กขคงจฉ"); // garbage Thai that is NOT in the dict
+                                              // There should be at least one Unknown token with confidence 0.0
+        let unknown = tokens.iter().find(|t| t.kind == TokenKind::Unknown);
+        if let Some(u) = unknown {
+            assert_eq!(u.confidence, 0.0, "Unknown token must have confidence 0.0");
+        }
+    }
+
+    #[test]
+    fn confidence_dict_word_is_positive() {
+        // กิน, ข้าว, ปลา are all in the dict and should have confidence > 0.0
+        let tokens = tok().segment("กินข้าวกับปลา");
+        for t in &tokens {
+            if t.kind == TokenKind::Thai {
+                assert!(
+                    t.confidence > 0.0,
+                    "dict Thai token {:?} must have confidence > 0",
+                    t.text
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn confidence_non_thai_tokens_are_1() {
+        // Latin, Number, Emoji tokens always have confidence 1.0
+        let tokens = tok().segment("hello 123 😀");
+        for t in &tokens {
+            assert_eq!(
+                t.confidence, 1.0,
+                "non-Thai token {:?} must have confidence 1.0",
+                t.text
+            );
+        }
+    }
+
+    #[test]
+    fn confidence_range_valid() {
+        // Confidence must always be in [0.0, 1.0]
+        let texts = &["กินข้าวกับปลา", "สวัสดีครับ", "hello กรุงเทพ 2024 😀", "กขคง"];
+        for text in texts {
+            for t in tok().segment(text) {
+                assert!(
+                    (0.0..=1.0).contains(&t.confidence),
+                    "token {:?} confidence {} out of range",
+                    t.text,
+                    t.confidence
+                );
+            }
+        }
     }
 }

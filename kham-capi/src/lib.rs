@@ -194,6 +194,9 @@ pub struct KhamToken {
     /// [`kham_segment_tokens`] because NE tagging is not part of the basic
     /// segmentation pipeline. Use [`kham_fts_segment`] to obtain Named tokens.
     pub kind: *mut c_char,
+    /// Segmentation confidence in [0.0, 1.0]. 0.0 = unknown token (no dictionary evidence).
+    /// 1.0 = unambiguous high-frequency dictionary match.
+    pub confidence: f32,
 }
 
 /// Heap-allocated array of [`KhamToken`] values.
@@ -237,6 +240,7 @@ pub unsafe extern "C" fn kham_segment_tokens(text: *const c_char) -> *mut KhamTo
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_cstring(t.kind).into_raw(),
+            confidence: t.confidence,
         })
         .collect();
 

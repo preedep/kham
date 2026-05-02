@@ -129,8 +129,8 @@ impl NeTagger {
     /// // Simulate segmenter splitting กรุงเทพ into กรุง + เทพ
     /// // Each Thai char is 3 bytes: กรุง = 12 bytes, เทพ = 9 bytes
     /// let tokens = vec![
-    ///     Token::new("กรุง", 0..12,  0..4, TokenKind::Thai),
-    ///     Token::new("เทพ",  12..21, 4..7, TokenKind::Thai),
+    ///     Token::new("กรุง", 0..12,  0..4, TokenKind::Thai, 1.0),
+    ///     Token::new("เทพ",  12..21, 4..7, TokenKind::Thai, 1.0),
     /// ];
     /// let tagged = tagger.tag_tokens(tokens, source);
     /// assert_eq!(tagged.len(), 1);
@@ -167,11 +167,16 @@ impl NeTagger {
                 if let Some(ne_kind) = self.tag(candidate) {
                     let char_start = tokens[i].char_span.start;
                     let char_end = tokens[end - 1].char_span.end;
+                    let confidence = tokens[i..end]
+                        .iter()
+                        .map(|t| t.confidence)
+                        .fold(1.0_f32, f32::min);
                     out.push(Token::new(
                         candidate,
                         span_start..span_end,
                         char_start..char_end,
                         TokenKind::Named(ne_kind),
+                        confidence,
                     ));
                     i = end;
                     matched = true;
@@ -265,7 +270,7 @@ mod tests {
         use crate::token::Token;
         let source = "กรุงเทพ";
         let tagger = NeTagger::from_tsv("กรุงเทพ\tPLACE\n");
-        let tok = Token::new("กรุงเทพ", 0..21, 0..7, TokenKind::Thai);
+        let tok = Token::new("กรุงเทพ", 0..21, 0..7, TokenKind::Thai, 1.0);
         let result = tagger.tag_tokens(alloc::vec![tok], source);
         assert_eq!(result[0].kind, TokenKind::Named(NamedEntityKind::Place));
     }
@@ -275,7 +280,7 @@ mod tests {
         use crate::token::Token;
         let source = "hello";
         let tagger = NeTagger::from_tsv("hello\tPERSON\n");
-        let tok = Token::new("hello", 0..5, 0..5, TokenKind::Latin);
+        let tok = Token::new("hello", 0..5, 0..5, TokenKind::Latin, 1.0);
         let result = tagger.tag_tokens(alloc::vec![tok], source);
         assert_eq!(result[0].kind, TokenKind::Latin); // not relabeled
     }
@@ -285,7 +290,7 @@ mod tests {
         use crate::token::Token;
         let source = "กิน";
         let tagger = NeTagger::from_tsv("กรุงเทพ\tPLACE\n");
-        let tok = Token::new("กิน", 0..9, 0..3, TokenKind::Thai);
+        let tok = Token::new("กิน", 0..9, 0..3, TokenKind::Thai, 1.0);
         let result = tagger.tag_tokens(alloc::vec![tok], source);
         assert_eq!(result[0].kind, TokenKind::Thai);
     }
@@ -300,8 +305,8 @@ mod tests {
         let source = "กรุงเทพ";
         let tagger = NeTagger::from_tsv("กรุงเทพ\tPLACE\n");
         let tokens = alloc::vec![
-            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai),
-            Token::new("เทพ", 12..21, 4..7, TokenKind::Thai),
+            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai, 1.0),
+            Token::new("เทพ", 12..21, 4..7, TokenKind::Thai, 1.0),
         ];
         let result = tagger.tag_tokens(tokens, source);
         assert_eq!(result.len(), 1, "two tokens should merge into one");
@@ -319,8 +324,8 @@ mod tests {
         let source = "กรุงเทพ";
         let tagger = NeTagger::from_tsv("กรุง\tPLACE\nกรุงเทพ\tPLACE\n");
         let tokens = alloc::vec![
-            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai),
-            Token::new("เทพ", 12..21, 4..7, TokenKind::Thai),
+            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai, 1.0),
+            Token::new("เทพ", 12..21, 4..7, TokenKind::Thai, 1.0),
         ];
         let result = tagger.tag_tokens(tokens, source);
         assert_eq!(result.len(), 1, "longer match should be preferred");
@@ -335,9 +340,9 @@ mod tests {
         let source = "กรุง100เทพ";
         let tagger = NeTagger::from_tsv("กรุงเทพ\tPLACE\n");
         let tokens = alloc::vec![
-            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai),
-            Token::new("100", 12..15, 4..7, TokenKind::Number),
-            Token::new("เทพ", 15..24, 7..10, TokenKind::Thai),
+            Token::new("กรุง", 0..12, 0..4, TokenKind::Thai, 1.0),
+            Token::new("100", 12..15, 4..7, TokenKind::Number, 1.0),
+            Token::new("เทพ", 15..24, 7..10, TokenKind::Thai, 1.0),
         ];
         let result = tagger.tag_tokens(tokens, source);
         assert!(
@@ -361,9 +366,9 @@ mod tests {
         let source = "ไปกรุงเทพ";
         let tagger = NeTagger::from_tsv("กรุงเทพ\tPLACE\n");
         let tokens = alloc::vec![
-            Token::new("ไป", 0..6, 0..2, TokenKind::Thai),
-            Token::new("กรุง", 6..18, 2..6, TokenKind::Thai),
-            Token::new("เทพ", 18..27, 6..9, TokenKind::Thai),
+            Token::new("ไป", 0..6, 0..2, TokenKind::Thai, 1.0),
+            Token::new("กรุง", 6..18, 2..6, TokenKind::Thai, 1.0),
+            Token::new("เทพ", 18..27, 6..9, TokenKind::Thai, 1.0),
         ];
         let result = tagger.tag_tokens(tokens, source);
         assert_eq!(result.len(), 2);

@@ -88,7 +88,7 @@ impl Iterator for FtsTokenStream {
 }
 
 /// A token produced by the FTS pipeline, ready for lexeme indexing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct FtsToken {
     /// The token text (owned; may be normalised).
     pub text: String,
@@ -108,6 +108,10 @@ pub struct FtsToken {
     /// Named entity category, or `None` if the token is not in the NE
     /// gazetteer. When set, `kind` is [`TokenKind::Named`]`(ne)`.
     pub ne: Option<NamedEntityKind>,
+    /// Segmentation confidence in the range `[0.0, 1.0]`.
+    /// `0.0` = Unknown token (no dictionary evidence).
+    /// `1.0` = unambiguous high-frequency dictionary match.
+    pub confidence: f32,
 }
 
 /// Builder for [`FtsTokenizer`].
@@ -621,6 +625,7 @@ impl FtsTokenizer {
                 trigrams,
                 pos,
                 ne,
+                confidence: token.confidence,
             });
 
             position += 1;

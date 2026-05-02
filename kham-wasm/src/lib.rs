@@ -92,6 +92,8 @@ pub struct Token {
     char_start: usize,
     char_end: usize,
     kind: &'static str,
+    /// Segmentation confidence in `[0.0, 1.0]`. `0.0` = unknown, `1.0` = high-confidence dict match.
+    pub confidence: f32,
 }
 
 #[wasm_bindgen]
@@ -166,6 +168,8 @@ pub struct FtsToken {
     trigrams: Vec<String>,
     pos: Option<&'static str>,
     ne: Option<&'static str>,
+    /// Segmentation confidence in `[0.0, 1.0]`. `0.0` = unknown, `1.0` = high-confidence dict match.
+    pub confidence: f32,
 }
 
 #[wasm_bindgen]
@@ -317,6 +321,7 @@ pub fn segment_tokens(text: &str) -> Vec<Token> {
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_str(t.kind),
+            confidence: t.confidence,
         })
         .collect()
 }
@@ -346,6 +351,7 @@ pub fn segment_fts(text: &str) -> Vec<FtsToken> {
                 trigrams: t.trigrams,
                 pos: t.pos.map(|p| p.as_str()),
                 ne: t.ne.map(|n| n.as_str()),
+                confidence: t.confidence,
             }
         })
         .collect()

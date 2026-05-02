@@ -61,6 +61,11 @@ typedef struct KhamToken {
    * segmentation pipeline. Use [`kham_fts_segment`] to obtain Named tokens.
    */
   char *kind;
+  /**
+   * Segmentation confidence in [0.0, 1.0]. 0.0 = unknown token (no dictionary evidence).
+   * 1.0 = unambiguous high-frequency dictionary match.
+   */
+  float confidence;
 } KhamToken;
 
 /**

@@ -107,6 +107,8 @@ fn parse_algo(algo: &str) -> SoundexAlgorithm {
 ///     kind (str): ``"Thai"`` | ``"Latin"`` | ``"Number"`` | ``"Punctuation"``
 ///         | ``"Emoji"`` | ``"Whitespace"`` | ``"Unknown"`` | ``"Person"``
 ///         | ``"Place"`` | ``"Org"``
+///     confidence (float): Segmentation confidence in ``[0.0, 1.0]``.
+///         ``0.0`` = unknown token; ``1.0`` = high-confidence dictionary match.
 #[pyclass(frozen)]
 pub struct Token {
     #[pyo3(get)]
@@ -121,14 +123,23 @@ pub struct Token {
     pub char_end: usize,
     #[pyo3(get)]
     pub kind: String,
+    /// Segmentation confidence [0.0, 1.0]. 0.0 = unknown, 1.0 = high-confidence dict match.
+    #[pyo3(get)]
+    pub confidence: f32,
 }
 
 #[pymethods]
 impl Token {
     fn __repr__(&self) -> String {
         format!(
-            "Token(text={:?}, byte_span={}..{}, char_span={}..{}, kind={:?})",
-            self.text, self.byte_start, self.byte_end, self.char_start, self.char_end, self.kind,
+            "Token(text={:?}, byte_span={}..{}, char_span={}..{}, kind={:?}, confidence={})",
+            self.text,
+            self.byte_start,
+            self.byte_end,
+            self.char_start,
+            self.char_end,
+            self.kind,
+            self.confidence,
         )
     }
 }
@@ -154,6 +165,8 @@ impl Token {
 ///         One of ``"Person"`` | ``"Place"`` | ``"Org"``.
 ///     synonyms (list[str]): Synonym / number-normalisation expansions (may be empty).
 ///     trigrams (list[str]): Character trigrams for ``"Unknown"`` tokens; empty otherwise.
+///     confidence (float): Segmentation confidence in ``[0.0, 1.0]``.
+///         ``0.0`` = unknown token; ``1.0`` = high-confidence dictionary match.
 #[pyclass(frozen)]
 pub struct FtsToken {
     #[pyo3(get)]
@@ -174,6 +187,9 @@ pub struct FtsToken {
     pub synonyms: Vec<String>,
     #[pyo3(get)]
     pub trigrams: Vec<String>,
+    /// Segmentation confidence [0.0, 1.0]. 0.0 = unknown, 1.0 = high-confidence dict match.
+    #[pyo3(get)]
+    pub confidence: f32,
 }
 
 #[pymethods]
@@ -311,6 +327,7 @@ fn segment_tokens(text: &str) -> Vec<Token> {
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_str(t.kind).to_owned(),
+            confidence: t.confidence,
         })
         .collect()
 }
@@ -347,6 +364,7 @@ fn segment_fts(text: &str) -> Vec<FtsToken> {
                 trigrams: t.trigrams,
                 pos: t.pos.map(|p| p.as_str().to_owned()),
                 ne: t.ne.map(|n| n.as_str().to_owned()),
+                confidence: t.confidence,
             }
         })
         .collect()
