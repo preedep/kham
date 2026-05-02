@@ -1,0 +1,331 @@
+---
+import Layout from '../layouts/Layout.astro';
+import LiveDemo from '../components/LiveDemo.astro';
+
+const features = [
+  {
+    icon: '✂️',
+    title: 'Word Segmentation',
+    body: 'Maximal matching over a 62,102-word DAWG dictionary. 33–34 MiB/s on Apple M-series. F1 1.000 on 228 curated test cases.',
+    link: '/getting-started#rust',
+  },
+  {
+    icon: '🏷️',
+    title: 'POS Tagging',
+    body: '13-category part-of-speech tagger derived from the ORCHID tagset. Integrated into the FTS pipeline for lexeme-level filtering.',
+    link: '/api#pos',
+  },
+  {
+    icon: '🔍',
+    title: 'Named Entity Recognition',
+    body: 'Person, Place, and Organization tags via a built-in gazetteer. NE tokens emit colocated lexemes in FTS for entity-aware search.',
+    link: '/api#ne',
+  },
+  {
+    icon: '🔤',
+    title: 'Spell Correction',
+    body: 'Levenshtein ≤ 2 candidates re-ranked by lk82 phonetic similarity and TNC corpus frequency. Single-word and full-text modes.',
+    link: '/api#spell',
+  },
+  {
+    icon: '🔊',
+    title: 'Phonetic Encoding',
+    body: 'Three Thai soundex systems: lk82 (general), udom83 (finer sibilants), MetaSound (per-syllable). Cross-language Thai–English phonetics.',
+    link: '/api#soundex',
+  },
+  {
+    icon: '🌐',
+    title: 'RTGS Romanization',
+    body: 'Royal Thai General System of Transcription. Sentence-level romanization: Thai/Named tokens transliterated, others pass through unchanged.',
+    link: '/api#romanizer',
+  },
+  {
+    icon: '🔑',
+    title: 'Keyword Extraction',
+    body: 'TF × inverse-corpus-frequency scoring, stopwords excluded. Unigram and n-gram (bigram/trigram) keyphrase extraction.',
+    link: '/api#keyword',
+  },
+  {
+    icon: '📊',
+    title: 'Number Normalization',
+    body: 'Thai digit strings to ASCII equivalents, Thai word-to-number conversion, and baht text conversion for financial documents.',
+    link: '/api#number',
+  },
+];
+
+const comparisons = [
+  { feature: 'Segmentation speed', kham: '33–34 MiB/s', pythainlp: '~2 MiB/s (newmm)' },
+  { feature: 'F1 accuracy', kham: '1.000 (228 test cases)', pythainlp: '≈ 0.94 (on kham test set)' },
+  { feature: 'Zero dependencies', kham: 'Yes — no_std core', pythainlp: 'No — requires Python + torchnlp etc.' },
+  { feature: 'WebAssembly', kham: 'Yes — 300 KB binary', pythainlp: 'No' },
+  { feature: 'PostgreSQL FTS', kham: 'Native parser extension', pythainlp: 'No' },
+  { feature: 'SQLite FTS5', kham: 'Loadable extension', pythainlp: 'No' },
+  { feature: 'Spell correction', kham: 'Yes — Levenshtein + phonetic', pythainlp: 'Yes — edit distance only' },
+  { feature: 'Phonetic encoding', kham: 'lk82, udom83, MetaSound', pythainlp: 'lk82 only' },
+  { feature: 'Offline / embedded', kham: 'Yes — no network, no server', pythainlp: 'Partial' },
+  { feature: 'License', kham: 'MIT OR Apache-2.0', pythainlp: 'Apache-2.0' },
+];
+
+const platforms = [
+  { name: 'Rust', icon: '🦀', desc: 'kham-core — no_std, zero-copy, embedded-ready', href: '/getting-started#rust' },
+  { name: 'Python', icon: '🐍', desc: 'pip install kham — PyO3 bindings, full API', href: '/integrations/python' },
+  { name: 'WebAssembly', icon: '🌐', desc: 'npm install kham-wasm — browser + Node.js', href: '/integrations/wasm' },
+  { name: 'C / FFI', icon: '⚙️', desc: 'kham-capi — cbindgen header, any language', href: '/getting-started#cli' },
+  { name: 'PostgreSQL', icon: '🐘', desc: 'kham-pg — native FTS parser, PG 14–18', href: '/integrations/postgresql' },
+  { name: 'SQLite', icon: '🗃️', desc: 'kham-sqlite — FTS5 tokenizer, offline-ready', href: '/integrations/sqlite' },
+];
+---
+
+<Layout
+  title="Thai NLP Library — Fast, Open-Source, Multi-Platform | kham"
+  description="kham is the fastest open-source Thai NLP library. 33 MiB/s word segmentation, POS tagging, NER, spell correction, phonetic search. Rust, Python, WASM, PostgreSQL, SQLite."
+  lang="en"
+  keywords="Thai NLP, Thai NLP library, Thai natural language processing, Thai tokenizer Python, Thai word segmentation Rust, Thai NLP open source, PyThaiNLP alternative, Thai NLP WebAssembly, Thai NLP offline"
+  jsonLd={[
+    {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'kham',
+      url: 'https://kham.io',
+      downloadUrl: 'https://crates.io/crates/kham-core',
+      applicationCategory: 'DeveloperApplication',
+      operatingSystem: 'Linux, macOS, Windows, Android, WebAssembly',
+      softwareVersion: '0.8.0',
+      description: 'The fastest open-source Thai NLP library. Word segmentation, POS tagging, NER, spell correction, phonetic search. Rust, Python, WASM, PostgreSQL, SQLite.',
+      featureList: 'Word segmentation, POS tagging, Named entity recognition, Spell correction, Phonetic encoding (lk82/udom83/MetaSound), RTGS romanization, Keyword extraction, Number normalization, Full-text search (PostgreSQL/SQLite)',
+      license: 'https://opensource.org/licenses/MIT',
+      offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Thai NLP', item: 'https://kham.io/thai-nlp' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'What is kham?',
+          acceptedAnswer: { '@type': 'Answer', text: 'kham is an open-source Thai NLP library written in Rust. It provides word segmentation at 33 MiB/s, POS tagging, NER, spell correction, phonetic encoding, RTGS romanization, and keyword extraction. It runs on Rust, Python, WebAssembly, C FFI, PostgreSQL, and SQLite.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'How does kham compare to PyThaiNLP?',
+          acceptedAnswer: { '@type': 'Answer', text: 'kham is approximately 15× faster than PyThaiNLP newmm, has zero external dependencies, and supports WebAssembly, PostgreSQL FTS, and SQLite FTS5 — none of which PyThaiNLP supports. Both achieve high F1 accuracy on Thai segmentation.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Can kham run offline or on mobile?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Yes. kham-core is a no_std Rust library with no network calls and no runtime dependencies. The WASM build is ~300 KB. The SQLite extension runs on Android and iOS for offline-first mobile search.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'How do I install kham for Python?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Run: pip install kham. Then: import kham; words = kham.segment("กินข้าวกับปลา"). No additional setup is required.' },
+        },
+      ],
+    },
+  ]}
+>
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white">
+    <div class="max-w-5xl mx-auto px-6 py-24 text-center">
+      <div class="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 text-sm font-medium px-4 py-1.5 rounded-full mb-8 border border-blue-500/30">
+        <span>v0.8.0</span>
+        <span class="opacity-50">·</span>
+        <a href="/changelog" class="hover:text-blue-200 transition-colors">Release notes →</a>
+      </div>
+      <h1 class="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
+        The Fastest Thai NLP Library<br class="hidden sm:block" /> for Production
+      </h1>
+      <p class="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+        kham is an open-source Thai NLP engine written in Rust — zero external dependencies,
+        <code class="bg-slate-700/70 text-blue-300 px-1.5 py-0.5 rounded font-mono">no_std</code> core,
+        and a complete pipeline from raw text to structured tokens.
+      </p>
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="/getting-started" class="bg-white text-slate-900 font-semibold px-7 py-3 rounded-lg hover:bg-slate-100 transition-colors shadow-lg">
+          Get started →
+        </a>
+        <a href="/demo" class="border border-white/40 text-white font-semibold px-7 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          Live demo
+        </a>
+        <a href="/benchmarks" class="border border-white/40 text-white font-semibold px-7 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          Benchmarks
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stats bar -->
+  <section class="bg-slate-950 text-slate-300 border-b border-slate-800">
+    <div class="max-w-5xl mx-auto px-6 py-8">
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+        {[
+          { value: '33 MiB/s', label: 'Segmentation throughput' },
+          { value: 'F1 1.000', label: 'Accuracy on 228 test cases' },
+          { value: '62k words', label: 'Built-in dictionary' },
+          { value: '6 targets', label: 'Rust · Python · WASM · C · PG · SQLite' },
+        ].map(({ value, label }) => (
+          <div>
+            <div class="text-2xl font-bold text-white">{value}</div>
+            <div class="text-xs text-slate-400 mt-1">{label}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- NLP capabilities -->
+  <section class="py-24 bg-white dark:bg-slate-950">
+    <div class="max-w-6xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-center text-slate-900 dark:text-slate-100 mb-4">
+        Complete Thai NLP pipeline
+      </h2>
+      <p class="text-center text-slate-500 dark:text-slate-400 mb-16 max-w-xl mx-auto">
+        Every module is available in Rust, Python, WebAssembly, and C FFI — one library, all platforms.
+      </p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {features.map(({ icon, title, body, link }) => (
+          <a href={link} class="block p-6 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-600 hover:shadow-md transition-all group">
+            <div class="text-3xl mb-3">{icon}</div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{title}</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{body}</p>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison table -->
+  <section class="py-24 bg-slate-50 dark:bg-slate-900">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4 text-center">
+        kham vs PyThaiNLP
+      </h2>
+      <p class="text-center text-slate-500 dark:text-slate-400 mb-10 max-w-xl mx-auto">
+        Feature comparison for developers choosing a Thai NLP library.
+      </p>
+      <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <tr>
+              <th class="px-5 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Feature</th>
+              <th class="px-5 py-3 text-left font-semibold text-blue-700 dark:text-blue-400">kham</th>
+              <th class="px-5 py-3 text-left font-semibold text-slate-500 dark:text-slate-400">PyThaiNLP</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100 dark:divide-slate-700">
+            {comparisons.map(({ feature, kham, pythainlp }) => (
+              <tr class="hover:bg-slate-50 dark:hover:bg-slate-800">
+                <td class="px-5 py-3 font-medium text-slate-700 dark:text-slate-300">{feature}</td>
+                <td class="px-5 py-3 text-green-700 dark:text-green-400 font-medium">{kham}</td>
+                <td class="px-5 py-3 text-slate-500 dark:text-slate-400">{pythainlp}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="text-xs text-slate-400 dark:text-slate-500 mt-3 text-center">
+        PyThaiNLP data from public documentation and benchmarks. Run your own: <code class="font-mono">python scripts/compare_pythainlp.py</code>
+      </p>
+    </div>
+  </section>
+
+  <!-- Quick-start code -->
+  <section class="py-24 bg-white dark:bg-slate-950">
+    <div class="max-w-4xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4 text-center">
+        Get started in 60 seconds
+      </h2>
+      <p class="text-center text-slate-500 dark:text-slate-400 mb-10">
+        Pick your platform — the API is consistent across all targets.
+      </p>
+      <div class="grid sm:grid-cols-2 gap-4">
+        {[
+          { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.8"' },
+          { lang: 'bash', label: 'pip', code: 'pip install kham' },
+          { lang: 'bash', label: 'npm', code: 'npm install kham-wasm' },
+          { lang: 'sql', label: 'Docker', code: 'docker run --rm -e POSTGRES_PASSWORD=secret \\\n  -p 5432:5432 nickmsft/kham-pg:latest' },
+        ].map(({ lang: _lang, label, code }) => (
+          <div class="bg-slate-900 rounded-xl overflow-hidden">
+            <div class="px-4 py-2 bg-slate-800 border-b border-slate-700 text-xs text-slate-400 font-mono">{label}</div>
+            <pre class="p-4 text-sm font-mono text-slate-300 overflow-x-auto"><code>{code}</code></pre>
+          </div>
+        ))}
+      </div>
+      <div class="text-center mt-8">
+        <a href="/getting-started" class="inline-flex items-center gap-2 bg-blue-600 text-white font-semibold px-8 py-3 rounded-lg hover:bg-blue-500 transition-colors shadow">
+          Full getting-started guide →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Multi-platform grid -->
+  <section class="py-24 bg-slate-50 dark:bg-slate-900">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4 text-center">
+        One library, every platform
+      </h2>
+      <p class="text-center text-slate-500 dark:text-slate-400 mb-12">
+        kham-core compiles to native Rust, WASM, Python wheels, a C header, and two database extensions — from a single codebase.
+      </p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {platforms.map(({ name, icon, desc, href }) => (
+          <a href={href} class="flex items-start gap-4 p-5 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-600 hover:shadow-md transition-all group">
+            <span class="text-3xl flex-none">{icon}</span>
+            <div>
+              <div class="font-semibold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{name}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{desc}</div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Live demo embed -->
+  <section class="py-24 bg-white dark:bg-slate-950 border-t border-slate-100 dark:border-slate-800">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="text-center mb-10">
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-3">Try Thai NLP in your browser</h2>
+        <p class="text-slate-500 dark:text-slate-400">Powered by kham-wasm — no server, no install required.</p>
+      </div>
+      <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 p-6 md:p-8">
+        <LiveDemo compact={true} />
+      </div>
+      <div class="text-center mt-6">
+        <a href="/demo" class="text-blue-600 dark:text-blue-400 font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
+          Open full playground →
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 bg-blue-600 text-white text-center">
+    <div class="max-w-2xl mx-auto px-6">
+      <h2 class="text-3xl font-bold mb-4">Ready to add Thai NLP to your project?</h2>
+      <p class="text-blue-100 mb-8">
+        Free, open-source, MIT OR Apache-2.0. No API keys, no rate limits, no server required.
+      </p>
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="/getting-started" class="bg-white text-blue-700 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 transition-colors shadow">
+          Get started
+        </a>
+        <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer"
+           class="border border-white/60 text-white font-semibold px-8 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          View on GitHub
+        </a>
+      </div>
+    </div>
+  </section>
+
+</Layout>

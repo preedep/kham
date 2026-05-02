@@ -8,7 +8,7 @@ const sections = [
     icon: '🦀',
     title: 'Rust',
     subtitle: 'Native crate — zero-copy, no_std core',
-    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.7"' },
+    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.8"' },
     example: {
       lang: 'rust',
       label: 'main.rs',
@@ -79,7 +79,7 @@ tokens.forEach(t => console.log(t.text, t.kind, t.char_start, t.char_end));`,
     id: 'cli',
     icon: '💻',
     title: 'CLI',
-    subtitle: 'Command-line Thai segmenter',
+    subtitle: 'Command-line Thai segmenter — segment, spell-check, extract keywords, romanize',
     install: { lang: 'bash', label: 'shell', code: 'cargo install kham-cli' },
     example: {
       lang: 'bash',
@@ -88,12 +88,24 @@ tokens.forEach(t => console.log(t.text, t.kind, t.char_start, t.char_end));`,
 kham "กินข้าวกับปลา"
 # กิน|ข้าว|กับ|ปลา
 
+# Show token kind and confidence score
+kham --kind --confidence "กินข้าวกับปลา"
+# กิน:Thai:conf=0.92|ข้าว:Thai:conf=0.98|กับ:Thai:conf=1.00|ปลา:Thai:conf=0.99
+
 # FTS mode — kind, POS, NE, stop, syn per token
 kham --fts "กินข้าวกับปลา"
 
-# FTS + phonetic code in the syn= field
-kham --fts --soundex lk82 "กินข้าวกับปลา"`,
+# Spell-check a word
+kham --spell "กีนข้าว"
+
+# Extract keywords and keyphrases
+kham --keywords "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ"
+
+# Romanize Thai to RTGS Latin
+kham --romanize "กินข้าวกับปลา"
+# kin khao kap pla`,
     },
+    link: '/integrations/cli',
   },
   {
     id: 'postgresql',
@@ -180,7 +192,7 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';`,
     <div class="mb-12">
       <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">Getting Started</h1>
       <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl">
-        kham v0.7.0 — pick your target and be up and running in minutes.
+        kham v0.8.0 — pick your target and be up and running in minutes.
       </p>
       <!-- Quick jump links -->
       <nav class="flex flex-wrap gap-3 mt-6" aria-label="Section jump links">

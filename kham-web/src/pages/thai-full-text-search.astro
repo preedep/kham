@@ -1,0 +1,313 @@
+---
+import Layout from '../layouts/Layout.astro';
+import CodeBlock from '../components/CodeBlock.astro';
+
+const features = [
+  {
+    icon: '🔊',
+    title: 'Phonetic matching',
+    body: 'Thai soundex codes (lk82 / udom83 / MetaSound) stored alongside each word — near-homophones and misspellings match automatically.',
+  },
+  {
+    icon: '🚫',
+    title: 'Stopword suppression',
+    body: '600+ Thai stopwords suppressed from the index. Common words like กับ, และ, ใน, ที่ do not pollute result ranking.',
+  },
+  {
+    icon: '🏷️',
+    title: 'POS lexeme filtering',
+    body: 'Part-of-speech tags are stored as colocated lexemes — filter results to nouns, verbs, or named entities in one tsquery.',
+  },
+  {
+    icon: '🌐',
+    title: 'RTGS romanization',
+    body: 'Latin-script queries match Thai documents via RTGS romanization. Search "pla" and find ปลา automatically.',
+  },
+  {
+    icon: '🔢',
+    title: 'Number normalization',
+    body: 'Thai digit strings (๑๒๓) indexed alongside ASCII equivalents (123) — cross-script numeric queries always match.',
+  },
+  {
+    icon: '⚡',
+    title: 'High throughput',
+    body: 'PostgreSQL: 15M+ ops/s. SQLite FTS5: 4–6 MiB/s bulk index throughput. Both benchmarked on Apple M-series.',
+  },
+];
+
+const pgCode = `-- 1. Create the extension
+CREATE EXTENSION kham_pg;
+
+-- 2. Create a table with a tsvector column
+CREATE TABLE articles (
+  id    SERIAL PRIMARY KEY,
+  title TEXT,
+  body  TEXT,
+  tsv   TSVECTOR
+);
+
+-- 3. Populate the index
+UPDATE articles
+SET tsv = to_tsvector('kham', coalesce(title,'') || ' ' || coalesce(body,''));
+
+-- 4. GIN index for fast queries
+CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);
+
+-- 5. Search — phonetic match "pla" finds ปลา
+SELECT id, ts_headline('kham', body, query, 'StartSel=<b>, StopSel=</b>') AS snippet
+FROM articles, to_tsquery('kham', 'pla') AS query
+WHERE tsv @@ query
+ORDER BY ts_rank(tsv, query) DESC
+LIMIT 10;`;
+
+const sqliteCode = `-- 1. Load the extension
+.load ./target/release/libkham_sqlite
+
+-- 2. Create an FTS5 virtual table
+CREATE VIRTUAL TABLE docs USING fts5(
+  title,
+  body,
+  tokenize = 'kham soundex lk82 stopwords on'
+);
+
+-- 3. Insert documents
+INSERT INTO docs VALUES
+  ('อาหารไทย', 'กินข้าวกับปลาและผัก'),
+  ('เมืองหลวง', 'กรุงเทพมหานครเป็นเมืองหลวง');
+
+-- 4. Search — BM25 ranked results
+SELECT title, bm25(docs) AS score
+FROM docs
+WHERE docs MATCH 'ปลา'
+ORDER BY score;
+
+-- 5. Snippet highlighting
+SELECT title, snippet(docs, 1, '<b>', '</b>', '…', 10)
+FROM docs
+WHERE docs MATCH 'กรุงเทพ';`;
+
+const dockerCode = `# PostgreSQL 17 with kham_pg pre-installed — no Rust toolchain needed
+docker run --rm \\
+  -e POSTGRES_PASSWORD=secret \\
+  -p 5432:5432 \\
+  nickmsft/kham-pg:0.8.0-pg17
+
+# Connect and use immediately
+psql -h localhost -U postgres -c "
+  CREATE EXTENSION kham_pg;
+  SELECT to_tsvector('kham', 'กินข้าวกับปลา');
+"`;
+---
+
+<Layout
+  title="Thai Full-Text Search for PostgreSQL & SQLite | kham"
+  description="Add Thai-language full-text search to PostgreSQL or SQLite in minutes. kham FTS supports phonetic matching, stopwords, POS filtering, and 15M+ ops/s throughput."
+  lang="en"
+  keywords="Thai full-text search, Thai FTS PostgreSQL, Thai SQLite search, Thai search engine, ค้นหาข้อความภาษาไทย, PostgreSQL Thai extension, SQLite Thai tokenizer, Thai phonetic search, kham-pg, kham-sqlite"
+  jsonLd={[
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Thai Full-Text Search', item: 'https://kham.io/thai-full-text-search' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How to Add Thai Full-Text Search to PostgreSQL',
+      description: 'Add Thai-language full-text search to PostgreSQL using the kham-pg extension — phonetic matching, stopwords, and POS filtering included.',
+      step: [
+        { '@type': 'HowToStep', position: 1, name: 'Pull the Docker image', text: 'docker run --rm -e POSTGRES_PASSWORD=secret -p 5432:5432 nickmsft/kham-pg:latest' },
+        { '@type': 'HowToStep', position: 2, name: 'Load the extension', text: 'CREATE EXTENSION kham_pg;' },
+        { '@type': 'HowToStep', position: 3, name: 'Index documents', text: "UPDATE articles SET tsv = to_tsvector('kham', body);" },
+        { '@type': 'HowToStep', position: 4, name: 'Search', text: "SELECT * FROM articles WHERE tsv @@ plainto_tsquery('kham', 'ปลา');" },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: [
+        {
+          '@type': 'Question',
+          name: 'Why does standard PostgreSQL full-text search fail for Thai?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Thai text has no spaces between words. PostgreSQL\'s built-in parser cannot identify word boundaries, so to_tsvector() on Thai text produces a single token for an entire sentence, making phrase and word-level search impossible. kham-pg replaces the parser with a proper Thai segmenter.' },
+        },
+        {
+          '@type': 'Question',
+          name: 'What PostgreSQL versions does kham-pg support?',
+          acceptedAnswer: { '@type': 'Answer', text: 'kham-pg supports PostgreSQL 14, 15, 16, 17, and 18. Pre-built Docker images and binary packages are available for Linux (amd64 and arm64).' },
+        },
+        {
+          '@type': 'Question',
+          name: 'Can I use Thai FTS in SQLite for mobile apps?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Yes. kham-sqlite is a loadable SQLite extension for FTS5. It runs on Android (arm64-v8a, armeabi-v7a, x86_64, x86), iOS, macOS, Linux, and Windows — making offline-first Thai search possible in any mobile or embedded app.' },
+        },
+      ],
+    },
+  ]}
+>
+
+  <!-- Hero -->
+  <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white">
+    <div class="max-w-5xl mx-auto px-6 py-24 text-center">
+      <div class="inline-flex items-center gap-2 bg-blue-500/20 text-blue-300 text-sm font-medium px-4 py-1.5 rounded-full mb-8 border border-blue-500/30">
+        <span>PostgreSQL 14–18 · SQLite FTS5</span>
+      </div>
+      <h1 class="text-5xl sm:text-6xl font-bold tracking-tight mb-6 leading-tight">
+        Thai Full-Text Search<br class="hidden sm:block" /> that Actually Works
+      </h1>
+      <p class="text-xl text-slate-300 mb-10 max-w-2xl mx-auto leading-relaxed">
+        Thai text has no spaces. Standard FTS engines produce garbage results.
+        kham replaces the parser with a proper Thai segmenter — phonetic matching, stopwords, and POS filtering included.
+      </p>
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="/integrations/postgresql" class="bg-white text-slate-900 font-semibold px-7 py-3 rounded-lg hover:bg-slate-100 transition-colors shadow-lg">
+          PostgreSQL guide →
+        </a>
+        <a href="/integrations/sqlite" class="border border-white/40 text-white font-semibold px-7 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          SQLite guide →
+        </a>
+        <a href="/benchmarks" class="border border-white/40 text-white font-semibold px-7 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          Benchmarks
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Problem / Solution -->
+  <section class="py-20 bg-white dark:bg-slate-950">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="grid sm:grid-cols-2 gap-10 items-start">
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">The problem with standard FTS for Thai</h2>
+          <p class="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+            Thai text has no whitespace between words. Standard FTS parsers — including PostgreSQL's built-in parser and SQLite's default tokenizer — split text on whitespace.
+            On Thai text, this means the entire sentence becomes a single un-searchable token.
+          </p>
+          <div class="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-4 font-mono text-sm">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-2">to_tsvector with built-in parser</div>
+            <div class="text-red-700 dark:text-red-400">'กินข้าวกับปลา':1</div>
+            <div class="text-xs text-slate-400 mt-1">← single token, cannot search "ปลา"</div>
+          </div>
+        </div>
+        <div>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-4">How kham solves it</h2>
+          <p class="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+            kham replaces the parser with a proper Thai segmenter. Each word is a separate, searchable token, enriched with phonetic codes and POS tags.
+          </p>
+          <div class="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-4 font-mono text-sm">
+            <div class="text-slate-500 dark:text-slate-400 text-xs mb-2">to_tsvector with kham parser</div>
+            <div class="text-green-700 dark:text-green-400">'กิน':1 'ข้าว':2 'ปลา':4<br />'4800':4 'pla':4 'pos_noun':4</div>
+            <div class="text-xs text-slate-400 mt-1">← word tokens + soundex + RTGS + POS</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Search features -->
+  <section class="py-24 bg-slate-50 dark:bg-slate-900">
+    <div class="max-w-6xl mx-auto px-6">
+      <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100 mb-4 text-center">
+        Search features
+      </h2>
+      <p class="text-center text-slate-500 dark:text-slate-400 mb-16 max-w-xl mx-auto">
+        Every feature works in both PostgreSQL and SQLite.
+      </p>
+      <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {features.map(({ icon, title, body }) => (
+          <div class="p-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950">
+            <div class="text-3xl mb-3">{icon}</div>
+            <h3 class="font-semibold text-slate-900 dark:text-slate-100 mb-2">{title}</h3>
+            <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">{body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- PostgreSQL quickstart -->
+  <section class="py-24 bg-white dark:bg-slate-950">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-4xl">🐘</span>
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100">PostgreSQL — native text search parser</h2>
+      </div>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+        kham-pg is a PostgreSQL text-search parser extension. It integrates with <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono text-sm">to_tsvector</code>, <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono text-sm">ts_headline</code>, and <code class="bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded font-mono text-sm">ts_rank</code> natively.
+        Supports PostgreSQL 14–18 with pre-built Docker images for fastest setup.
+      </p>
+      <div class="mb-6">
+        <CodeBlock code={dockerCode} lang="bash" label="Docker (fastest start)" />
+      </div>
+      <CodeBlock code={pgCode} lang="sql" label="example.sql" />
+      <a href="/integrations/postgresql" class="inline-flex items-center gap-2 mt-6 text-blue-600 dark:text-blue-400 font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
+        Full PostgreSQL integration guide →
+      </a>
+    </div>
+  </section>
+
+  <!-- SQLite quickstart -->
+  <section class="py-24 bg-slate-50 dark:bg-slate-900">
+    <div class="max-w-4xl mx-auto px-6">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="text-4xl">🗃️</span>
+        <h2 class="text-3xl font-bold text-slate-900 dark:text-slate-100">SQLite — offline-first Thai search</h2>
+      </div>
+      <p class="text-slate-600 dark:text-slate-400 mb-4 leading-relaxed">
+        kham-sqlite is a loadable FTS5 tokenizer extension. Ideal for mobile apps, desktop apps, and edge deployments where there is no database server.
+        Runs on Android, iOS, macOS, Linux, and Windows.
+      </p>
+      <CodeBlock code={sqliteCode} lang="sql" label="sqlite3 shell" />
+      <a href="/integrations/sqlite" class="inline-flex items-center gap-2 mt-6 text-blue-600 dark:text-blue-400 font-medium hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
+        Full SQLite integration guide →
+      </a>
+    </div>
+  </section>
+
+  <!-- Performance callout -->
+  <section class="py-16 bg-blue-50 dark:bg-blue-950/20 border-y border-blue-100 dark:border-blue-900">
+    <div class="max-w-5xl mx-auto px-6">
+      <h2 class="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-6 text-center">Performance</h2>
+      <div class="grid sm:grid-cols-3 gap-6">
+        {[
+          { label: 'PostgreSQL to_tsvector', value: '15M+ ops/s', sub: '~63 B document, Linux ARM64' },
+          { label: 'SQLite bulk index', value: '4–6 MiB/s', sub: 'in-memory, FTS5 full pipeline' },
+          { label: 'Segmentation', value: '33 MiB/s', sub: 'pure Thai, Apple M-series' },
+        ].map(({ label, value, sub }) => (
+          <div class="bg-white dark:bg-slate-900 rounded-xl border border-blue-100 dark:border-blue-800 p-6 text-center">
+            <div class="text-4xl font-bold text-blue-700 dark:text-blue-400 mb-1">{value}</div>
+            <div class="font-semibold text-slate-800 dark:text-slate-200 mb-1 text-sm">{label}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">{sub}</div>
+          </div>
+        ))}
+      </div>
+      <p class="text-center mt-4">
+        <a href="/benchmarks" class="text-blue-600 dark:text-blue-400 font-medium text-sm hover:text-blue-800 dark:hover:text-blue-300 transition-colors">
+          Full benchmark results →
+        </a>
+      </p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="py-20 bg-blue-600 text-white text-center">
+    <div class="max-w-2xl mx-auto px-6">
+      <h2 class="text-3xl font-bold mb-4">Add Thai search to your app today</h2>
+      <p class="text-blue-100 mb-8">
+        Free, open-source, MIT OR Apache-2.0. Docker images for zero-setup PostgreSQL — no Rust toolchain required.
+      </p>
+      <div class="flex flex-wrap gap-4 justify-center">
+        <a href="/integrations/postgresql" class="bg-white text-blue-700 font-semibold px-8 py-3 rounded-lg hover:bg-blue-50 transition-colors shadow">
+          PostgreSQL guide
+        </a>
+        <a href="/integrations/sqlite" class="border border-white/60 text-white font-semibold px-8 py-3 rounded-lg hover:bg-white/10 transition-colors">
+          SQLite guide
+        </a>
+      </div>
+    </div>
+  </section>
+
+</Layout>

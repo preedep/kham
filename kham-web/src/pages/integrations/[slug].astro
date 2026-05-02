@@ -554,11 +554,118 @@ wasm-pack build kham-wasm --target web --release
   },
 };
 
+const slugKeywords: Record<string, string> = {
+  postgresql: 'Thai FTS PostgreSQL, Thai full-text search PostgreSQL, PostgreSQL Thai extension, kham-pg, Thai text search parser, Thai soundex PostgreSQL, Thai POS PostgreSQL',
+  sqlite:     'Thai SQLite search, SQLite FTS5 Thai, Thai tokenizer SQLite, kham-sqlite, Thai offline search, SQLite Thai extension, Thai FTS5 tokenizer',
+  python:     'Thai NLP Python, Thai word segmentation Python, kham Python, PyThaiNLP alternative, Thai tokenizer pip, Thai spell checker Python, Thai keyword extraction Python',
+  wasm:       'Thai NLP WebAssembly, Thai tokenizer browser, Thai word segmentation WASM, kham-wasm npm, Thai NLP Next.js, Thai NLP React, Thai NLP Node.js',
+};
+
+const slugJsonLd: Record<string, object[]> = {
+  postgresql: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Getting Started', item: 'https://kham.io/getting-started' },
+        { '@type': 'ListItem', position: 3, name: 'PostgreSQL FTS', item: 'https://kham.io/integrations/postgresql' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How to Add Thai Full-Text Search to PostgreSQL',
+      description: 'Install kham-pg, load the extension, and search Thai documents with phonetic matching and POS filtering.',
+      step: [
+        { '@type': 'HowToStep', position: 1, name: 'Pull the Docker image', text: 'docker run --rm -e POSTGRES_PASSWORD=secret -p 5432:5432 nickmsft/kham-pg:latest' },
+        { '@type': 'HowToStep', position: 2, name: 'Build and install', text: 'cargo build -p kham-pg --release && make -C kham-pg install' },
+        { '@type': 'HowToStep', position: 3, name: 'Create the extension', text: 'CREATE EXTENSION kham_pg;' },
+        { '@type': 'HowToStep', position: 4, name: 'Index and search', text: "SELECT to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');" },
+      ],
+    },
+  ],
+  sqlite: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Getting Started', item: 'https://kham.io/getting-started' },
+        { '@type': 'ListItem', position: 3, name: 'SQLite FTS5', item: 'https://kham.io/integrations/sqlite' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How to Add Thai Search to SQLite FTS5',
+      description: 'Build the kham-sqlite extension, load it, and create a Thai FTS5 virtual table.',
+      step: [
+        { '@type': 'HowToStep', position: 1, name: 'Build the extension', text: 'cargo build -p kham-sqlite --release' },
+        { '@type': 'HowToStep', position: 2, name: 'Load in SQLite', text: ".load ./target/release/libkham_sqlite" },
+        { '@type': 'HowToStep', position: 3, name: 'Create FTS5 table', text: "CREATE VIRTUAL TABLE docs USING fts5(body, tokenize='kham');" },
+        { '@type': 'HowToStep', position: 4, name: 'Search', text: "SELECT * FROM docs WHERE docs MATCH 'ปลา';" },
+      ],
+    },
+  ],
+  python: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Getting Started', item: 'https://kham.io/getting-started' },
+        { '@type': 'ListItem', position: 3, name: 'Python', item: 'https://kham.io/integrations/python' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How to Use Thai NLP in Python with kham',
+      description: 'Install kham via pip and use segment(), segment_tokens(), spell_suggestions(), and extract_keywords().',
+      step: [
+        { '@type': 'HowToStep', position: 1, name: 'Install', text: 'pip install kham' },
+        { '@type': 'HowToStep', position: 2, name: 'Segment text', text: "import kham; words = kham.segment('กินข้าวกับปลา')" },
+        { '@type': 'HowToStep', position: 3, name: 'Get rich tokens', text: "tokens = kham.segment_tokens('กินข้าวกับปลา')" },
+        { '@type': 'HowToStep', position: 4, name: 'Spell check', text: "suggs = kham.spell_suggestions('กีนข้าว', 5)" },
+      ],
+    },
+  ],
+  wasm: [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: 'https://kham.io/' },
+        { '@type': 'ListItem', position: 2, name: 'Getting Started', item: 'https://kham.io/getting-started' },
+        { '@type': 'ListItem', position: 3, name: 'WebAssembly / npm', item: 'https://kham.io/integrations/wasm' },
+      ],
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How to Use Thai Word Segmentation in the Browser (WASM)',
+      description: 'Install kham-wasm from npm and call segment() or segment_tokens() in any JavaScript or TypeScript project.',
+      step: [
+        { '@type': 'HowToStep', position: 1, name: 'Install', text: 'npm install kham-wasm' },
+        { '@type': 'HowToStep', position: 2, name: 'Initialise WASM', text: "import init, { segment } from 'kham-wasm'; await init();" },
+        { '@type': 'HowToStep', position: 3, name: 'Segment text', text: "const words = segment('กินข้าวกับปลา');" },
+      ],
+    },
+  ],
+};
+
 const { slug } = Astro.params;
 const data = integrations[slug as keyof typeof integrations];
 ---
 
-<Layout title={`${data.title} Integration — kham`} description={data.description} lang="en">
+<Layout
+  title={`${data.title} Integration — kham`}
+  description={data.description}
+  keywords={slugKeywords[slug as keyof typeof slugKeywords]}
+  jsonLd={slugJsonLd[slug as keyof typeof slugJsonLd]}
+  lang="en"
+>
   <div class="max-w-4xl mx-auto px-6 py-16">
     <!-- Breadcrumb -->
     <nav class="text-sm text-slate-500 dark:text-slate-400 mb-8" aria-label="Breadcrumb">

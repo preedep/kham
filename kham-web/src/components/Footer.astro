@@ -29,10 +29,12 @@ const year = new Date().getFullYear();
         <span class="text-sm">— {t('footer.tagline')}</span>
       </div>
 
-      <nav class="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-400" aria-label="Footer navigation">
+      <nav class="flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm text-slate-600 dark:text-slate-400" aria-label="Footer navigation">
         <a href={`${p}/getting-started`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('footer.getting-started')}</a>
         <a href={`${p}/demo`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.demo')}</a>
         <a href={`${p}/api`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.api')}</a>
+        <a href="/thai-nlp" class="hover:text-slate-900 dark:hover:text-white transition-colors">Thai NLP</a>
+        <a href="/thai-full-text-search" class="hover:text-slate-900 dark:hover:text-white transition-colors">Thai FTS</a>
         <a href={`${p}/license`} class="hover:text-slate-900 dark:hover:text-white transition-colors">{t('nav.license')}</a>
         <a href="https://github.com/preedep/kham" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-white transition-colors">GitHub</a>
         <a href="https://crates.io/crates/kham-core" target="_blank" rel="noopener noreferrer" class="hover:text-slate-900 dark:hover:text-white transition-colors">crates.io</a>

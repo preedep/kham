@@ -7,10 +7,22 @@ import NumberWidget from '../components/NumberWidget.astro';
 ---
 
 <Layout
-  title="Live Demo — kham Thai Segmenter"
-  description="Interactive Thai word segmentation playground powered by kham-wasm running entirely in your browser."
+  title="Live Demo — kham Thai NLP Playground"
+  description="Interactive Thai NLP playground: word segmentation, POS tagging, NER, spell check, phonetic search, and romanization — all running in your browser via WebAssembly, no server required."
   lang="en"
-  keywords="Thai word segmentation demo, Thai tokenizer online, kham demo, ตัดคำออนไลน์, Thai NLP playground"
+  keywords="Thai word segmentation demo, Thai tokenizer online, kham demo, ตัดคำออนไลน์, Thai NLP playground, Thai spell check online, Thai phonetic search demo"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: 'kham Live Demo',
+    url: 'https://kham.io/demo',
+    applicationCategory: 'DeveloperApplication',
+    operatingSystem: 'Any',
+    description: 'Interactive Thai NLP playground — segmentation, POS tagging, NER, spell check, phonetic search, and romanization, running in the browser via WebAssembly.',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    featureList: 'Thai word segmentation, POS tagging, Named entity recognition, Spell checking, Phonetic search, RTGS romanization, Keyword extraction',
+    browserRequirements: 'WebAssembly support',
+  }}
 >
   <div class="max-w-4xl mx-auto px-6 py-16">
     <div class="mb-10">
