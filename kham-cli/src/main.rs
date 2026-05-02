@@ -8,16 +8,20 @@
 //!     [TEXT]    Thai text to segment. Reads from stdin if omitted.
 //!
 //! OPTIONS:
-//!     -d, --dict <FILE>    Path to a custom word-list file (newline-separated)
-//!     -s, --sep <SEP>      Output separator between tokens [default: "|"]
-//!     -w, --whitespace     Include whitespace tokens in output
-//!     -n, --normalize      Run normalize() before segmenting
-//!     -k, --kind           Append token kind after each token (e.g. กิน:Thai)
-//!         --spans          Append char span after each token (e.g. กิน:0-3)
-//!         --fts            Run the FTS pipeline; print one token per line with
-//!                          kind, POS, NE, and stopword metadata
-//!     -h, --help           Print help information
-//!     -V, --version        Print version information
+//!     -d, --dict <FILE>           Path to a custom word-list file (newline-separated)
+//!     -s, --sep <SEP>             Output separator between tokens [default: "|"]
+//!     -w, --whitespace            Include whitespace tokens in output
+//!     -n, --normalize             Run normalize() before segmenting
+//!     -k, --kind                  Append token kind after each token (e.g. กิน:Thai)
+//!         --spans                 Append char span after each token (e.g. กิน:0-3)
+//!         --fts                   Run the FTS pipeline; print one token per line with
+//!                                 kind, POS, NE, and stopword metadata
+//!         --confidence            Show confidence score alongside each token in text
+//!                                 output mode (e.g. กิน:Thai:conf=0.90)
+//!         --min-confidence <MIN>  Only output tokens with confidence ≥ MIN (0.0–1.0)
+//!         --format <FORMAT>       Output format: text (default), json, csv
+//!     -h, --help                  Print help information
+//!     -V, --version               Print version information
 //! ```
 
 use std::io::{self, BufRead};
@@ -27,7 +31,7 @@ use clap::Parser;
 use colored::Colorize;
 use kham_core::fts::FtsTokenizer;
 use kham_core::soundex::SoundexAlgorithm;
-use kham_core::{TokenKind, Tokenizer};
+use kham_core::{TokenKind, TokenStream, Tokenizer};
 use log::{debug, info, warn};
 
 // ---------------------------------------------------------------------------
@@ -44,6 +48,18 @@ fn kind_str(kind: TokenKind) -> &'static str {
         TokenKind::Whitespace => "Whitespace",
         TokenKind::Unknown => "Unknown",
         TokenKind::Named(ne) => ne.as_str(),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CSV quoting helper
+// ---------------------------------------------------------------------------
+
+fn csv_quote(s: &str) -> String {
+    if s.contains(',') || s.contains('"') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_string()
     }
 }
 
@@ -111,6 +127,19 @@ struct Cli {
     /// Example: kham --fts --soundex lk82 "กินข้าวกับปลา"
     #[arg(long, value_name = "ALGO")]
     soundex: Option<String>,
+
+    /// Show confidence score alongside each token in text output mode.
+    /// Has no effect when --format json or --format csv (confidence is always included there).
+    #[arg(long)]
+    confidence: bool,
+
+    /// Only output tokens with confidence ≥ MIN (0.0–1.0).
+    #[arg(long, value_name = "MIN")]
+    min_confidence: Option<f32>,
+
+    /// Output format: text (default), json, csv.
+    #[arg(long, default_value = "text", value_name = "FORMAT")]
+    format: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -148,8 +177,24 @@ fn main() {
 
     debug!("CLI args: {:?}", cli);
 
+    // Validate --format
+    match cli.format.as_str() {
+        "text" | "json" | "csv" => {}
+        other => {
+            eprintln!("kham: unknown format {other:?}; valid: text, json, csv");
+            std::process::exit(1);
+        }
+    }
+
     if cli.soundex.is_some() && !cli.fts {
         warn!("--soundex has no effect without --fts");
+    }
+
+    if cli.confidence && (cli.format == "json" || cli.format == "csv") {
+        warn!(
+            "--confidence has no effect with --format {}; confidence is always included",
+            cli.format
+        );
     }
 
     if cli.fts {
@@ -186,6 +231,11 @@ fn run_basic_mode(cli: &Cli) {
         "Tokenizer ready ({:.3}ms)",
         t0.elapsed().as_secs_f64() * 1000.0
     );
+
+    // Print CSV header once before any lines
+    if cli.format == "csv" {
+        println!("text,kind,char_start,char_end,byte_start,byte_end,confidence");
+    }
 
     match cli.text {
         Some(ref text) => {
@@ -237,7 +287,19 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
     };
 
     let t0 = Instant::now();
-    let tokens = tokenizer.segment(text);
+
+    // Collect tokens, filtering by min_confidence if requested
+    let tokens: Vec<_> = if let Some(min) = cli.min_confidence {
+        let mut stream: TokenStream<'_> = tokenizer.segment_stream(text);
+        let mut collected = Vec::new();
+        while let Some(tok) = stream.next_above_confidence(min) {
+            collected.push(tok);
+        }
+        collected
+    } else {
+        tokenizer.segment(text)
+    };
+
     let elapsed_us = t0.elapsed().as_secs_f64() * 1_000_000.0;
 
     debug!(
@@ -268,20 +330,66 @@ fn process_line(tokenizer: &Tokenizer, raw: &str, cli: &Cli) {
         warn!("segment: {} unknown token(s) in {:?}", unknown_count, text);
     }
 
-    let parts: Vec<String> = tokens
-        .iter()
-        .map(|t| match (cli.kind, cli.spans) {
-            (true, true) => format!(
-                "{}:{:?}:{}-{}",
-                t.text, t.kind, t.char_span.start, t.char_span.end
-            ),
-            (true, false) => format!("{}:{:?}", t.text, t.kind),
-            (false, true) => format!("{}:{}-{}", t.text, t.char_span.start, t.char_span.end),
-            (false, false) => t.text.to_string(),
-        })
-        .collect();
-
-    println!("{}", parts.join(&cli.sep));
+    match cli.format.as_str() {
+        "json" => {
+            let arr: Vec<serde_json::Value> = tokens
+                .iter()
+                .map(|t| {
+                    serde_json::json!({
+                        "text": t.text,
+                        "kind": kind_str(t.kind),
+                        "char_start": t.char_span.start,
+                        "char_end": t.char_span.end,
+                        "byte_start": t.span.start,
+                        "byte_end": t.span.end,
+                        "confidence": t.confidence,
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::json!(arr));
+        }
+        "csv" => {
+            for t in &tokens {
+                println!(
+                    "{},{},{},{},{},{},{}",
+                    csv_quote(t.text),
+                    csv_quote(kind_str(t.kind)),
+                    t.char_span.start,
+                    t.char_span.end,
+                    t.span.start,
+                    t.span.end,
+                    t.confidence,
+                );
+            }
+        }
+        _ => {
+            // text format (default)
+            let parts: Vec<String> = tokens
+                .iter()
+                .map(|t| {
+                    let mut s = match (cli.kind, cli.spans) {
+                        (true, true) => format!(
+                            "{}:{}:{}-{}",
+                            t.text,
+                            kind_str(t.kind),
+                            t.char_span.start,
+                            t.char_span.end
+                        ),
+                        (true, false) => format!("{}:{}", t.text, kind_str(t.kind)),
+                        (false, true) => {
+                            format!("{}:{}-{}", t.text, t.char_span.start, t.char_span.end)
+                        }
+                        (false, false) => t.text.to_string(),
+                    };
+                    if cli.confidence {
+                        s.push_str(&format!(":conf={:.2}", t.confidence));
+                    }
+                    s
+                })
+                .collect();
+            println!("{}", parts.join(&cli.sep));
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -319,10 +427,15 @@ fn run_fts_mode(cli: &Cli) {
         t0.elapsed().as_secs_f64() * 1000.0
     );
 
+    // Print CSV header once before any lines
+    if cli.format == "csv" {
+        println!("text,position,kind,is_stop,pos,ne,synonyms,confidence");
+    }
+
     match cli.text {
         Some(ref text) => {
             debug!("FTS mode: positional argument ({} bytes)", text.len());
-            process_fts_line(&fts, text);
+            process_fts_line(&fts, text, cli);
         }
         None => {
             debug!("FTS mode: stdin");
@@ -333,7 +446,7 @@ fn run_fts_mode(cli: &Cli) {
                     Ok(text) => {
                         line_count += 1;
                         debug!("stdin line {}: {} bytes", line_count, text.len());
-                        process_fts_line(&fts, &text);
+                        process_fts_line(&fts, &text, cli);
                     }
                     Err(e) => {
                         eprintln!("kham: read error: {e}");
@@ -354,25 +467,87 @@ fn run_fts_mode(cli: &Cli) {
 /// ```
 ///
 /// Pipe through `column -t` for aligned columns.
-fn process_fts_line(fts: &FtsTokenizer, text: &str) {
-    let tokens = fts.segment_for_fts(text);
-    for t in &tokens {
-        let pos = t.pos.map(|p| p.as_str()).unwrap_or("-");
-        let ne = t.ne.map(|n| n.as_str()).unwrap_or("-");
-        let syn = if t.synonyms.is_empty() {
-            "-".to_string()
-        } else {
-            t.synonyms.join(",")
-        };
-        println!(
-            "{}\tkind={}\tpos={}\tne={}\tstop={}\tsyn={}",
-            t.text,
-            kind_str(t.kind),
-            pos,
-            ne,
-            t.is_stop,
-            syn,
-        );
+fn process_fts_line(fts: &FtsTokenizer, text: &str, cli: &Cli) {
+    let mut tokens = fts.segment_for_fts(text);
+
+    if let Some(min) = cli.min_confidence {
+        tokens.retain(|t| t.confidence >= min);
+    }
+
+    match cli.format.as_str() {
+        "json" => {
+            let arr: Vec<serde_json::Value> = tokens
+                .iter()
+                .map(|t| {
+                    let pos = t.pos.map(|p| p.as_str());
+                    let ne = t.ne.map(|n| n.as_str());
+                    serde_json::json!({
+                        "text": t.text,
+                        "position": t.position,
+                        "kind": kind_str(t.kind),
+                        "is_stop": t.is_stop,
+                        "pos": pos,
+                        "ne": ne,
+                        "synonyms": t.synonyms,
+                        "trigrams": t.trigrams,
+                        "confidence": t.confidence,
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::json!(arr));
+        }
+        "csv" => {
+            for t in &tokens {
+                let pos = t.pos.map(|p| p.as_str()).unwrap_or("-");
+                let ne = t.ne.map(|n| n.as_str()).unwrap_or("-");
+                let synonyms = t.synonyms.join(" ");
+                println!(
+                    "{},{},{},{},{},{},{},{}",
+                    csv_quote(&t.text),
+                    t.position,
+                    csv_quote(kind_str(t.kind)),
+                    t.is_stop,
+                    csv_quote(pos),
+                    csv_quote(ne),
+                    csv_quote(&synonyms),
+                    t.confidence,
+                );
+            }
+        }
+        _ => {
+            // text format (default)
+            for t in &tokens {
+                let pos = t.pos.map(|p| p.as_str()).unwrap_or("-");
+                let ne = t.ne.map(|n| n.as_str()).unwrap_or("-");
+                let syn = if t.synonyms.is_empty() {
+                    "-".to_string()
+                } else {
+                    t.synonyms.join(",")
+                };
+                if cli.confidence {
+                    println!(
+                        "{}\tkind={}\tpos={}\tne={}\tstop={}\tsyn={}\tconf={:.2}",
+                        t.text,
+                        kind_str(t.kind),
+                        pos,
+                        ne,
+                        t.is_stop,
+                        syn,
+                        t.confidence,
+                    );
+                } else {
+                    println!(
+                        "{}\tkind={}\tpos={}\tne={}\tstop={}\tsyn={}",
+                        t.text,
+                        kind_str(t.kind),
+                        pos,
+                        ne,
+                        t.is_stop,
+                        syn,
+                    );
+                }
+            }
+        }
     }
 }
 
@@ -422,5 +597,21 @@ mod tests {
             parse_soundex_algo("METASOUND"),
             SoundexAlgorithm::MetaSound
         ));
+    }
+
+    #[test]
+    fn csv_quote_no_special_chars() {
+        assert_eq!(csv_quote("hello"), "hello");
+        assert_eq!(csv_quote("Thai"), "Thai");
+    }
+
+    #[test]
+    fn csv_quote_with_comma() {
+        assert_eq!(csv_quote("a,b"), "\"a,b\"");
+    }
+
+    #[test]
+    fn csv_quote_with_quote() {
+        assert_eq!(csv_quote("say \"hi\""), "\"say \"\"hi\"\"\"");
     }
 }

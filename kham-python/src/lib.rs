@@ -65,6 +65,10 @@ use kham_core::{
     spell::SpellChecker,
     TokenKind, Tokenizer,
 };
+// PyToken is the Python-facing alias for the Token pyclass defined below.
+// It is used by segment_above_confidence to keep naming consistent with
+// the existing segment_tokens API.
+type PyToken = Token;
 use pyo3::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -752,6 +756,50 @@ fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
 }
 
 // ---------------------------------------------------------------------------
+// segment_above_confidence
+// ---------------------------------------------------------------------------
+
+/// Segment Thai text and return only tokens whose segmentation confidence
+/// meets or exceeds ``min_confidence``.
+///
+/// This is a convenience filter over :func:`segment_tokens`: it calls
+/// ``segment_stream`` internally and collects tokens passing
+/// ``next_above_confidence``.
+///
+/// Args:
+///     text (str): Input text (may contain mixed scripts).
+///     min_confidence (float): Minimum confidence threshold in ``[0.0, 1.0]``.
+///         Pass ``0.0`` to include all tokens; ``1.0`` for only the highest-
+///         confidence dictionary matches.
+///
+/// Returns:
+///     list[Token]: Tokens with ``confidence >= min_confidence``.
+///
+/// Example:
+///     >>> toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.8)
+///     >>> all(t.confidence >= 0.8 for t in toks)
+///     True
+#[pyfunction]
+#[pyo3(name = "segment_above_confidence")]
+fn segment_stream_above_confidence(text: &str, min_confidence: f32) -> Vec<PyToken> {
+    let tokenizer = Tokenizer::new();
+    let mut stream = tokenizer.segment_stream(text);
+    let mut result = Vec::new();
+    while let Some(t) = stream.next_above_confidence(min_confidence) {
+        result.push(PyToken {
+            text: t.text.to_owned(),
+            byte_start: t.span.start,
+            byte_end: t.span.end,
+            char_start: t.char_span.start,
+            char_end: t.char_span.end,
+            kind: kind_str(t.kind).to_owned(),
+            confidence: t.confidence,
+        });
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
 // Module
 // ---------------------------------------------------------------------------
 
@@ -771,6 +819,7 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(segment, m)?)?;
     m.add_function(wrap_pyfunction!(segment_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(segment_fts, m)?)?;
+    m.add_function(wrap_pyfunction!(segment_stream_above_confidence, m)?)?;
 
     // Romanization
     m.add_function(wrap_pyfunction!(romanize, m)?)?;

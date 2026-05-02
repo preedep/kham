@@ -54,6 +54,8 @@ use kham_core::{
     spell::SpellChecker,
     TokenKind, Tokenizer,
 };
+// WasmToken is the wasm-bindgen Token struct defined below.
+type WasmToken = Token;
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -664,6 +666,34 @@ pub fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
             count: k.count,
         })
         .collect()
+}
+
+/// Segment Thai text and return only tokens whose segmentation confidence
+/// meets or exceeds `min_confidence`.
+///
+/// A convenience filter over [`segment_tokens`]: calls `segment_stream`
+/// internally and collects tokens passing `next_above_confidence`.
+///
+/// Pass `0.0` to include all tokens; `1.0` for only the highest-confidence
+/// dictionary matches. Whitespace tokens that have confidence < min_confidence
+/// are also excluded.
+#[wasm_bindgen]
+pub fn segment_above_confidence(text: &str, min_confidence: f32) -> Vec<WasmToken> {
+    let tokenizer = Tokenizer::new();
+    let mut stream = tokenizer.segment_stream(text);
+    let mut result = Vec::new();
+    while let Some(t) = stream.next_above_confidence(min_confidence) {
+        result.push(WasmToken {
+            text: t.text.to_owned(),
+            byte_start: t.span.start,
+            byte_end: t.span.end,
+            char_start: t.char_span.start,
+            char_end: t.char_span.end,
+            kind: kind_str(t.kind),
+            confidence: t.confidence,
+        });
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------

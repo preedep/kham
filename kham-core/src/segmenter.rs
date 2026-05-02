@@ -197,6 +197,89 @@ impl Tokenizer {
 
         result
     }
+
+    /// Segment `text` and return a [`TokenStream`] for incremental consumption.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use kham_core::Tokenizer;
+    ///
+    /// let tok = Tokenizer::new();
+    /// let mut stream = tok.segment_stream("กินข้าวกับปลา");
+    /// while let Some(t) = stream.next_word() {
+    ///     println!("{}", t.text);
+    /// }
+    /// ```
+    pub fn segment_stream<'t>(&self, text: &'t str) -> TokenStream<'t> {
+        TokenStream {
+            inner: self.segment(text).into_iter(),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// TokenStream
+// ---------------------------------------------------------------------------
+
+/// A streaming iterator over [`Token`]s produced by [`Tokenizer::segment_stream`].
+///
+/// Wraps the full `Vec<Token>` as an [`alloc::vec::IntoIter`]; the streaming
+/// API lets callers consume tokens one at a time and filter by kind or
+/// confidence without allocating a second collection.
+///
+/// # Example
+///
+/// ```rust
+/// use kham_core::Tokenizer;
+///
+/// let tok = Tokenizer::builder().keep_whitespace(true).build();
+/// let mut stream = tok.segment_stream("กิน ข้าว");
+/// // next_word() skips whitespace tokens.
+/// while let Some(t) = stream.next_word() {
+///     println!("{}", t.text);
+/// }
+/// ```
+pub struct TokenStream<'t> {
+    inner: alloc::vec::IntoIter<Token<'t>>,
+}
+
+impl<'t> TokenStream<'t> {
+    /// Advance past [`TokenKind::Whitespace`] tokens and return the next
+    /// non-whitespace token, or `None` when the stream is exhausted.
+    pub fn next_word(&mut self) -> Option<Token<'t>> {
+        self.inner
+            .by_ref()
+            .find(|t| t.kind != TokenKind::Whitespace)
+    }
+
+    /// Advance past whitespace and [`TokenKind::Unknown`] tokens and return
+    /// the next token whose kind is neither, or `None` when exhausted.
+    pub fn next_known(&mut self) -> Option<Token<'t>> {
+        self.inner
+            .by_ref()
+            .find(|t| t.kind != TokenKind::Whitespace && t.kind != TokenKind::Unknown)
+    }
+
+    /// Advance past tokens with `confidence < min` and return the next
+    /// qualifying token, or `None` when the stream is exhausted.
+    pub fn next_above_confidence(&mut self, min: f32) -> Option<Token<'t>> {
+        self.inner.by_ref().find(|t| t.confidence >= min)
+    }
+}
+
+impl<'t> Iterator for TokenStream<'t> {
+    type Item = Token<'t>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Token<'t>> {
+        self.inner.next()
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -977,6 +1060,70 @@ mod tests {
                     t.confidence
                 );
             }
+        }
+    }
+
+    // ── TokenStream ───────────────────────────────────────────────────────────
+
+    #[test]
+    fn segment_stream_yields_same_as_segment() {
+        let t = tok();
+        let text = "กินข้าวกับปลา";
+        let direct: alloc::vec::Vec<_> = t.segment(text);
+        let streamed: alloc::vec::Vec<_> = t.segment_stream(text).collect();
+        assert_eq!(direct.len(), streamed.len());
+        for (a, b) in direct.iter().zip(streamed.iter()) {
+            assert_eq!(a.text, b.text);
+            assert_eq!(a.kind, b.kind);
+            assert_eq!(a.span, b.span);
+        }
+    }
+
+    #[test]
+    fn next_word_skips_whitespace() {
+        let t = Tokenizer::builder().keep_whitespace(true).build();
+        let mut stream = t.segment_stream("กิน ข้าว ปลา");
+        while let Some(tok) = stream.next_word() {
+            assert_ne!(
+                tok.kind,
+                TokenKind::Whitespace,
+                "next_word() must not return a whitespace token"
+            );
+        }
+    }
+
+    #[test]
+    fn next_known_skips_unknown() {
+        let t = tok();
+        // Individual bare consonants unlikely to be dict words → Unknown tokens
+        let mut stream = t.segment_stream("กขค");
+        while let Some(tok) = stream.next_known() {
+            assert_ne!(
+                tok.kind,
+                TokenKind::Unknown,
+                "next_known() must not return an Unknown token"
+            );
+            assert_ne!(
+                tok.kind,
+                TokenKind::Whitespace,
+                "next_known() must not return a Whitespace token"
+            );
+        }
+    }
+
+    #[test]
+    fn next_above_confidence_filters_low() {
+        let t = tok();
+        let text = "กินข้าวกับปลา";
+        let threshold = 0.8_f32;
+        let mut stream = t.segment_stream(text);
+        while let Some(tok) = stream.next_above_confidence(threshold) {
+            assert!(
+                tok.confidence >= threshold,
+                "next_above_confidence({threshold}) returned token {:?} with confidence {}",
+                tok.text,
+                tok.confidence
+            );
         }
     }
 }
