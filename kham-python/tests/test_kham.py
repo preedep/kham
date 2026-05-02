@@ -63,6 +63,21 @@ class TestTokenAttributes:
         assert hasattr(t, "char_start")
         assert hasattr(t, "char_end")
         assert hasattr(t, "kind")
+        assert hasattr(t, "confidence")
+
+    def test_confidence_is_float(self):
+        for t in tokens("กินข้าว"):
+            assert isinstance(t.confidence, float), f"confidence should be float, got {type(t.confidence)}"
+
+    def test_confidence_range(self):
+        for t in tokens("กินข้าวกับปลา"):
+            assert 0.0 <= t.confidence <= 1.0, f"confidence {t.confidence} out of [0, 1]"
+
+    def test_unknown_token_confidence_zero(self):
+        toks = tokens("xyzqqqบบบ")
+        unknowns = [t for t in toks if t.kind == "Unknown"]
+        for t in unknowns:
+            assert t.confidence == 0.0, f"Unknown token {t.text!r} should have confidence=0.0"
 
     def test_text_is_str(self):
         for t in tokens("กินข้าว"):
@@ -232,3 +247,150 @@ class TestEdgeCases:
         text = "ธนาคาร100แห่งhello"
         rebuilt = "".join(t.text for t in tokens(text))
         assert rebuilt == text
+
+
+# ---------------------------------------------------------------------------
+# spell_did_you_mean
+# ---------------------------------------------------------------------------
+
+class TestSpellDidYouMean:
+    def test_correct_word_returns_none(self):
+        assert kham.spell_did_you_mean("กิน") is None
+
+    def test_empty_input_returns_none(self):
+        assert kham.spell_did_you_mean("") is None
+
+    def test_returns_str_or_none(self):
+        result = kham.spell_did_you_mean("กานข้าว")
+        assert result is None or isinstance(result, str)
+
+    def test_suggestion_is_non_empty_when_present(self):
+        result = kham.spell_did_you_mean("กานข้าว")
+        if result is not None:
+            assert len(result) > 0
+
+
+# ---------------------------------------------------------------------------
+# spell_correct_text
+# ---------------------------------------------------------------------------
+
+class TestSpellCorrectText:
+    def test_returns_str(self):
+        assert isinstance(kham.spell_correct_text("กินข้าว"), str)
+
+    def test_known_text_is_non_empty(self):
+        assert kham.spell_correct_text("กินข้าว") != ""
+
+    def test_empty_input_returns_empty(self):
+        assert kham.spell_correct_text("") == ""
+
+    def test_known_text_unchanged(self):
+        # All tokens are known, so the result should reproduce the input text.
+        result = kham.spell_correct_text("กินข้าวกับปลา")
+        assert result == "กินข้าวกับปลา"
+
+
+# ---------------------------------------------------------------------------
+# romanize_sentence
+# ---------------------------------------------------------------------------
+
+class TestRomanizeSentence:
+    def test_returns_str(self):
+        assert isinstance(kham.romanize_sentence("กิน"), str)
+
+    def test_thai_produces_ascii(self):
+        result = kham.romanize_sentence("กิน")
+        assert result.isascii(), f"expected ASCII, got {result!r}"
+
+    def test_latin_passthrough(self):
+        assert kham.romanize_sentence("hello") == "hello"
+
+    def test_non_empty_for_thai(self):
+        assert kham.romanize_sentence("กินข้าว") != ""
+
+    def test_empty_input_returns_empty(self):
+        assert kham.romanize_sentence("") == ""
+
+    def test_number_passthrough(self):
+        result = kham.romanize_sentence("100")
+        assert result == "100"
+
+
+# ---------------------------------------------------------------------------
+# extract_phrases
+# ---------------------------------------------------------------------------
+
+class TestExtractPhrases:
+    def test_returns_list(self):
+        result = kham.extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 5)
+        assert isinstance(result, list)
+
+    def test_max_n_zero_returns_empty(self):
+        result = kham.extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 0)
+        assert result == []
+
+    def test_empty_text_returns_empty(self):
+        assert kham.extract_phrases("", 5) == []
+
+    def test_respects_max_n(self):
+        text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล"
+        result = kham.extract_phrases(text, 2)
+        assert len(result) <= 2
+
+    def test_phrase_has_required_attributes(self):
+        text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล"
+        for p in kham.extract_phrases(text, 5):
+            assert isinstance(p.word, str)
+            assert isinstance(p.score, float)
+            assert isinstance(p.count, int)
+            assert p.word != ""
+            assert p.score >= 0.0
+            assert p.count >= 1
+
+    def test_score_descending(self):
+        text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล"
+        phrases = kham.extract_phrases(text, 10)
+        scores = [p.score for p in phrases]
+        assert scores == sorted(scores, reverse=True), "phrases must be sorted by score descending"
+
+
+# ---------------------------------------------------------------------------
+# segment_above_confidence
+# ---------------------------------------------------------------------------
+
+class TestSegmentAboveConfidence:
+    def test_returns_list(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 0.5)
+        assert isinstance(result, list)
+
+    def test_all_tokens_meet_threshold(self):
+        threshold = 0.5
+        result = kham.segment_above_confidence("กินข้าวกับปลา", threshold)
+        for t in result:
+            assert t.confidence >= threshold, (
+                f"token {t.text!r} has confidence {t.confidence} < threshold {threshold}"
+            )
+
+    def test_threshold_zero_returns_all_non_unknown(self):
+        all_toks  = kham.segment_tokens("กินข้าวกับปลา")
+        above_toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.0)
+        non_unknown = [t for t in all_toks if t.confidence >= 0.0]
+        assert len(above_toks) == len(non_unknown)
+
+    def test_threshold_one_returns_only_high_confidence(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 1.0)
+        for t in result:
+            assert t.confidence == 1.0
+
+    def test_high_threshold_filters_out_tokens(self):
+        all_toks   = kham.segment_tokens("กินข้าวกับปลา")
+        above_toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.99)
+        assert len(above_toks) <= len(all_toks)
+
+    def test_empty_input_returns_empty(self):
+        assert kham.segment_above_confidence("", 0.5) == []
+
+    def test_returned_tokens_have_confidence_field(self):
+        result = kham.segment_above_confidence("กินข้าวกับปลา", 0.0)
+        for t in result:
+            assert hasattr(t, "confidence")

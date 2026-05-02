@@ -92,15 +92,23 @@ struct KhamFts5Api {
 For documents stored with stacked tone marks or unresolved Sara Am (rare in practice), offsets
 may shift by a few bytes in those spans.
 
-## Synonym expansion and soundex (FTS5_TOKEN_COLOCATED)
+## Colocated token expansion (FTS5_TOKEN_COLOCATED)
 
-For each non-stop token, synonyms, RTGS romanization forms, and soundex phonetic codes are
-emitted as colocated tokens at the same `(iStart, iEnd)` position.
+For each non-stop token, synonyms, RTGS romanization forms, soundex phonetic codes, and
+(where available) POS lexemes are emitted as colocated tokens at the same `(iStart, iEnd)`
+position.  Thai digit tokens also emit an ASCII numeral colocated synonym.
+
+POS lexemes use the concatenated form `pos<orchid_tag_lowercased>` (e.g. `posnoun`, `posverb`,
+`posconj`) — no underscore, because FTS5 uses the kham tokenizer to parse `MATCH` arguments
+too, and `_` (U+005F) is classified as Punctuation and would split `pos_noun` into three tokens.
 
 ```sql
-SELECT * FROM docs WHERE docs MATCH 'kin';   -- matches กิน via RTGS
-SELECT * FROM docs WHERE docs MATCH '4800';  -- matches ปลา via lk82 soundex code
-SELECT * FROM docs WHERE docs MATCH '1600';  -- matches กาน/ขาน/คาน (near-homophones, lk82)
+SELECT * FROM docs WHERE docs MATCH 'kin';      -- matches กิน via RTGS
+SELECT * FROM docs WHERE docs MATCH '4800';     -- matches ปลา via lk82 soundex code
+SELECT * FROM docs WHERE docs MATCH '1600';     -- matches กาน/ขาน/คาน (near-homophones, lk82)
+SELECT * FROM docs WHERE docs MATCH '123';      -- matches ๑๒๓ via number normalization
+SELECT * FROM docs WHERE docs MATCH 'posverb'; -- all documents containing a verb token
+SELECT * FROM docs WHERE docs MATCH 'กิน AND posverb'; -- กิน used as a verb
 ```
 
 RTGS romanization is enabled by default (`RomanizationMap::builtin()`).
@@ -174,6 +182,17 @@ SELECT * FROM docs WHERE docs MATCH 'krungthep'; -- matches กรุงเท�
 SELECT * FROM docs WHERE docs MATCH '4800';      -- matches ปลา (lk82 code)
 SELECT * FROM docs WHERE docs MATCH '1600';      -- matches กาน/ขาน/คาน (near-homophones)
 
+-- Thai digit / number-word normalization
+INSERT INTO docs VALUES ('ราคา ๑๒๓ บาท');
+SELECT * FROM docs WHERE docs MATCH '123';       -- matches ๑๒๓ via ASCII colocated synonym
+
+-- POS lexeme filtering (concatenated form, no underscore — pos_X would split in FTS5 queries)
+SELECT * FROM docs WHERE docs MATCH 'posnoun';           -- all docs with a noun token
+SELECT * FROM docs WHERE docs MATCH 'posverb';           -- all docs with a verb token
+SELECT * FROM docs WHERE docs MATCH 'กิน AND posverb';   -- กิน used as a verb
+-- Full POS tag set: posnoun posverb posadj posadv pospart pospropn pospron
+--                  posnum posclas posconj posaux posdet posprep
+
 -- Override soundex algorithm
 CREATE VIRTUAL TABLE docs2 USING fts5(body, tokenize='kham soundex udom83');
 CREATE VIRTUAL TABLE docs3 USING fts5(body, tokenize='kham soundex none'); -- disable
@@ -191,13 +210,14 @@ All non-whitespace token kinds are forwarded to SQLite FTS5 without stopword fil
 
 | `TokenKind`              | Forwarded? | Notes |
 |--------------------------|-----------|-------|
-| `Thai`                   | ✓ | + synonyms / RTGS / soundex as colocated |
-| `Latin`                  | ✓ | |
-| `Number`                 | ✓ | |
-| `Punctuation`            | ✓ | |
-| `Emoji`                  | ✓ | |
-| `Unknown`                | ✓ | trigrams emitted as colocated |
-| `Named(_)`               | ✓ | merged by NE tagger; + RTGS / soundex |
+| `TokenKind`              | Forwarded? | Colocated tokens |
+| `Thai`                   | ✓ | synonyms + RTGS + soundex + `pos<tag>` (if POS known) |
+| `Latin`                  | ✓ | — |
+| `Number`                 | ✓ | ASCII form when token contains Thai digits (e.g. `๑๒๓` → `123`) |
+| `Punctuation`            | ✓ | — |
+| `Emoji`                  | ✓ | — |
+| `Unknown`                | ✓ | char n-grams (trigrams by default) |
+| `Named(_)`               | ✓ | RTGS + soundex (merged by NE tagger) |
 | `Whitespace`             | — | excluded by `segment_for_fts` |
 
 ## Build Commands
@@ -228,6 +248,8 @@ sqlite3 ':memory:' \
 - [x] **N-gram size** — `ngram_size N` argument; controls char n-gram size for Unknown tokens (default 3; 0 = disabled)
 - [x] **Custom synonym map** — `synonyms '<path>'` argument; loads TSV at table-creation time
 - [x] **Custom dictionary overlay** — `dict '<path>'` argument; overlays domain words on the built-in dictionary (fast, no trie rebuild)
+- [x] **Thai number normalization** — Thai digit tokens (๑๒๓) indexed with ASCII colocated synonym ("123")
+- [x] **POS lexeme expansion** — `pos<tag>` colocated token emitted for tagged tokens (e.g. `posnoun`, `posverb`); enables POS-filtered FTS queries
 - [ ] **Tokenizer config inspection** — pragma/metadata to query which options a table was created with
 
 ## unsafe policy

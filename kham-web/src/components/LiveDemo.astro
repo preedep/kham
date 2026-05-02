@@ -17,6 +17,7 @@ const sentenceSamples = [
 ];
 
 const spellSamples = [
+  'ผมกีนข้าวกับปลา',
   'กีนข้าว',
   'ประเทส',
   'สวัสดื',
@@ -26,6 +27,12 @@ const spellSamples = [
 const keywordSamples = [
   'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ ดาวดวงนี้โคจรอยู่ใกล้ดาวเคราะห์น้อย ทีมนักวิจัยกำลังศึกษาข้อมูลเพิ่มเติมเกี่ยวกับดาวดวงนี้',
   'อาหารไทยมีชื่อเสียงไปทั่วโลก ต้มยำกุ้งและผัดไทยเป็นอาหารที่คนต่างชาติชื่นชอบ รสชาติเผ็ดและหอมของสมุนไพรไทยทำให้อาหารไทยแตกต่างจากอาหารชาติอื่น',
+];
+
+const romanizeSamples = [
+  'กินข้าวกับปลา',
+  'กรุงเทพมหานครเป็นเมืองหลวงของประเทศไทย',
+  'นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่',
 ];
 ---
 
@@ -111,6 +118,18 @@ const keywordSamples = [
         {s.length > 18 ? s.slice(0, 18) + '…' : s}
       </button>
     ))}
+    {!compact && romanizeSamples.map((s) => (
+      <button
+        type="button"
+        class="demo-sample hidden text-xs px-3 py-1.5 rounded-md bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 transition-colors truncate max-w-[180px]"
+        data-text={s}
+        data-mode="romanize"
+        title={s}
+        aria-label={`Use romanize sample: ${s}`}
+      >
+        {s.length > 14 ? s.slice(0, 14) + '…' : s}
+      </button>
+    ))}
   </div>
 
   <!-- Controls row -->
@@ -137,6 +156,7 @@ const keywordSamples = [
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="sentences" aria-pressed="false">Sentences</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="spell"     aria-pressed="false">Spell</button>
         <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="keywords"  aria-pressed="false">Keywords</button>
+        <button type="button" class="demo-mode-tab text-xs font-medium px-3 py-1.5 rounded-md transition-colors" data-mode="romanize"  aria-pressed="false">Romanize</button>
       </div>
     )}
 
@@ -281,7 +301,7 @@ const keywordSamples = [
   let wasmMod      = null;
   let lastTokens   = [];
   let activeFilter = 'All';
-  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences' | 'spell' | 'keywords'
+  let mode         = 'seg';   // 'seg' | 'fts' | 'sentences' | 'spell' | 'keywords' | 'romanize'
   let showRoman    = false;
 
   // ── wasm ──────────────────────────────────────────────────────────────────
@@ -389,8 +409,73 @@ const keywordSamples = [
     </tr>`;
   }
 
-  // ── render spell suggestions ──────────────────────────────────────────────
-  function renderSpellResults(suggestions) {
+  // ── render spell suggestions + corrected text ────────────────────────────
+  function renderSpellResults(suggestions, inputText, corrected) {
+    const pills     = document.getElementById('demo-pills');
+    const tableWrap = document.getElementById('demo-table-wrap');
+    const filterRow = document.getElementById('demo-filter-row');
+    const sentHint  = document.getElementById('demo-sent-hint');
+
+    if (tableWrap) tableWrap.classList.add('hidden');
+    if (filterRow) filterRow.classList.add('hidden');
+    if (sentHint)  sentHint.classList.add('hidden');
+
+    pills.className = 'flex flex-col gap-3 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'region');
+    pills.setAttribute('aria-label', 'Spell check results');
+
+    const parts = [];
+
+    // Corrected text banner — shown when spell_correct_text changed the input
+    const changed = corrected && corrected !== inputText;
+    const correctedBanner = changed
+      ? `<div class="flex items-start gap-2.5 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
+          <svg class="w-4 h-4 mt-0.5 shrink-0 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <div class="flex-1 min-w-0">
+            <p class="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-1">Corrected text</p>
+            <p class="text-sm text-emerald-900 dark:text-emerald-200 font-medium break-words">${corrected}</p>
+          </div>
+        </div>`
+      : `<div class="flex items-center gap-2 p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+          <svg class="w-4 h-4 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+          </svg>
+          <p class="text-sm text-slate-500 dark:text-slate-400">No corrections needed.</p>
+        </div>`;
+    parts.push(correctedBanner);
+
+    // Suggestions list (for single-word input or first unknown token)
+    if (suggestions.length) {
+      const suggHtml = suggestions.map((s, i) => {
+        const editColor = s.edit_distance === 0
+          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+          : s.edit_distance === 1
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
+        const soundexBadge = s.soundex_match
+          ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">soundex ✓</span>'
+          : '';
+        return `<div class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors" role="listitem">
+          <span class="flex-none w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 text-xs font-bold flex items-center justify-center">${i + 1}</span>
+          <span class="text-base font-semibold text-slate-900 dark:text-slate-100 flex-1">${s.word}</span>
+          <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${editColor}">edit ${s.edit_distance}</span>
+          ${soundexBadge}
+          <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">freq ${s.freq_score}</span>
+        </div>`;
+      }).join('');
+      parts.push(`<div class="flex flex-col gap-1.5" role="list" aria-label="Suggestions">
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide px-0.5">Suggestions for "${inputText.split(/\s/)[0]}"</p>
+        ${suggHtml}
+      </div>`);
+    }
+
+    pills.innerHTML = parts.join('');
+  }
+
+  // ── render romanization result ────────────────────────────────────────────
+  function renderRomanizeResult(romanized) {
     const pills     = document.getElementById('demo-pills');
     const tableWrap = document.getElementById('demo-table-wrap');
     const filterRow = document.getElementById('demo-filter-row');
@@ -401,35 +486,37 @@ const keywordSamples = [
     if (sentHint)  sentHint.classList.add('hidden');
 
     pills.className = 'flex flex-col gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
-    pills.setAttribute('role', 'list');
-    pills.setAttribute('aria-label', 'Spell suggestions');
+    pills.setAttribute('role', 'region');
+    pills.setAttribute('aria-label', 'Romanized text');
 
-    if (!suggestions.length) {
-      pills.innerHTML = '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No suggestions — word may already be correct.</p>';
-      return;
-    }
+    pills.innerHTML = romanized
+      ? `<p class="text-base font-mono text-indigo-700 dark:text-indigo-300 leading-relaxed break-words">${romanized}</p>`
+      : '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No output.</p>';
+  }
 
-    pills.innerHTML = suggestions.map((s, i) => {
-      const editColor = s.edit_distance === 0
-        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-        : s.edit_distance === 1
-          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
-          : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300';
-      const soundexBadge = s.soundex_match
-        ? '<span class="inline-flex items-center px-1.5 py-0.5 rounded text-xs bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">soundex ✓</span>'
-        : '';
-      return `<div class="flex items-center gap-3 p-2.5 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-300 dark:hover:border-blue-600 transition-colors" role="listitem">
-        <span class="flex-none w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 text-xs font-bold flex items-center justify-center">${i + 1}</span>
-        <span class="text-base font-semibold text-slate-900 dark:text-slate-100 flex-1">${s.word}</span>
-        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${editColor}">edit ${s.edit_distance}</span>
-        ${soundexBadge}
-        <span class="text-xs text-slate-400 dark:text-slate-500 font-mono">freq ${s.freq_score}</span>
-      </div>`;
+  // ── keyword pill builder (shared by keywords and phrases) ────────────────
+  function keywordPillsHtml(items, colorClass) {
+    if (!items.length) return '<p class="text-sm text-slate-400 dark:text-slate-500 py-1">None extracted.</p>';
+    const maxScore = items[0].score || 1;
+    return items.map((k, i) => {
+      const pct = Math.round((k.score / maxScore) * 100);
+      const intensity = colorClass
+        ? (pct > 70 ? colorClass.hi : pct > 40 ? colorClass.mid : colorClass.lo)
+        : (pct > 70
+            ? 'bg-blue-600 text-white dark:bg-blue-500'
+            : pct > 40
+              ? 'bg-blue-200 text-blue-800 dark:bg-blue-800/60 dark:text-blue-200'
+              : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300');
+      const sizeClass = i === 0 ? 'text-base px-4 py-2' : i < 3 ? 'text-sm px-3 py-1.5' : 'text-xs px-2.5 py-1';
+      return `<span class="inline-flex flex-col items-center gap-0.5 rounded-lg font-medium transition-colors ${intensity} ${sizeClass}" role="listitem" title="score ${k.score.toFixed(4)}, count ${k.count}">
+        <span>${k.word}</span>
+        <span class="text-[10px] opacity-70">×${k.count}</span>
+      </span>`;
     }).join('');
   }
 
   // ── render keyword extraction ─────────────────────────────────────────────
-  function renderKeywordResults(keywords) {
+  function renderKeywordResults(keywords, phrases) {
     const pills     = document.getElementById('demo-pills');
     const tableWrap = document.getElementById('demo-table-wrap');
     const filterRow = document.getElementById('demo-filter-row');
@@ -439,29 +526,34 @@ const keywordSamples = [
     if (filterRow) filterRow.classList.add('hidden');
     if (sentHint)  sentHint.classList.add('hidden');
 
-    pills.className = 'flex flex-wrap gap-2 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
-    pills.setAttribute('role', 'list');
-    pills.setAttribute('aria-label', 'Keywords');
+    pills.className = 'flex flex-col gap-4 mb-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-slate-200 dark:border-slate-700 min-h-[52px]';
+    pills.setAttribute('role', 'region');
+    pills.setAttribute('aria-label', 'Keywords and keyphrases');
 
-    if (!keywords.length) {
-      pills.innerHTML = '<p class="text-sm text-slate-400 dark:text-slate-500 py-2">No keywords extracted.</p>';
-      return;
-    }
+    const kwColors = {
+      hi:  'bg-blue-600 text-white dark:bg-blue-500',
+      mid: 'bg-blue-200 text-blue-800 dark:bg-blue-800/60 dark:text-blue-200',
+      lo:  'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    };
+    const phColors = {
+      hi:  'bg-violet-600 text-white dark:bg-violet-500',
+      mid: 'bg-violet-200 text-violet-800 dark:bg-violet-800/60 dark:text-violet-200',
+      lo:  'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+    };
 
-    const maxScore = keywords[0].score || 1;
-    pills.innerHTML = keywords.map((k, i) => {
-      const pct = Math.round((k.score / maxScore) * 100);
-      const intensity = pct > 70
-        ? 'bg-blue-600 text-white dark:bg-blue-500'
-        : pct > 40
-          ? 'bg-blue-200 text-blue-800 dark:bg-blue-800/60 dark:text-blue-200'
-          : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
-      const sizeClass = i === 0 ? 'text-base px-4 py-2' : i < 3 ? 'text-sm px-3 py-1.5' : 'text-xs px-2.5 py-1';
-      return `<span class="inline-flex flex-col items-center gap-0.5 rounded-lg font-medium transition-colors ${intensity} ${sizeClass}" role="listitem" title="score ${k.score.toFixed(4)}, count ${k.count}">
-        <span>${k.word}</span>
-        <span class="text-[10px] opacity-70">×${k.count}</span>
-      </span>`;
-    }).join('');
+    pills.innerHTML = `
+      <div>
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Keywords</p>
+        <div class="flex flex-wrap gap-2" role="list" aria-label="Keywords">
+          ${keywords.length ? keywordPillsHtml(keywords, kwColors) : '<p class="text-sm text-slate-400 dark:text-slate-500 py-1">No keywords extracted.</p>'}
+        </div>
+      </div>
+      <div class="border-t border-slate-200 dark:border-slate-700 pt-3">
+        <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-2">Keyphrases</p>
+        <div class="flex flex-wrap gap-2" role="list" aria-label="Keyphrases">
+          ${keywordPillsHtml(phrases || [], phColors)}
+        </div>
+      </div>`;
   }
 
   // ── render token pills + table ────────────────────────────────────────────
@@ -579,7 +671,7 @@ const keywordSamples = [
     const tableWrap  = document.getElementById('demo-table-wrap');
     const sentHint   = document.getElementById('demo-sent-hint');
     const inputHint  = document.getElementById('demo-input-hint');
-    const tokenOnlyMode = mode === 'sentences' || mode === 'spell' || mode === 'keywords';
+    const tokenOnlyMode = mode === 'sentences' || mode === 'spell' || mode === 'keywords' || mode === 'romanize';
     if (romanBtn)  romanBtn.classList.toggle('hidden', mode !== 'fts');
     if (filterRow) filterRow.classList.toggle('hidden', tokenOnlyMode);
     if (tableWrap) tableWrap.classList.toggle('hidden', tokenOnlyMode);
@@ -598,7 +690,7 @@ const keywordSamples = [
     });
 
     // Update run button label
-    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract', romanize: 'Romanize' };
     const label = document.getElementById('demo-btn-label');
     if (label) label.textContent = labelMap[mode] || 'Segment';
   }
@@ -636,7 +728,7 @@ const keywordSamples = [
     btn.disabled = loading;
     btn.setAttribute('aria-busy', loading ? 'true' : 'false');
     spinner.classList.toggle('hidden', !loading);
-    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract' };
+    const labelMap = { sentences: 'Split', spell: 'Check', keywords: 'Extract', romanize: 'Romanize' };
     label.textContent = loading ? 'Loading…' : (labelMap[mode] || 'Segment');
     if (status) { status.classList.toggle('hidden', !loading); status.textContent = loading ? 'Initialising WebAssembly…' : ''; }
   }
@@ -725,18 +817,60 @@ const keywordSamples = [
     try {
       const mod = await loadWasm();
       const t0 = performance.now();
-      const suggestions = mod.spell_suggestions(text, 8);
+      // Use the first token of multi-word input for suggestions; correct_text handles full passage
+      const firstWord = text.split(/\s+/)[0];
+      const suggestions = mod.spell_suggestions(firstWord, 8);
+      const corrected   = mod.spell_correct_text(text);
       const elapsed = performance.now() - t0;
 
-      renderSpellResults(suggestions);
+      renderSpellResults(suggestions, text, corrected);
 
+      const changed = corrected && corrected !== text;
       const stats = document.getElementById('demo-stats');
-      if (stats) stats.innerHTML = suggestions.length
-        ? `<span>Input: <strong>${text}</strong></span><span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span><span>Suggestions: <strong>${suggestions.length}</strong></span>`
-        : `<span>No suggestions for <strong>${text}</strong></span>`;
+      if (stats) stats.innerHTML = changed
+        ? `<span>Corrected passage · Suggestions for <strong>${firstWord}</strong>: <strong>${suggestions.length}</strong></span>`
+        : suggestions.length
+          ? `<span>Input: <strong>${firstWord}</strong></span><span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span><span>Suggestions: <strong>${suggestions.length}</strong></span>`
+          : `<span>No corrections needed for <strong>${text}</strong></span>`;
 
       const count = document.getElementById('demo-count');
-      if (count) count.textContent = `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''}`;
+      if (count) count.textContent = changed
+        ? `corrected · ${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''}`
+        : `${suggestions.length} suggestion${suggestions.length !== 1 ? 's' : ''}`;
+
+      const timeBadge = document.getElementById('demo-time');
+      const timeVal   = document.getElementById('demo-time-val');
+      const timeStr   = elapsed < 1 ? `${(elapsed * 1000).toFixed(0)} µs` : `${elapsed.toFixed(2)} ms`;
+      if (timeVal) { timeVal.textContent = timeStr; timeBadge.classList.remove('hidden'); }
+      else if (timeBadge) timeBadge.textContent = timeStr;
+
+      document.getElementById('demo-results').classList.remove('hidden');
+    } catch (err) {
+      console.error('kham-wasm error:', err);
+      const status = document.getElementById('demo-status');
+      if (status) { status.classList.remove('hidden'); status.textContent = 'Error loading WebAssembly. Check console.'; }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function runRomanize() {
+    const text = document.getElementById('demo-input').value.trim();
+    if (!text) return;
+    setLoading(true);
+    try {
+      const mod = await loadWasm();
+      const t0 = performance.now();
+      const romanized = mod.romanize_sentence(text);
+      const elapsed = performance.now() - t0;
+
+      renderRomanizeResult(romanized);
+
+      const stats = document.getElementById('demo-stats');
+      if (stats) stats.innerHTML = `<span>Input: <strong>${text.length}</strong> chars → Romanized: <strong>${romanized.length}</strong> chars</span>`;
+
+      const count = document.getElementById('demo-count');
+      if (count) count.textContent = romanized ? '1 result' : 'no output';
 
       const timeBadge = document.getElementById('demo-time');
       const timeVal   = document.getElementById('demo-time-val');
@@ -762,15 +896,16 @@ const keywordSamples = [
       const mod = await loadWasm();
       const t0 = performance.now();
       const keywords = mod.extract_keywords(text, 10);
+      const phrases  = mod.extract_phrases(text, 5);
       const elapsed = performance.now() - t0;
 
-      renderKeywordResults(keywords);
+      renderKeywordResults(keywords, phrases);
 
       const stats = document.getElementById('demo-stats');
-      if (stats) stats.innerHTML = `<span>Keywords extracted: <strong>${keywords.length}</strong></span>`;
+      if (stats) stats.innerHTML = `<span>Keywords: <strong>${keywords.length}</strong></span><span class="w-px h-4 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></span><span>Keyphrases: <strong>${phrases.length}</strong></span>`;
 
       const count = document.getElementById('demo-count');
-      if (count) count.textContent = `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''}`;
+      if (count) count.textContent = `${keywords.length} keyword${keywords.length !== 1 ? 's' : ''} · ${phrases.length} phrase${phrases.length !== 1 ? 's' : ''}`;
 
       const timeBadge = document.getElementById('demo-time');
       const timeVal   = document.getElementById('demo-time-val');
@@ -792,6 +927,7 @@ const keywordSamples = [
     if (mode === 'sentences') runSentences();
     else if (mode === 'spell') runSpell();
     else if (mode === 'keywords') runKeywords();
+    else if (mode === 'romanize') runRomanize();
     else runTokens();
   }
 

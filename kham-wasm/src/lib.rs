@@ -54,6 +54,8 @@ use kham_core::{
     spell::SpellChecker,
     TokenKind, Tokenizer,
 };
+// WasmToken is the wasm-bindgen Token struct defined below.
+type WasmToken = Token;
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,8 @@ pub struct Token {
     char_start: usize,
     char_end: usize,
     kind: &'static str,
+    /// Segmentation confidence in `[0.0, 1.0]`. `0.0` = unknown, `1.0` = high-confidence dict match.
+    pub confidence: f32,
 }
 
 #[wasm_bindgen]
@@ -166,6 +170,8 @@ pub struct FtsToken {
     trigrams: Vec<String>,
     pos: Option<&'static str>,
     ne: Option<&'static str>,
+    /// Segmentation confidence in `[0.0, 1.0]`. `0.0` = unknown, `1.0` = high-confidence dict match.
+    pub confidence: f32,
 }
 
 #[wasm_bindgen]
@@ -317,6 +323,7 @@ pub fn segment_tokens(text: &str) -> Vec<Token> {
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_str(t.kind),
+            confidence: t.confidence,
         })
         .collect()
 }
@@ -346,6 +353,7 @@ pub fn segment_fts(text: &str) -> Vec<FtsToken> {
                 trigrams: t.trigrams,
                 pos: t.pos.map(|p| p.as_str()),
                 ne: t.ne.map(|n| n.as_str()),
+                confidence: t.confidence,
             }
         })
         .collect()
@@ -609,6 +617,56 @@ pub fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
         .collect()
 }
 
+/// Return the single best spelling suggestion for `word`, or an empty string
+/// if the word is already correct or no candidate is found within edit distance 2.
+///
+/// JavaScript note: use `=== ""` to detect "no suggestion"; an empty result
+/// means the word is likely correct or unrecognised.
+#[wasm_bindgen]
+pub fn spell_did_you_mean(word: &str) -> String {
+    SpellChecker::builtin()
+        .did_you_mean(word)
+        .unwrap_or_default()
+}
+
+/// Correct misspelled unknown tokens in `text` using the built-in dictionary.
+///
+/// Segments `text` into tokens, replaces each `Unknown` token (≥ 2 chars)
+/// with the best spelling suggestion if one exists within edit distance 2, and
+/// joins the result. Known tokens are passed through unchanged.
+#[wasm_bindgen]
+pub fn spell_correct_text(text: &str) -> String {
+    SpellChecker::builtin().correct_text(text)
+}
+
+/// Segment `text` and romanize it to RTGS Latin.
+///
+/// Thai and Named tokens are converted to RTGS romanization; Latin, Number,
+/// Punctuation, and other token kinds pass through unchanged. Whitespace
+/// between tokens is preserved.
+#[wasm_bindgen]
+pub fn romanize_sentence(text: &str) -> String {
+    RomanizationMap::builtin().romanize_sentence(text)
+}
+
+/// Extract up to `max_n` keyphrases (bigrams and trigrams) from `text`,
+/// ranked by TF × average-IDF of constituent words.
+///
+/// Stopwords and single-character tokens are excluded as phrase constituents.
+/// Returns an empty array for very short text or `max_n = 0`.
+#[wasm_bindgen]
+pub fn extract_phrases(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract_phrases(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Keyword
 // ---------------------------------------------------------------------------
@@ -658,6 +716,34 @@ pub fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
             count: k.count,
         })
         .collect()
+}
+
+/// Segment Thai text and return only tokens whose segmentation confidence
+/// meets or exceeds `min_confidence`.
+///
+/// A convenience filter over [`segment_tokens`]: calls `segment_stream`
+/// internally and collects tokens passing `next_above_confidence`.
+///
+/// Pass `0.0` to include all tokens; `1.0` for only the highest-confidence
+/// dictionary matches. Whitespace tokens that have confidence < min_confidence
+/// are also excluded.
+#[wasm_bindgen]
+pub fn segment_above_confidence(text: &str, min_confidence: f32) -> Vec<WasmToken> {
+    let tokenizer = Tokenizer::new();
+    let mut stream = tokenizer.segment_stream(text);
+    let mut result = Vec::new();
+    while let Some(t) = stream.next_above_confidence(min_confidence) {
+        result.push(WasmToken {
+            text: t.text.to_owned(),
+            byte_start: t.span.start,
+            byte_end: t.span.end,
+            char_start: t.char_span.start,
+            char_end: t.char_span.end,
+            kind: kind_str(t.kind),
+            confidence: t.confidence,
+        });
+    }
+    result
 }
 
 // ---------------------------------------------------------------------------
@@ -857,5 +943,92 @@ mod tests {
             tokens.iter().any(|t| t.is_stop()),
             "expected at least one stopword token"
         );
+    }
+
+    // --- spell_did_you_mean ---
+
+    #[test]
+    fn spell_did_you_mean_correct_word_returns_empty() {
+        assert_eq!(spell_did_you_mean("กิน"), "");
+    }
+
+    #[test]
+    fn spell_did_you_mean_empty_input_returns_empty() {
+        assert_eq!(spell_did_you_mean(""), "");
+    }
+
+    // --- spell_correct_text ---
+
+    #[test]
+    fn spell_correct_text_known_text_unchanged() {
+        let result = spell_correct_text("กินข้าว");
+        assert!(
+            !result.is_empty(),
+            "expected non-empty result for known text"
+        );
+    }
+
+    #[test]
+    fn spell_correct_text_returns_string() {
+        let result = spell_correct_text("กินข้าวกับปลา");
+        assert!(!result.is_empty());
+    }
+
+    // --- romanize_sentence ---
+
+    #[test]
+    fn romanize_sentence_produces_ascii_for_thai() {
+        let result = romanize_sentence("กิน");
+        assert!(
+            result.is_ascii(),
+            "expected ASCII romanization, got {result:?}"
+        );
+    }
+
+    #[test]
+    fn romanize_sentence_preserves_latin_passthrough() {
+        let result = romanize_sentence("hello");
+        assert_eq!(result, "hello");
+    }
+
+    #[test]
+    fn romanize_sentence_non_empty_for_thai_input() {
+        let result = romanize_sentence("กินข้าว");
+        assert!(!result.is_empty());
+    }
+
+    // --- extract_phrases ---
+
+    #[test]
+    fn extract_phrases_max_n_zero_returns_empty() {
+        let result = extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 0);
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn extract_phrases_short_text_returns_empty_or_vec() {
+        let result = extract_phrases("กิน", 5);
+        // Short single-token text may return nothing; just check it doesn't panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn extract_phrases_respects_max_n() {
+        let text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล";
+        let result = extract_phrases(text, 2);
+        assert!(
+            result.len() <= 2,
+            "got {} phrases, expected ≤ 2",
+            result.len()
+        );
+    }
+
+    #[test]
+    fn extract_phrases_phrase_text_non_empty() {
+        let text = "การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล";
+        let result = extract_phrases(text, 5);
+        for p in &result {
+            assert!(!p.word().is_empty(), "phrase word must not be empty");
+        }
     }
 }

@@ -9,7 +9,7 @@ const sections = [
   {
     id: 'rust', icon: '🦀', title: 'Rust',
     subtitle: 'Native crate — zero-copy, no_std core',
-    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.6"' },
+    install: { lang: 'toml', label: 'Cargo.toml', code: '[dependencies]\nkham-core = "0.7"' },
     example: { lang: 'rust', label: 'main.rs', code: `use kham_core::Tokenizer;
 
 fn main() {
@@ -179,10 +179,15 @@ SELECT * FROM docs WHERE docs MATCH 'ปลา';` },
                   <td class="py-2 pr-6">macOS · Linux · Windows · Android (arm64-v8a, armeabi-v7a, x86_64, x86)</td>
                   <td class="py-2 font-mono text-xs">libkham_sqlite.dylib / .so / .dll</td>
                 </tr>
-                <tr>
+                <tr class="border-b border-blue-100 dark:border-blue-900/50">
                   <td class="py-2 pr-6 font-mono text-xs">kham-pg</td>
                   <td class="py-2 pr-6">Linux x86_64 &amp; aarch64 · PostgreSQL 14–18</td>
                   <td class="py-2 font-mono text-xs">kham-pg-&lt;version&gt;-pg&lt;N&gt;-&lt;arch&gt;-unknown-linux-gnu.tar.gz</td>
+                </tr>
+                <tr>
+                  <td class="py-2 pr-6 font-mono text-xs">kham-pg Docker</td>
+                  <td class="py-2 pr-6">linux/amd64 &amp; arm64 · PostgreSQL 14–18</td>
+                  <td class="py-2 font-mono text-xs">nickmsft/kham-pg:&lt;version&gt;-pg&lt;N&gt;</td>
                 </tr>
               </tbody>
             </table>

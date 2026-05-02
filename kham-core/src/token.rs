@@ -96,7 +96,7 @@ pub enum TokenKind {
 ///     assert_eq!(t.char_span.end - t.char_span.start, t.text.chars().count());
 /// }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Token<'a> {
     /// Zero-copy reference into the original input.
     pub text: &'a str,
@@ -108,6 +108,16 @@ pub struct Token<'a> {
     pub char_span: Range<usize>,
     /// Script / category of this token.
     pub kind: TokenKind,
+    /// Segmentation confidence in the range `[0.0, 1.0]`.
+    ///
+    /// - `0.0` — Unknown token (no dictionary evidence).
+    /// - `0.7` — Dictionary match, but zero TNC corpus frequency (word known, rare in corpus),
+    ///   or dict match with 4+ competing boundary edges (highly ambiguous).
+    /// - `0.8` — Dict match with 3 competing edges.
+    /// - `0.9` — Dict match with 2 competing edges.
+    /// - `1.0` — Unambiguous high-frequency dictionary match, or any non-Thai token
+    ///   (Latin, Number, Emoji, Punctuation, Whitespace, Named).
+    pub confidence: f32,
 }
 
 impl<'a> Token<'a> {
@@ -123,6 +133,7 @@ impl<'a> Token<'a> {
         span: Range<usize>,
         char_span: Range<usize>,
         kind: TokenKind,
+        confidence: f32,
     ) -> Self {
         debug_assert_eq!(text.len(), span.end - span.start);
         debug_assert_eq!(text.chars().count(), char_span.end - char_span.start);
@@ -131,6 +142,7 @@ impl<'a> Token<'a> {
             span,
             char_span,
             kind,
+            confidence,
         }
     }
 
@@ -158,7 +170,7 @@ mod tests {
     fn make(text: &str, byte_start: usize, char_start: usize, kind: TokenKind) -> Token<'_> {
         let byte_end = byte_start + text.len();
         let char_end = char_start + text.chars().count();
-        Token::new(text, byte_start..byte_end, char_start..char_end, kind)
+        Token::new(text, byte_start..byte_end, char_start..char_end, kind, 1.0)
     }
 
     #[test]

@@ -110,7 +110,7 @@ pub mod tcc;
 pub mod token;
 
 pub use error::KhamError;
-pub use segmenter::{Tokenizer, TokenizerBuilder};
+pub use segmenter::{TokenStream, Tokenizer, TokenizerBuilder};
 pub use token::{NamedEntityKind, Token, TokenKind};
 
 /// Decompress zlib-compressed built-in data produced by the build script.

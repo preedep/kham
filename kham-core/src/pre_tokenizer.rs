@@ -255,6 +255,7 @@ fn push_token<'t>(
         start..end,
         char_start..char_end,
         kind,
+        1.0,
     ));
 }
 

@@ -65,6 +65,10 @@ use kham_core::{
     spell::SpellChecker,
     TokenKind, Tokenizer,
 };
+// PyToken is the Python-facing alias for the Token pyclass defined below.
+// It is used by segment_above_confidence to keep naming consistent with
+// the existing segment_tokens API.
+type PyToken = Token;
 use pyo3::prelude::*;
 
 // ---------------------------------------------------------------------------
@@ -107,6 +111,8 @@ fn parse_algo(algo: &str) -> SoundexAlgorithm {
 ///     kind (str): ``"Thai"`` | ``"Latin"`` | ``"Number"`` | ``"Punctuation"``
 ///         | ``"Emoji"`` | ``"Whitespace"`` | ``"Unknown"`` | ``"Person"``
 ///         | ``"Place"`` | ``"Org"``
+///     confidence (float): Segmentation confidence in ``[0.0, 1.0]``.
+///         ``0.0`` = unknown token; ``1.0`` = high-confidence dictionary match.
 #[pyclass(frozen)]
 pub struct Token {
     #[pyo3(get)]
@@ -121,14 +127,23 @@ pub struct Token {
     pub char_end: usize,
     #[pyo3(get)]
     pub kind: String,
+    /// Segmentation confidence [0.0, 1.0]. 0.0 = unknown, 1.0 = high-confidence dict match.
+    #[pyo3(get)]
+    pub confidence: f32,
 }
 
 #[pymethods]
 impl Token {
     fn __repr__(&self) -> String {
         format!(
-            "Token(text={:?}, byte_span={}..{}, char_span={}..{}, kind={:?})",
-            self.text, self.byte_start, self.byte_end, self.char_start, self.char_end, self.kind,
+            "Token(text={:?}, byte_span={}..{}, char_span={}..{}, kind={:?}, confidence={})",
+            self.text,
+            self.byte_start,
+            self.byte_end,
+            self.char_start,
+            self.char_end,
+            self.kind,
+            self.confidence,
         )
     }
 }
@@ -154,6 +169,8 @@ impl Token {
 ///         One of ``"Person"`` | ``"Place"`` | ``"Org"``.
 ///     synonyms (list[str]): Synonym / number-normalisation expansions (may be empty).
 ///     trigrams (list[str]): Character trigrams for ``"Unknown"`` tokens; empty otherwise.
+///     confidence (float): Segmentation confidence in ``[0.0, 1.0]``.
+///         ``0.0`` = unknown token; ``1.0`` = high-confidence dictionary match.
 #[pyclass(frozen)]
 pub struct FtsToken {
     #[pyo3(get)]
@@ -174,6 +191,9 @@ pub struct FtsToken {
     pub synonyms: Vec<String>,
     #[pyo3(get)]
     pub trigrams: Vec<String>,
+    /// Segmentation confidence [0.0, 1.0]. 0.0 = unknown, 1.0 = high-confidence dict match.
+    #[pyo3(get)]
+    pub confidence: f32,
 }
 
 #[pymethods]
@@ -311,6 +331,7 @@ fn segment_tokens(text: &str) -> Vec<Token> {
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_str(t.kind).to_owned(),
+            confidence: t.confidence,
         })
         .collect()
 }
@@ -347,6 +368,7 @@ fn segment_fts(text: &str) -> Vec<FtsToken> {
                 trigrams: t.trigrams,
                 pos: t.pos.map(|p| p.as_str().to_owned()),
                 ne: t.ne.map(|n| n.as_str().to_owned()),
+                confidence: t.confidence,
             }
         })
         .collect()
@@ -673,6 +695,96 @@ fn spell_suggestions(word: &str, max_n: usize) -> Vec<SpellSuggestion> {
         .collect()
 }
 
+/// Return the single best spelling suggestion for ``word``, or ``None`` if the
+/// word is already correct or no candidate is found within edit distance 2.
+///
+/// Args:
+///     word (str): Potentially misspelled Thai word.
+///
+/// Returns:
+///     str | None: The best suggestion, or ``None``.
+///
+/// Example:
+///     >>> kham.spell_did_you_mean("กานข้าว")
+///     'กินข้าว'
+///     >>> kham.spell_did_you_mean("กิน") is None
+///     True
+#[pyfunction]
+fn spell_did_you_mean(word: &str) -> Option<String> {
+    SpellChecker::builtin().did_you_mean(word)
+}
+
+/// Correct misspelled unknown tokens in ``text`` using the built-in dictionary.
+///
+/// Segments ``text`` into tokens, replaces each ``Unknown`` token (≥ 2 chars)
+/// with the best spelling suggestion if one exists within edit distance 2, and
+/// joins the result. Known tokens are passed through unchanged.
+///
+/// Args:
+///     text (str): Input text.
+///
+/// Returns:
+///     str: Corrected text.
+///
+/// Example:
+///     >>> kham.spell_correct_text("กานข้าว")
+///     'กินข้าว'
+#[pyfunction]
+fn spell_correct_text(text: &str) -> String {
+    SpellChecker::builtin().correct_text(text)
+}
+
+/// Segment ``text`` and romanize it to RTGS Latin.
+///
+/// Thai and Named tokens are converted to RTGS romanization; all other
+/// token kinds (Latin, Number, Punctuation, etc.) pass through unchanged.
+/// Whitespace between tokens is preserved.
+///
+/// Args:
+///     text (str): Input text (may contain mixed scripts).
+///
+/// Returns:
+///     str: Romanized text.
+///
+/// Example:
+///     >>> kham.romanize_sentence("กินข้าว")
+///     'kin khao'
+#[pyfunction]
+fn romanize_sentence(text: &str) -> String {
+    RomanizationMap::builtin().romanize_sentence(text)
+}
+
+/// Extract up to ``max_n`` keyphrases (bigrams and trigrams) from ``text``,
+/// ranked by TF × average-IDF of constituent words.
+///
+/// Stopwords and single-character tokens are excluded as phrase constituents.
+/// Returns an empty list for very short text or ``max_n = 0``.
+///
+/// Args:
+///     text (str): Input document text.
+///     max_n (int): Maximum number of keyphrases to return.
+///
+/// Returns:
+///     list[Keyword]: Each entry has ``word`` (the phrase text), ``score``,
+///     and ``count``.
+///
+/// Example:
+///     >>> khs = kham.extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ", 3)
+///     >>> [k.word for k in khs]
+///     ['การพัฒนาซอฟต์แวร์', ...]
+#[pyfunction]
+fn extract_phrases(text: &str, max_n: usize) -> Vec<Keyword> {
+    KeyExtractor::builtin()
+        .extract_phrases(text, max_n)
+        .into_iter()
+        .map(|k| Keyword {
+            word: k.word,
+            score: k.score,
+            count: k.count,
+        })
+        .collect()
+}
+
 // ---------------------------------------------------------------------------
 // Keyword
 // ---------------------------------------------------------------------------
@@ -734,6 +846,50 @@ fn extract_keywords(text: &str, max_n: usize) -> Vec<Keyword> {
 }
 
 // ---------------------------------------------------------------------------
+// segment_above_confidence
+// ---------------------------------------------------------------------------
+
+/// Segment Thai text and return only tokens whose segmentation confidence
+/// meets or exceeds ``min_confidence``.
+///
+/// This is a convenience filter over :func:`segment_tokens`: it calls
+/// ``segment_stream`` internally and collects tokens passing
+/// ``next_above_confidence``.
+///
+/// Args:
+///     text (str): Input text (may contain mixed scripts).
+///     min_confidence (float): Minimum confidence threshold in ``[0.0, 1.0]``.
+///         Pass ``0.0`` to include all tokens; ``1.0`` for only the highest-
+///         confidence dictionary matches.
+///
+/// Returns:
+///     list[Token]: Tokens with ``confidence >= min_confidence``.
+///
+/// Example:
+///     >>> toks = kham.segment_above_confidence("กินข้าวกับปลา", 0.8)
+///     >>> all(t.confidence >= 0.8 for t in toks)
+///     True
+#[pyfunction]
+#[pyo3(name = "segment_above_confidence")]
+fn segment_stream_above_confidence(text: &str, min_confidence: f32) -> Vec<PyToken> {
+    let tokenizer = Tokenizer::new();
+    let mut stream = tokenizer.segment_stream(text);
+    let mut result = Vec::new();
+    while let Some(t) = stream.next_above_confidence(min_confidence) {
+        result.push(PyToken {
+            text: t.text.to_owned(),
+            byte_start: t.span.start,
+            byte_end: t.span.end,
+            char_start: t.char_span.start,
+            char_end: t.char_span.end,
+            kind: kind_str(t.kind).to_owned(),
+            confidence: t.confidence,
+        });
+    }
+    result
+}
+
+// ---------------------------------------------------------------------------
 // Module
 // ---------------------------------------------------------------------------
 
@@ -753,6 +909,7 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(segment, m)?)?;
     m.add_function(wrap_pyfunction!(segment_tokens, m)?)?;
     m.add_function(wrap_pyfunction!(segment_fts, m)?)?;
+    m.add_function(wrap_pyfunction!(segment_stream_above_confidence, m)?)?;
 
     // Romanization
     m.add_function(wrap_pyfunction!(romanize, m)?)?;
@@ -778,9 +935,15 @@ fn kham(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Spell checking
     m.add_function(wrap_pyfunction!(spell_suggestions, m)?)?;
+    m.add_function(wrap_pyfunction!(spell_did_you_mean, m)?)?;
+    m.add_function(wrap_pyfunction!(spell_correct_text, m)?)?;
+
+    // Romanization (sentence-level)
+    m.add_function(wrap_pyfunction!(romanize_sentence, m)?)?;
 
     // Keyword extraction
     m.add_function(wrap_pyfunction!(extract_keywords, m)?)?;
+    m.add_function(wrap_pyfunction!(extract_phrases, m)?)?;
 
     Ok(())
 }

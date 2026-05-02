@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — 0.8.0
+
+### Added
+
+**kham-core**
+- `Token::confidence: f32` — segmentation confidence score on every token; 0.0 for Unknown tokens, 1.0 for unambiguous dict matches; intermediate values reflect TNC frequency and boundary ambiguity (competing edge count from the newmm DP pass); propagated into `FtsToken::confidence` and all bindings (Python, WASM, C FFI)
+- `SpellChecker::did_you_mean(word) -> Option<String>` — returns `None` if the word is in the dictionary, `Some(best_match)` otherwise
+- `SpellChecker::correct_text(text) -> String` — segments the input and replaces every `Unknown` token (≥ 2 chars) with its best spelling correction; known tokens pass through unchanged
+- `RomanizationMap::romanize_sentence(text) -> String` — segments `text` and RTGS-romanizes every Thai/Named token; non-Thai tokens (numbers, Latin, punctuation, whitespace) are preserved as-is
+- `KeyExtractor::extract_phrases(text, max_n) -> Vec<Keyword>` — bigram and trigram keyphrases from adjacent content tokens, scored by TF × average-IDF; phrases are space-separated token pairs/triples
+- `TokenStream<'t>` / `Tokenizer::segment_stream(text)` — streaming iterator over `Token`; `next_word()` skips whitespace, `next_known()` skips whitespace and Unknown, `next_above_confidence(f32)` filters by confidence threshold
+- `kham-python` / `kham-wasm`: `segment_above_confidence(text, min_confidence)` convenience function returning only tokens at or above the confidence threshold
+- CLI `--confidence` — append `conf=X.XX` per token in text output mode
+- CLI `--min-confidence <MIN>` — filter output to tokens with confidence ≥ MIN via `segment_stream`
+- CLI `--format text|json|csv` — structured output for both basic and FTS modes
+- CLI `--romanize` — segment and romanize Thai text to RTGS Latin; non-Thai tokens pass through
+
+---
+
 ## [0.7.0] - 2026-05-02
 
 ### Added
@@ -22,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `kham_tsvector(text) → tsvector` — SQL STABLE helper; shorthand for `to_tsvector('kham', text)`
 - `kham_tsquery(text) → tsquery` — SQL STABLE helper; shorthand for `plainto_tsquery('kham', text)`
 - `kham_features` regress suite — 14 SQL tests covering all new features
+- Docker Hub images — `nickmsft/kham-pg:<version>-pg<N>` multi-arch images (amd64 + arm64) for PostgreSQL 14–18; `nickmsft/kham-pg:latest` points to PG 17; no Rust toolchain required
 
 ### Changed
 

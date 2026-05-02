@@ -4,7 +4,16 @@ import Layout from '../../layouts/Layout.astro';
 
 <Layout title="ประสิทธิภาพ — kham" lang="th"
   description="kham throughput การตัดคำ 33–34 MiB/s, ความแม่นยำ F1 1.000 บน 228 test cases (ตรงกับ PyThaiNLP newmm 94.9%) วัดบน Apple M-series"
-  keywords="benchmark ตัดคำภาษาไทย, ความแม่นยำ NLP ไทย, kham vs PyThaiNLP, ประสิทธิภาพ Rust NLP, F1 score">
+  keywords="benchmark ตัดคำภาษาไทย, ความแม่นยำ NLP ไทย, kham vs PyThaiNLP, ประสิทธิภาพ Rust NLP, F1 score"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'หน้าหลัก', item: 'https://kham.io/th/' },
+      { '@type': 'ListItem', position: 2, name: 'ประสิทธิภาพ', item: 'https://kham.io/th/benchmarks' },
+    ],
+  }}
+>
   <div class="max-w-5xl mx-auto px-6 py-16">
     <div class="mb-12">
       <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">ประสิทธิภาพ</h1>

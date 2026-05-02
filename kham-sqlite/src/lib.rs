@@ -7,6 +7,8 @@
 //! - Synonym expansion via `FTS5_TOKEN_COLOCATED` (configurable TSV map)
 //! - RTGS romanization added as colocated synonyms (กิน → "kin")
 //! - Thai phonetic soundex codes as colocated synonyms for fuzzy matching
+//! - Thai digit → ASCII normalization (๑๒๓ indexed as "123" via colocated synonym)
+//! - POS lexeme colocated tokens (e.g. `posnoun`, `posverb`) for POS filtering
 //!
 //! ```sql
 //! SELECT load_extension('./libkham_sqlite', 'sqlite3_kham_init');
@@ -87,6 +89,12 @@ const SQLITE_ERROR: c_int = 1;
 
 /// Flag passed to `xToken` to emit a colocated synonym at the same position.
 const FTS5_TOKEN_COLOCATED: c_int = 0x0001;
+
+/// `xTokenize` flags set by FTS5 to indicate the tokenization context.
+/// POS lexemes must only be emitted during document indexing, not query
+/// tokenization — otherwise a query for any noun would expand to `posnoun`
+/// and match every document that contains any noun token.
+const FTS5_TOKENIZE_QUERY: c_int = 0x0001;
 
 // ---------------------------------------------------------------------------
 // FTS5 type definitions — must match sqlite3.h layout exactly.
@@ -402,6 +410,7 @@ unsafe extern "C" fn kham_fts5_create(
     let ngram_size = parse_ngram_size_arg(az_arg, n_arg);
     let mut builder = FtsTokenizer::builder()
         .romanization(RomanizationMap::builtin())
+        .number_normalize(true)
         .ngram_size(ngram_size);
     if let Some(algo) = soundex_algo {
         builder = builder.soundex(algo);
@@ -447,13 +456,16 @@ unsafe extern "C" fn kham_fts5_delete(p: *mut KhamFts5Tokenizer) {
 /// Pipeline per call:
 /// 1. Normalise input (สระลอย, วรรณยุกต์ dedup, Sara Am) — offsets reference normalized text.
 /// 2. Run the full FTS pipeline (`segment_for_fts`): segment → NE tag → stopword → POS →
-///    synonym expand → RTGS romanization.
+///    synonym expand → RTGS romanization → number normalization.
 /// 3. For each non-whitespace token, call `x_token(flags=0, iStart, iEnd)`.
-/// 4. For each synonym/RTGS form, call `x_token(FTS5_TOKEN_COLOCATED, iStart, iEnd)`.
+/// 4. For each synonym/RTGS/soundex/number form, call `x_token(FTS5_TOKEN_COLOCATED, …)`.
+/// 5. For n-grams (Unknown tokens), call `x_token(FTS5_TOKEN_COLOCATED, …)` for each gram.
+/// 6. For POS-tagged tokens, call `x_token(FTS5_TOKEN_COLOCATED, …)` with `"pos<tag>"`.
+///    Enables: `WHERE docs MATCH 'กิน AND posverb'`.
 unsafe extern "C" fn kham_fts5_tokenize(
     p: *mut KhamFts5Tokenizer,
     p_ctx: *mut c_void,
-    _flags: c_int,
+    flags: c_int,
     p_text: *const c_char,
     n_text: c_int,
     x_token: XTokenFn,
@@ -572,6 +584,32 @@ unsafe extern "C" fn kham_fts5_tokenize(
                 };
                 if rc != SQLITE_OK {
                     return rc;
+                }
+            }
+
+            // Emit POS lexeme as colocated token ONLY during document indexing.
+            // If emitted during query tokenization, `MATCH 'หมา'` would expand to
+            // "หมา OR posnoun", matching every document that contains any noun —
+            // because FTS5 treats xTokenize colocated tokens as OR alternatives in
+            // queries.  The flag FTS5_TOKENIZE_QUERY (0x0001) is set by FTS5 when
+            // tokenizing a MATCH expression; it is NOT set when indexing documents.
+            if (flags & FTS5_TOKENIZE_QUERY) == 0 {
+                if let Some(pos) = ft.pos {
+                    let pos_lexeme = format!("pos{}", pos.as_tag().to_ascii_lowercase());
+                    let pos_bytes = pos_lexeme.as_bytes();
+                    let rc = unsafe {
+                        x_token(
+                            p_ctx,
+                            FTS5_TOKEN_COLOCATED,
+                            pos_bytes.as_ptr() as *const c_char,
+                            pos_bytes.len() as c_int,
+                            i_start,
+                            i_end,
+                        )
+                    };
+                    if rc != SQLITE_OK {
+                        return rc;
+                    }
                 }
             }
         }

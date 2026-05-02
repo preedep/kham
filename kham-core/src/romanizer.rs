@@ -47,6 +47,9 @@ use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use crate::segmenter::Tokenizer;
+use crate::token::TokenKind;
+
 static BUILTIN_ROMANIZATION: &str = include_str!("../data/romanization_th.tsv");
 
 /// A Thai-word → RTGS-romanization lookup table.
@@ -216,6 +219,41 @@ impl RomanizationMap {
             .iter()
             .map(|t| String::from(self.romanize_or_raw(t)))
             .collect()
+    }
+
+    /// Segment `text` and romanize every Thai token using RTGS table-lookup with
+    /// rule-based fallback. Non-Thai tokens (Latin, numbers, punctuation,
+    /// whitespace) are passed through as-is.
+    ///
+    /// The result is a continuous string with no separator between tokens — the
+    /// original whitespace tokens (if any) are preserved as spaces.
+    ///
+    /// # Example
+    /// ```rust
+    /// use kham_core::romanizer::RomanizationMap;
+    ///
+    /// let map = RomanizationMap::builtin();
+    /// let out = map.romanize_sentence("กินข้าว");
+    /// // Should contain only ASCII / Latin characters for Thai input
+    /// assert!(!out.is_empty());
+    /// assert!(!out.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c)));
+    /// ```
+    pub fn romanize_sentence(&self, text: &str) -> String {
+        if text.is_empty() {
+            return String::new();
+        }
+        let tokenizer = Tokenizer::builder().keep_whitespace(true).build();
+        let tokens = tokenizer.segment(text);
+        let mut out = String::with_capacity(text.len() * 2);
+        for token in &tokens {
+            match token.kind {
+                TokenKind::Thai | TokenKind::Named(_) => {
+                    out.push_str(&self.romanize_or_rule(token.text));
+                }
+                _ => out.push_str(token.text),
+            }
+        }
+        out
     }
 
     /// Number of entries in the map.
@@ -668,5 +706,33 @@ mod tests {
     fn romanize_tokens_empty_slice() {
         let map = RomanizationMap::builtin();
         assert!(map.romanize_tokens(&[]).is_empty());
+    }
+
+    // romanize_sentence tests --------------------------------------------------
+
+    #[test]
+    fn romanize_sentence_thai_only() {
+        let map = RomanizationMap::builtin();
+        let out = map.romanize_sentence("กินข้าว");
+        assert!(!out.is_empty(), "output should not be empty");
+        assert!(
+            !out.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c)),
+            "output should contain no Thai characters; got: {out:?}"
+        );
+    }
+
+    #[test]
+    fn romanize_sentence_mixed() {
+        let map = RomanizationMap::builtin();
+        let out = map.romanize_sentence("กิน100บาท");
+        assert!(
+            out.contains("100"),
+            "output should preserve '100'; got: {out:?}"
+        );
+        // "บาท" should be romanized — no Thai chars in the output
+        assert!(
+            !out.chars().any(|c| ('\u{0E00}'..='\u{0E7F}').contains(&c)),
+            "output should contain no Thai characters; got: {out:?}"
+        );
     }
 }

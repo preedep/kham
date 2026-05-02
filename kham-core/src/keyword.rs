@@ -211,6 +211,99 @@ impl KeyExtractor {
         results.truncate(max_n);
         results
     }
+
+    /// Extract up to `max_n` multi-word keyphrases (bigrams and trigrams) from
+    /// `text`, ranked by TF × average-IDF score.
+    ///
+    /// Phrases are formed from adjacent content tokens — tokens that pass the
+    /// same eligibility rules as [`extract`]: non-whitespace, non-punctuation,
+    /// non-emoji, non-unknown, character length ≥ 2, and not a stopword. A
+    /// bigram is two such consecutive tokens; a trigram is three.
+    ///
+    /// The IDF for a phrase is the average IDF of its constituent words.
+    ///
+    /// Returns an empty `Vec` when `text` has fewer than 2 eligible tokens or
+    /// `max_n` is zero.
+    ///
+    /// # Example
+    /// ```rust
+    /// use kham_core::keyword::KeyExtractor;
+    ///
+    /// let kex = KeyExtractor::builtin();
+    /// let phrases = kex.extract_phrases("นักพัฒนาซอฟต์แวร์เขียนโค้ดทุกวัน", 5);
+    /// // Each keyword word field contains a space-separated phrase
+    /// assert!(phrases.iter().all(|k| k.word.contains(' ')));
+    /// ```
+    pub fn extract_phrases(&self, text: &str, max_n: usize) -> Vec<Keyword> {
+        if text.is_empty() || max_n == 0 {
+            return Vec::new();
+        }
+
+        let tokens = self.tokenizer.segment(text);
+
+        // Collect eligible content token texts
+        let content: Vec<&str> = tokens
+            .iter()
+            .filter(|t| {
+                !matches!(
+                    t.kind,
+                    TokenKind::Whitespace
+                        | TokenKind::Punctuation
+                        | TokenKind::Emoji
+                        | TokenKind::Unknown
+                )
+            })
+            .filter(|t| t.text.chars().count() >= 2 && !self.stops.contains(t.text))
+            .map(|t| t.text)
+            .collect();
+
+        if content.len() < 2 {
+            return Vec::new();
+        }
+
+        let total_f = content.len() as f32;
+        let idf_num = self.max_corpus_freq as f32 + 1.0;
+
+        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+
+        // Bigrams
+        for w in content.windows(2) {
+            let phrase = alloc::format!("{} {}", w[0], w[1]);
+            *counts.entry(phrase).or_insert(0) += 1;
+        }
+        // Trigrams
+        for w in content.windows(3) {
+            let phrase = alloc::format!("{} {} {}", w[0], w[1], w[2]);
+            *counts.entry(phrase).or_insert(0) += 1;
+        }
+
+        let mut results: Vec<Keyword> = counts
+            .into_iter()
+            .map(|(phrase, count)| {
+                let tf = count as f32 / total_f;
+                let parts: Vec<&str> = phrase.split(' ').collect();
+                let avg_idf = parts
+                    .iter()
+                    .map(|w| idf_num / (self.freq.get(w) as f32 + 1.0))
+                    .sum::<f32>()
+                    / parts.len() as f32;
+                Keyword {
+                    word: phrase,
+                    score: tf * avg_idf,
+                    count,
+                }
+            })
+            .collect();
+
+        results.sort_unstable_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then(a.word.cmp(&b.word))
+        });
+        results.truncate(max_n);
+        results
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -352,5 +445,34 @@ mod tests {
                 .all(|k| !k.word.chars().all(|c| c.is_ascii_punctuation())),
             "punctuation token found in results: {kws:?}"
         );
+    }
+
+    // extract_phrases tests ----------------------------------------------------
+
+    #[test]
+    fn extract_phrases_empty_input() {
+        assert!(kex().extract_phrases("", 5).is_empty());
+    }
+
+    #[test]
+    fn extract_phrases_contains_space() {
+        let phrases = kex().extract_phrases("นักพัฒนาซอฟต์แวร์เขียนโค้ดทุกวัน", 5);
+        assert!(
+            phrases.iter().all(|k| k.word.contains(' ')),
+            "all phrases should contain a space; got: {phrases:?}"
+        );
+    }
+
+    #[test]
+    fn extract_phrases_score_order() {
+        let phrases = kex().extract_phrases("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัลสำหรับนักพัฒนา", 10);
+        for pair in phrases.windows(2) {
+            assert!(
+                pair[0].score >= pair[1].score,
+                "sort order violated: {:?} before {:?}",
+                pair[0],
+                pair[1]
+            );
+        }
     }
 }

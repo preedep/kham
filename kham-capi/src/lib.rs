@@ -194,6 +194,9 @@ pub struct KhamToken {
     /// [`kham_segment_tokens`] because NE tagging is not part of the basic
     /// segmentation pipeline. Use [`kham_fts_segment`] to obtain Named tokens.
     pub kind: *mut c_char,
+    /// Segmentation confidence in [0.0, 1.0]. 0.0 = unknown token (no dictionary evidence).
+    /// 1.0 = unambiguous high-frequency dictionary match.
+    pub confidence: f32,
 }
 
 /// Heap-allocated array of [`KhamToken`] values.
@@ -237,6 +240,7 @@ pub unsafe extern "C" fn kham_segment_tokens(text: *const c_char) -> *mut KhamTo
             char_start: t.char_span.start,
             char_end: t.char_span.end,
             kind: kind_cstring(t.kind).into_raw(),
+            confidence: t.confidence,
         })
         .collect();
 
@@ -1019,6 +1023,126 @@ pub unsafe extern "C" fn kham_spell_list_free(list: *mut KhamSpellList) {
     }
 }
 
+/// Return the single best spelling suggestion for `word`.
+///
+/// Returns a newly allocated null-terminated UTF-8 string, or `NULL` if the
+/// word is already correct or no candidate is found within edit distance 2.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `word` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `word` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_did_you_mean(word: *const c_char) -> *mut c_char {
+    if word.is_null() {
+        return std::ptr::null_mut();
+    }
+    let w = match unsafe { CStr::from_ptr(word) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    match SpellChecker::builtin().did_you_mean(w) {
+        Some(suggestion) => CString::new(suggestion).unwrap_or_default().into_raw(),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Correct misspelled unknown tokens in `text` using the built-in dictionary.
+///
+/// Segments `text`, replaces each `Unknown` token (≥ 2 chars) with the best
+/// spelling suggestion within edit distance 2, and returns the corrected text.
+/// Known tokens are passed through unchanged.
+///
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_spell_correct_text(text: *const c_char) -> *mut c_char {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    CString::new(SpellChecker::builtin().correct_text(s))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Segment `text` and romanize it to RTGS Latin.
+///
+/// Thai and Named tokens are converted to RTGS romanization; other token kinds
+/// (Latin, Number, Punctuation, etc.) pass through unchanged. Whitespace is
+/// preserved between tokens.
+///
+/// Returns a newly allocated null-terminated UTF-8 string.
+/// Free with [`kham_string_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * Returns `NULL` if `text` is null or contains invalid UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn kham_romanize_sentence(text: *const c_char) -> *mut c_char {
+    if text.is_null() {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+    CString::new(RomanizationMap::builtin().romanize_sentence(s))
+        .unwrap_or_default()
+        .into_raw()
+}
+
+/// Extract up to `max_n` keyphrases (bigrams and trigrams) from `text`,
+/// ranked by TF × average-IDF of constituent words.
+///
+/// Returns a heap-allocated [`KhamKeywordList`]. Each entry's `word` field
+/// contains the phrase text. Free with [`kham_keyword_list_free`].
+///
+/// # Safety
+///
+/// * `text` must be a valid null-terminated UTF-8 string.
+/// * The returned pointer must be freed with [`kham_keyword_list_free`].
+/// * Returns `NULL` if `text` is null, contains invalid UTF-8, or `max_n` is 0.
+#[no_mangle]
+pub unsafe extern "C" fn kham_extract_phrases(
+    text: *const c_char,
+    max_n: usize,
+) -> *mut KhamKeywordList {
+    if text.is_null() || max_n == 0 {
+        return std::ptr::null_mut();
+    }
+    let s = match unsafe { CStr::from_ptr(text) }.to_str() {
+        Ok(s) => s,
+        Err(_) => return std::ptr::null_mut(),
+    };
+
+    let phrases = KeyExtractor::builtin().extract_phrases(s, max_n);
+    let mut c_kws: Vec<KhamKeyword> = phrases
+        .into_iter()
+        .map(|k| KhamKeyword {
+            word: CString::new(k.word).unwrap_or_default().into_raw(),
+            score: k.score,
+            count: k.count,
+        })
+        .collect();
+
+    let len = c_kws.len();
+    let ptr = c_kws.as_mut_ptr();
+    std::mem::forget(c_kws);
+
+    Box::into_raw(Box::new(KhamKeywordList { keywords: ptr, len }))
+}
+
 // ---------------------------------------------------------------------------
 // Keyword extraction
 // ---------------------------------------------------------------------------
@@ -1402,6 +1526,87 @@ mod tests {
     #[test]
     fn roman_token_list_free_null_is_safe() {
         unsafe { kham_roman_token_list_free(std::ptr::null_mut()) };
+    }
+
+    // --- kham_spell_did_you_mean ---
+
+    #[test]
+    fn spell_did_you_mean_null_returns_null() {
+        assert!(unsafe { kham_spell_did_you_mean(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn spell_did_you_mean_correct_word_returns_null() {
+        let input = CString::new("กิน").unwrap();
+        let result = unsafe { kham_spell_did_you_mean(input.as_ptr()) };
+        assert!(
+            result.is_null(),
+            "expected NULL for a correctly-spelled word"
+        );
+    }
+
+    // --- kham_spell_correct_text ---
+
+    #[test]
+    fn spell_correct_text_null_returns_null() {
+        assert!(unsafe { kham_spell_correct_text(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn spell_correct_text_returns_non_empty() {
+        let input = CString::new("กินข้าว").unwrap();
+        let result = unsafe { kham_spell_correct_text(input.as_ptr()) };
+        assert!(!result.is_null());
+        assert!(!unsafe { ptr_to_str(result) }.is_empty());
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_romanize_sentence ---
+
+    #[test]
+    fn romanize_sentence_null_returns_null() {
+        assert!(unsafe { kham_romanize_sentence(std::ptr::null()) }.is_null());
+    }
+
+    #[test]
+    fn romanize_sentence_returns_latin_for_thai() {
+        let input = CString::new("กิน").unwrap();
+        let result = unsafe { kham_romanize_sentence(input.as_ptr()) };
+        assert!(!result.is_null());
+        let s = unsafe { ptr_to_str(result) };
+        assert!(
+            s.is_ascii(),
+            "expected ASCII romanization for 'กิน', got {s:?}"
+        );
+        unsafe { kham_string_free(result) };
+    }
+
+    // --- kham_extract_phrases ---
+
+    #[test]
+    fn extract_phrases_null_returns_null() {
+        assert!(unsafe { kham_extract_phrases(std::ptr::null(), 5) }.is_null());
+    }
+
+    #[test]
+    fn extract_phrases_max_n_zero_returns_null() {
+        let input = CString::new("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญ").unwrap();
+        assert!(unsafe { kham_extract_phrases(input.as_ptr(), 0) }.is_null());
+    }
+
+    #[test]
+    fn extract_phrases_returns_keyword_list() {
+        let input = CString::new("การพัฒนาซอฟต์แวร์เป็นสิ่งสำคัญในยุคดิจิทัล").unwrap();
+        let result = unsafe { kham_extract_phrases(input.as_ptr(), 5) };
+        if !result.is_null() {
+            let list = unsafe { &*result };
+            for i in 0..list.len {
+                let k = unsafe { &*list.keywords.add(i) };
+                assert!(!k.word.is_null());
+                assert!(!unsafe { ptr_to_str(k.word) }.is_empty());
+            }
+            unsafe { kham_keyword_list_free(result) };
+        }
     }
 
     // --- kham_split_sentences ---

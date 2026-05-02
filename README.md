@@ -21,9 +21,11 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 - **Named entity recognition** — gazetteer-based NER (~36,600 entries): provinces, countries, Wikipedia places/orgs, person and family names
 - **Part-of-speech tagging** — 13-category lookup table (~9,000 entries)
 - **Phonetic encoding** — lk82, udom83, MetaSound, and Thai–English cross-language Soundex
-- **Spell correction** — `SpellChecker::suggestions(word, n)`: Levenshtein ≤ 2 over the built-in dictionary, re-ranked by lk82 phonetic similarity and TNC frequency
-- **Keyword extraction** — `KeyExtractor::extract(text, n)`: TF × inverse-corpus-frequency scoring; stopwords and single-char tokens excluded
-- **RTGS romanization** — table lookup (415 entries) with rule-based fallback for OOV Thai words; `romanize_or_rule()` covers any Thai input
+- **Confidence scoring** — `Token::confidence: f32` on every token; `0.0` for Unknown, `1.0` for unambiguous dict match; intermediate values from TNC frequency and boundary ambiguity
+- **Streaming iterator** — `Tokenizer::segment_stream(text)` returns a `TokenStream` with `next_word()`, `next_known()`, and `next_above_confidence(f32)` for lazy, filtered iteration
+- **Spell correction** — `SpellChecker::suggestions(word, n)`: Levenshtein ≤ 2 over the built-in dictionary, re-ranked by lk82 phonetic similarity and TNC frequency; `did_you_mean(word)` returns the single best correction; `correct_text(text)` corrects an entire passage
+- **Keyword extraction** — `KeyExtractor::extract(text, n)`: TF × inverse-corpus-frequency scoring; `extract_phrases(text, n)` adds bigram and trigram keyphrases; stopwords and single-char tokens excluded
+- **RTGS romanization** — table lookup (415 entries) with rule-based fallback for OOV Thai words; `romanize_or_rule()` per-token; `romanize_sentence(text)` for a whole passage
 - **Number normalization** — Thai digits ↔ ASCII, spelled-out number words ↔ integer, Thai Baht currency text
 - **Abbreviation expansion** — 118-entry built-in TSV (months, era markers, ranks, agencies)
 - **Date parsing** — 7 input formats, Buddhist Era and Gregorian, round-trips to ISO 8601 and Thai text
@@ -50,7 +52,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 
 ```toml
 [dependencies]
-kham-core = "0.6"
+kham-core = "0.8"
 ```
 
 ```rust
@@ -86,6 +88,27 @@ kham "กินข้าวกับปลา"               # กินข้�
 kham --sep " / " "สวัสดีชาวโลก"    # สวัสดี / ชาว / โลก
 kham --kind "ธนาคาร100แห่ง"        # ธนาคาร:Thai|100:Number|แห่ง:Thai
 kham --spans "กินข้าวกับปลา"       # กินข้าว:0-7|กับ:7-10|ปลา:10-13
+
+# Confidence scores
+kham --confidence "กินข้าวกับปลา"  # กินข้าว:conf=0.95|กับ:conf=1.00|ปลา:conf=1.00
+
+# Filter by confidence threshold
+kham --min-confidence 0.9 "กินข้าวกับปลา"
+
+# Structured output
+kham --format json "กินข้าวกับปลา"
+kham --format csv  "กินข้าวกับปลา"
+
+# Romanize Thai to RTGS Latin
+kham --romanize "กินข้าวกับปลา"    # kin khao kap pla
+
+# Spell check a word
+kham --spell "กีนข้าว"             # ranked suggestions with edit distance + freq
+kham --spell --top-n 3 "ประเทส"
+
+# Keyword extraction
+kham --keywords "นักวิทยาศาสตร์ค้นพบดาวเคราะห์ใหม่ในระบบสุริยะ"
+kham --keywords --top-n 5 --format json "..."
 
 # FTS pipeline — kind, POS, NE, stopword, synonyms (one token per line)
 kham --fts "ทักษิณเดินทางไปกรุงเทพ"
@@ -125,12 +148,42 @@ pub struct Token<'a> {
     pub span: Range<usize>,       // byte offsets in the original string
     pub char_span: Range<usize>,  // Unicode scalar-value (char) offsets
     pub kind: TokenKind,          // Thai | Latin | Number | Punctuation | Emoji | Whitespace | Unknown | Named(NamedEntityKind)
+    pub confidence: f32,          // 0.0 (Unknown) … 1.0 (unambiguous dict match)
 }
 ```
 
 - `span` — byte offsets; slice with `&input[token.span.clone()]`
 - `char_span` — Unicode scalar-value offsets for Python/JavaScript indexing
+- `confidence` — `0.0` for Unknown tokens; `1.0` for unambiguous single-path dict matches; intermediate values reflect TNC frequency weight and competing-edge count from the newmm DP pass
 - Joining all `token.text` values (whitespace kept) reconstructs the original input exactly
+
+### TokenStream
+
+`segment_stream` returns a lazy iterator that avoids collecting into a `Vec`:
+
+```rust
+use kham_core::Tokenizer;
+
+let tok = Tokenizer::new();
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+
+// skip whitespace
+while let Some(t) = stream.next_word() {
+    println!("{}", t.text);
+}
+
+// skip whitespace + Unknown tokens
+let mut stream = tok.segment_stream("ธนาคาร xyzqqq แห่ง");
+while let Some(t) = stream.next_known() {
+    println!("{} conf={:.2}", t.text, t.confidence);
+}
+
+// filter by confidence threshold
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+while let Some(t) = stream.next_above_confidence(0.8) {
+    println!("{} conf={:.2}", t.text, t.confidence);
+}
+```
 
 ---
 
@@ -267,14 +320,23 @@ assert_eq!(sents[2].text, "เราไปกินข้าวกันเถ�
 use kham_core::spell::SpellChecker;
 
 let checker = SpellChecker::builtin();
+
+// Ranked suggestions (Levenshtein ≤ 2, re-ranked by soundex + TNC freq)
 let suggestions = checker.suggestions("กีนข้าว", 5);
 for s in &suggestions {
     println!("{} (edit={}, soundex={}, freq={})", s.word, s.edit_distance, s.soundex_match, s.freq_score);
 }
 // กินข้าว (edit=1, soundex=true, freq=1342)
-```
 
-Candidates are filtered to Levenshtein edit distance ≤ 2, then ranked by soundex-match flag (lk82), then by TNC corpus frequency descending.
+// Single best correction — None if the word is already in the dictionary
+if let Some(fix) = checker.did_you_mean("กีนข้าว") {
+    println!("{}", fix); // กินข้าว
+}
+
+// Correct an entire passage — Unknown tokens (≥ 2 chars) are replaced
+let corrected = checker.correct_text("ผมกีนข้าวกับปลา");
+println!("{}", corrected); // ผมกินข้าวกับปลา
+```
 
 ---
 
@@ -284,9 +346,18 @@ Candidates are filtered to Levenshtein edit distance ≤ 2, then ranked by sound
 use kham_core::keyword::KeyExtractor;
 
 let extractor = KeyExtractor::builtin();
-let keywords = extractor.extract("นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจใหม่สำหรับประชาชน", 3);
+let text = "นายกรัฐมนตรีประกาศนโยบายเศรษฐกิจใหม่สำหรับประชาชน";
+
+// Top-N unigram keywords
+let keywords = extractor.extract(text, 3);
 for kw in &keywords {
     println!("{} (score={:.3}, count={})", kw.word, kw.score, kw.count);
+}
+
+// Bigram and trigram keyphrases
+let phrases = extractor.extract_phrases(text, 5);
+for p in &phrases {
+    println!("{} (score={:.3}, count={})", p.word, p.score, p.count);
 }
 ```
 

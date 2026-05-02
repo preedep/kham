@@ -21,14 +21,26 @@ const modules = [
 ];
 ---
 
-<Layout title="อ้างอิง API — kham" lang="th" description={t('api.desc')}>
+<Layout title="อ้างอิง API — kham" lang="th" description={t('api.desc')}
+  keywords="kham API, kham-core Rust API, NLP ภาษาไทย API, Tokenizer, TokenStream, FtsTokenizer, SpellChecker, KeyExtractor, soundex ไทย, RTGS romanization, kham Python API, kham WASM API"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'TechArticle',
+    headline: 'kham API Reference',
+    description: 'เอกสาร API ครบถ้วนสำหรับ kham-core — Rust, Python, WASM และ C FFI สำหรับ NLP ภาษาไทย',
+    url: 'https://kham.io/th/api',
+    inLanguage: 'th',
+    author: { '@type': 'Organization', name: 'kham contributors', url: 'https://github.com/preedep/kham' },
+    about: { '@type': 'SoftwareApplication', name: 'kham', applicationCategory: 'DeveloperApplication' },
+  }}
+>
   <div class="max-w-6xl mx-auto px-6 py-16">
 
     <!-- Header -->
     <div class="mb-10">
       <div class="flex items-center gap-3 mb-2">
         <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100">{t('api.title')}</h1>
-        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.7.0</span>
+        <span class="text-sm font-medium px-2.5 py-1 bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 rounded-full">v0.8.0</span>
       </div>
       <p class="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mb-3">
         {t('api.desc')}
@@ -120,6 +132,27 @@ let tok2 = Tokenizer::builder()
     .build();`,
             },
             {
+              label: 'segment_stream',
+              lang: 'rust',
+              code: `use kham_core::{Tokenizer, TokenStream};
+
+let tok = Tokenizer::new();
+
+// Streaming — consume one token at a time
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+
+// next_word() — skip whitespace
+while let Some(t) = stream.next_word() {
+    println!("{} ({:?})", t.text, t.kind);
+}
+
+// next_above_confidence(0.8) — skip low-confidence tokens
+let mut stream = tok.segment_stream("ธนาคาร100แห่ง");
+while let Some(t) = stream.next_above_confidence(0.8) {
+    println!("{} conf={:.2}", t.text, t.confidence);
+}`,
+            },
+            {
               label: 'Python',
               lang: 'python',
               code: `import kham
@@ -137,12 +170,16 @@ for t in kham.segment_tokens("ธนาคาร100แห่ง"):
 
 # normalize ก่อน segment
 text = kham.normalize("ข้้าว")   # "ข้าว"
-words = kham.segment(text)`,
+words = kham.segment(text)
+
+# segment_above_confidence — เฉพาะ token ที่มี confidence ≥ threshold
+for t in kham.segment_above_confidence("ธนาคาร100แห่ง", 0.8):
+    print(t.text, t.confidence)`,
             },
             {
               label: 'WASM',
               lang: 'js',
-              code: `import init, { segment, segment_tokens, normalize } from '/wasm/kham_wasm.js';
+              code: `import init, { segment, segment_tokens, normalize, segment_above_confidence } from '/wasm/kham_wasm.js';
 await init(); // เรียกครั้งเดียวตอน load
 
 // ง่าย — JS Array ของ string
@@ -157,7 +194,11 @@ for (const t of tokens) {
 
 // normalize ก่อน segment
 const clean = normalize("ข้้าว");   // "ข้าว"
-const toks  = segment(clean);`,
+const toks  = segment(clean);
+
+// segment_above_confidence — เฉพาะ token ที่มี confidence ≥ threshold
+const high = segment_above_confidence("ธนาคาร100แห่ง", 0.8);
+for (const t of high) console.log(t.text, t.confidence);`,
             },
             {
               label: 'C',
@@ -216,8 +257,9 @@ let tokens = tok.segment(input);
 for t in &tokens {
     // t.text      — &str (zero-copy slice ของ input)
     // t.span      — Range<usize> byte offsets
-    // t.char_span — Range<usize> Unicode scalar-value offsets
-    // t.kind      — TokenKind
+    // t.char_span   — Range<usize> Unicode scalar-value offsets
+    // t.kind        — TokenKind
+    // t.confidence  — f32: 0.0 (Unknown) … 1.0 (dict match ที่มีความมั่นใจสูง)
 
     assert_eq!(&input[t.span.clone()], t.text);
 }
@@ -237,10 +279,11 @@ for t in tokens:
     # t.text       — str
     # t.byte_start / t.byte_end  — UTF-8 byte offsets
     # t.char_start / t.char_end  — Unicode scalar-value offsets
-    # t.kind       — str: "Thai" | "Latin" | "Number" | "Punctuation"
-    #                      "Emoji" | "Whitespace" | "Unknown"
-    #                      "Person" | "Place" | "Org"  (Named entities)
-    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}")`,
+    # t.kind        — str: "Thai" | "Latin" | "Number" | "Punctuation"
+    #                       "Emoji" | "Whitespace" | "Unknown"
+    #                       "Person" | "Place" | "Org"  (Named entities)
+    # t.confidence  — float: 0.0 (Unknown) … 1.0 (dict match ที่มีความมั่นใจสูง)
+    print(f"{t.text!r:12} kind={t.kind}  chars={t.char_start}..{t.char_end}  conf={t.confidence:.2f}")`,
             },
             {
               label: 'WASM',
@@ -254,10 +297,11 @@ for (const t of tokens) {
   // t.text       — string
   // t.byte_start / t.byte_end  — UTF-8 byte offsets
   // t.char_start / t.char_end  — Unicode scalar-value offsets
-  // t.kind       — "Thai" | "Latin" | "Number" | "Punctuation"
-  //                "Emoji" | "Whitespace" | "Unknown"
-  //                "Person" | "Place" | "Org"  (Named entities)
-  console.log(t.text, t.kind, t.char_start, t.char_end);
+  // t.kind        — "Thai" | "Latin" | "Number" | "Punctuation"
+  //                 "Emoji" | "Whitespace" | "Unknown"
+  //                 "Person" | "Place" | "Org"  (Named entities)
+  // t.confidence  — number: 0.0 (Unknown) … 1.0
+  console.log(t.text, t.kind, t.char_start, t.char_end, t.confidence);
 }`,
             },
             {
@@ -272,6 +316,7 @@ for (const t of tokens) {
 //   kind       — char*: "Thai" | "Latin" | "Number" | "Punctuation"
 //                       "Emoji" | "Whitespace" | "Unknown"
 //                       "Person" | "Place" | "Org"  (FTS pipeline เท่านั้น)
+//   confidence — float: 0.0 (Unknown) … 1.0
 
 KhamTokenList *list = kham_segment_tokens("ธนาคาร100แห่ง");
 for (size_t i = 0; i < list->len; i++) {
@@ -426,7 +471,7 @@ let fts2 = FtsTokenizer::builder()
               code: `import kham
 
 # FtsToken fields: text, position, kind, is_stop, roman,
-#                  pos, ne, synonyms (list), trigrams (list)
+#                  pos, ne, synonyms (list), trigrams (list), confidence (float)
 for t in kham.segment_fts("นายกรัฐมนตรีกินข้าว"):
     print(f"{t.text:10} pos={t.pos!r:15} ne={t.ne!r} stop={t.is_stop}")
 
@@ -447,7 +492,8 @@ await init();
 
 // FtsToken properties: text, position, kind, is_stop, roman,
 //                      pos (string|null), ne (string|null),
-//                      synonyms (string[]), trigrams (string[])
+//                      synonyms (string[]), trigrams (string[]),
+//                      confidence (number: 0.0…1.0)
 const tokens = segment_fts("นายกรัฐมนตรีกินข้าว");
 for (const t of tokens) {
   console.log(t.text, '| pos:', t.pos, '| ne:', t.ne,
@@ -490,7 +536,7 @@ kham_fts_lexemes_free(lex, len);`,
         />
         <div class="mt-3 text-sm text-slate-500 dark:text-slate-400">
           <strong>FtsToken fields:</strong>
-          {['text','position','kind','is_stop','roman','pos','ne','synonyms','trigrams'].map(f => (
+          {['text','position','kind','is_stop','roman','pos','ne','synonyms','trigrams','confidence'].map(f => (
             <code class="mx-1 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">{f}</code>
           ))}
         </div>
@@ -731,7 +777,11 @@ println!("{}", rom.romanize_or_raw("zzz"));   // "zzz"  (OOV → passthrough)
 
 // lookup แบบ batch
 let roman = rom.romanize_tokens(&["กรุงเทพ", "ประเทศ", "ไทย"]);
-println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]`,
+println!("{:?}", roman); // ["Krung Thep", "prathet", "Thai"]
+
+// Whole sentence romanization
+let sentence = rom.romanize_sentence("กินข้าวกับปลา 100 บาท");
+println!("{sentence}"); // kinkhaokapla 100 bat`,
             },
             {
               label: 'Python',
@@ -1155,7 +1205,17 @@ assert_eq!(exact[0].edit_distance, 0);
 // s.word          — String   คำ candidate จาก dictionary
 // s.edit_distance — u8       Levenshtein distance (0–2)
 // s.soundex_match — bool     lk82 code ตรงกัน
-// s.freq_score    — u32      TNC corpus frequency (0 ถ้าไม่มีในตาราง)`,
+// s.freq_score    — u32      TNC corpus frequency (0 ถ้าไม่มีในตาราง)
+
+// Single best correction
+let checker = SpellChecker::builtin();
+if let Some(corrected) = checker.did_you_mean("กีนข้าว") {
+    println!("Did you mean: {corrected}");  // กินข้าว
+}
+// Correct whole text
+let text = "กีนข้าวกับปลา";
+let out = checker.correct_text(text);
+println!("{out}");`,
             },
             {
               label: 'Python',
@@ -1264,6 +1324,16 @@ for kw in &keywords {
 // kw.word  — String  คำสำคัญ
 // kw.score — f32     TF × (max_freq+1) / (corpus_freq+1)
 // kw.count — usize   จำนวนครั้งที่ปรากฏในเอกสาร`,
+            },
+            {
+              label: 'extract_phrases',
+              lang: 'rust',
+              code: `let extractor = KeyExtractor::builtin();
+let text = "นักพัฒนาซอฟต์แวร์เขียนโค้ดทุกวัน นักพัฒนาซอฟต์แวร์ใช้ภาษาต่าง ๆ";
+let phrases = extractor.extract_phrases(text, 5);
+for p in &phrases {
+    println!("{:20} score={:.4} count={}", p.word, p.score, p.count);
+}`,
             },
             {
               label: 'Python',
