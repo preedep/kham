@@ -19,7 +19,7 @@ DOCKER_COMPOSE ?= docker compose
 PG_VERSION     ?= 17
 PG_VERSIONS    := 14 15 16 17 18
 
-EXT_VERSION       := 0.8.0
+EXT_VERSION       := 0.8.1
 KHAM_CORE_VERSION := $(shell sed -n 's/^version = "\(.*\)"/\1/p' ../Cargo.toml | head -1)
 DIST_NAME         := kham_pg-$(EXT_VERSION)
 
@@ -49,6 +49,7 @@ install: build
 	install -m 644 kham_pg.control $(EXT_DIR)/
 	install -m 644 sql/kham_pg--$(EXT_VERSION).sql $(EXT_DIR)/
 	install -m 644 sql/kham_pg--0.7.0--0.8.0.sql $(EXT_DIR)/
+	install -m 644 sql/kham_pg--0.8.0--0.8.1.sql $(EXT_DIR)/
 	@echo "Installed kham_pg $(EXT_VERSION) into $(EXT_DIR)"
 
 # ── regress (Docker) ──────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ dist:
 	cp sql/kham_pg--0.3.0--0.6.0.sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.6.0--0.7.0.sql $(DIST_NAME)/sql/
 	cp sql/kham_pg--0.7.0--0.8.0.sql $(DIST_NAME)/sql/
+	cp sql/kham_pg--0.8.0--0.8.1.sql $(DIST_NAME)/sql/
 	# Source
 	cp src/lib.rs src/shim.c $(DIST_NAME)/src/
 	cp build.rs $(DIST_NAME)/

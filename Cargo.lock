@@ -619,7 +619,7 @@ dependencies = [
 
 [[package]]
 name = "kham-bench-accuracy"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "clap 4.6.0",
  "kham-core",
@@ -627,7 +627,7 @@ dependencies = [
 
 [[package]]
 name = "kham-capi"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "cbindgen",
  "kham-core",
@@ -635,7 +635,7 @@ dependencies = [
 
 [[package]]
 name = "kham-cli"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "clap 4.6.0",
  "colored",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "kham-core"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "criterion",
  "miniz_oxide",
@@ -655,7 +655,7 @@ dependencies = [
 
 [[package]]
 name = "kham-pg"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "cc",
  "kham-core",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "kham-python"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "kham-core",
  "pyo3",
@@ -672,7 +672,7 @@ dependencies = [
 
 [[package]]
 name = "kham-sqlite"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "cc",
  "criterion",
@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "kham-wasm"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "kham-core",
  "wasm-bindgen",

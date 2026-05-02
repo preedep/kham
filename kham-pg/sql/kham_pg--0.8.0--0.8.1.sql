@@ -1,0 +1,13 @@
+-- kham_pg--0.8.0--0.8.1.sql
+--
+-- Upgrade path: 0.8.0 → 0.8.1
+--
+-- No SQL object changes in this release.  The 0.8.1 update is a performance-
+-- only fix in the Rust extension binary:
+--
+--   * OnceLock-cached parser FtsTokenizer (eliminates 46.7 ms init per call)
+--   * Single contiguous text_buf in KhamState (O(n) → O(1) allocations/doc)
+--   * Per-word LRU lexeme cache in kham_dict_lexize (4096 entries/algorithm)
+--
+-- Running ALTER EXTENSION kham_pg UPDATE loads the new .so automatically.
+-- No DDL changes are required.
