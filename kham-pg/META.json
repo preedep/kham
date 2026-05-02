@@ -2,7 +2,7 @@
   "name": "kham_pg",
   "abstract": "Thai full-text search parser for PostgreSQL",
   "description": "A PostgreSQL text search parser for the Thai language, powered by the kham word segmentation engine. Enables to_tsvector, plainto_tsquery, ts_rank, and GIN indexes on Thai text.",
-  "version": "0.3.0",
+  "version": "0.6.0",
   "maintainer": [
     "Preedee Ponchevin <nickmsft@mac.com>"
   ],
@@ -22,8 +22,8 @@
   "provides": {
     "kham_pg": {
       "abstract": "Thai full-text search parser for PostgreSQL",
-      "file": "sql/kham_pg--0.3.0.sql",
-      "version": "0.3.0"
+      "file": "sql/kham_pg--0.6.0.sql",
+      "version": "0.6.0"
     }
   },
   "resources": {
