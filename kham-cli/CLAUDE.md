@@ -18,6 +18,9 @@ CLI binary using `clap`. Exposes user-facing runtime flags only — not internal
 | `--min-confidence <MIN>` | Filter output to tokens with confidence ≥ MIN (0.0–1.0). Works in both basic and FTS mode. |
 | `--format <FORMAT>` | Output format: `text` (default), `json`, `csv`. `text` = current behaviour. `json` = one JSON array per input line. `csv` = header row then data rows (comma-separated, fields quoted if needed). |
 | `--romanize` | Segment and romanize Thai text to RTGS Latin. Non-Thai tokens pass through unchanged. Incompatible with --fts. |
+| `--spell` | Spell-check mode: show ranked suggestions for the input word (edit distance ≤ 2, sorted by soundex match → dist → TNC freq). |
+| `--keywords` | Keyword mode: print `# Keywords` (TF×IDF single tokens) then `# Keyphrases` (bigram/trigram) sections from the text. |
+| `--top-n <N>` | Maximum results per section in `--spell` or `--keywords` mode (default: 10). |
 
 Combined `--kind --spans` produces `กิน:Thai:0-3`.
 
@@ -25,6 +28,10 @@ Combined `--kind --spans` produces `กิน:Thai:0-3`.
 
 - `--fts` is incompatible with `--dict` — warn and ignore `--dict` when both are given.
 - `--fts` is intended for testing and inspecting the FTS pipeline (POS, NE, stopword metadata), not production use.
+- Mode priority: `--spell` > `--keywords` > `--fts` > basic (which includes `--romanize`). Conflicting mode flags emit a warning.
+- `--top-n` has no effect outside `--spell` and `--keywords` modes.
+- `--spell` stdin: each line is treated as an independent word to check.
+- `--keywords` stdin: each line is treated as an independent document.
 
 ## Do NOT add
 
