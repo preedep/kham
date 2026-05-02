@@ -1,31 +1,35 @@
 # kham-pg Makefile
 #
 # Targets:
-#   build    — compile the Rust cdylib against the host pg_config
-#   install  — build + copy .so / control / SQL files to the host PG install
-#   regress  — run pg_regress integration tests inside Docker (PG 17)
-#   bench    — run throughput benchmark inside Docker (PG 17); reports ops/s and ms/op
-#   dist     — produce kham_pg-$(EXT_VERSION).zip for PGXN upload
-#   clean    — remove Cargo build artefacts and dist directory
+#   build          — compile the Rust cdylib against the host pg_config
+#   install        — build + copy .so / control / SQL files to the host PG install
+#   regress        — run pg_regress integration tests inside Docker (default PG 17)
+#   regress-matrix — run pg_regress against PG 14, 15, 16, 17, 18 in sequence
+#   bench          — run throughput benchmark inside Docker (PG 17); reports ops/s and ms/op
+#   dist           — produce kham_pg-$(EXT_VERSION).zip for PGXN upload
+#   clean          — remove Cargo build artefacts and dist directory
 #
-# Prerequisites (for `regress`): Docker with BuildKit support.
+# Prerequisites (for `regress` / `regress-matrix`): Docker with BuildKit support.
 # Set PG_CONFIG to override which pg_config is used for `build` and `install`.
+# Set PG_VERSION to override the PostgreSQL major version used in Docker (default 17).
 
 PG_CONFIG      ?= pg_config
 CARGO          ?= cargo
 DOCKER_COMPOSE ?= docker compose
+PG_VERSION     ?= 17
+PG_VERSIONS    := 14 15 16 17 18
 
 EXT_VERSION    := 0.3.0
 DIST_NAME      := kham_pg-$(EXT_VERSION)
 
-PG_PKGLIBDIR   := $(shell $(PG_CONFIG) --pkglibdir)
-PG_SHAREDIR    := $(shell $(PG_CONFIG) --sharedir)
-EXT_DIR        := $(PG_SHAREDIR)/extension
+PG_PKGLIBDIR    = $(shell $(PG_CONFIG) --pkglibdir)
+PG_SHAREDIR     = $(shell $(PG_CONFIG) --sharedir)
+EXT_DIR         = $(PG_SHAREDIR)/extension
 
 LIBNAME        := libkham_pg.so
 RELEASE_LIB    := ../target/release/$(LIBNAME)
 
-.PHONY: build install regress regress-update-expected bench dist clean
+.PHONY: build install regress regress-matrix regress-update-expected bench dist clean
 
 # ── build ─────────────────────────────────────────────────────────────────────
 
@@ -43,16 +47,36 @@ install: build
 # ── regress (Docker) ──────────────────────────────────────────────────────────
 
 regress:
-	$(DOCKER_COMPOSE) -f docker/docker-compose.yml up \
+	PG_VERSION=$(PG_VERSION) $(DOCKER_COMPOSE) -f docker/docker-compose.yml up \
 	    --build \
 	    --exit-code-from regress \
 	    --abort-on-container-exit
+
+# ── regress-matrix — run regress against all supported PG versions ────────────
+
+regress-matrix:
+	@failed=""; \
+	for v in $(PG_VERSIONS); do \
+	    printf '\n=== kham-pg regress: PG %s ===\n' "$$v"; \
+	    PG_VERSION=$$v $(DOCKER_COMPOSE) -f docker/docker-compose.yml up \
+	        --build \
+	        --exit-code-from regress \
+	        --abort-on-container-exit \
+	        || failed="$$failed $$v"; \
+	    PG_VERSION=$$v $(DOCKER_COMPOSE) -f docker/docker-compose.yml down \
+	        --rmi local 2>/dev/null || true; \
+	done; \
+	echo ""; \
+	if [ -n "$$failed" ]; then \
+	    printf 'FAILED on PG versions:%s\n' "$$failed"; exit 1; \
+	fi; \
+	printf 'All passed: PG %s\n' "$(PG_VERSIONS)"
 
 # Regenerate expected output files from the current Docker run.
 # After running this, review regress/results/output/kham_fts.out and, if
 # correct, copy it to regress/expected/kham_fts.out.
 regress-update-expected:
-	$(DOCKER_COMPOSE) -f docker/docker-compose.yml up \
+	PG_VERSION=$(PG_VERSION) $(DOCKER_COMPOSE) -f docker/docker-compose.yml up \
 	    --build \
 	    --exit-code-from regress \
 	    --abort-on-container-exit || true

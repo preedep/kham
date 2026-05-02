@@ -92,11 +92,32 @@ Punctuation and emoji have no mapping — PG discards those token types at index
 
 `varatt.h` is only needed for varlena args — `kham_start` uses raw pointer args so it is not included.
 
+## PostgreSQL version support
+
+| Version | Status |
+|---------|--------|
+| PG 14   | Supported — tested via `regress-matrix` |
+| PG 15   | Supported — tested via `regress-matrix` |
+| PG 16   | Supported — tested via `regress-matrix` |
+| PG 17   | Supported — default CI target |
+| PG 18   | Supported — tested via `regress-matrix` |
+
+Compatibility notes:
+- **PG 16+**: `lexize` callback 4th arg changed from `bool` to `List*`. `shim.c` ignores arg3 entirely — works on all versions.
+- **PG 18+**: `PG_MODULE_MAGIC_DATA` is function-like. Guarded with `#ifdef PG_MODULE_ABI_DATA` in `shim.c`.
+
 ## Docker test environment
 
 Multi-stage build (`kham-pg/docker/Dockerfile.test`):
-- **Stage 1 (builder):** `debian:bookworm-slim` + `postgresql-server-dev-17` + Rust → `libkham_pg.so`
-- **Stage 2 (runner):** `debian:bookworm-slim` + `postgresql-17` only (~200 MB vs ~2 GB single-stage)
+- **Stage 1 (builder):** `debian:bookworm-slim` + `postgresql-server-dev-${PG_VERSION}` + Rust → `libkham_pg.so`
+- **Stage 2 (runner):** `debian:bookworm-slim` + `postgresql-${PG_VERSION}` only (~200 MB vs ~2 GB single-stage)
+- `PG_VERSION` build arg selects the major version (default 17). Each major version requires its own compiled `.so` because `PG_MODULE_MAGIC` is version-stamped.
+
+```bash
+make -C kham-pg regress                  # PG 17 (default)
+make -C kham-pg regress PG_VERSION=16   # single-version override
+make -C kham-pg regress-matrix          # PG 14, 15, 16, 17, 18 in sequence
+```
 
 Do **not** use Alpine/musl: Rust musl targets are static-only and do not support `cdylib`.
 

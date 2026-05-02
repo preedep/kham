@@ -4,12 +4,16 @@
 # Usage:
 #   docker compose -f kham-pg/docker/docker-compose.yml up --build --exit-code-from regress
 #
-# Or via the Makefile shortcut:
-#   make -C kham-pg regress
+# Or via the Makefile shortcuts:
+#   make -C kham-pg regress                  # default PG 17
+#   make -C kham-pg regress PG_VERSION=16    # single version override
+#   make -C kham-pg regress-matrix           # PG 14–18 in sequence
 
 services:
   regress:
     build:
       context: ../..          # repository root — gives access to full workspace
       dockerfile: kham-pg/docker/Dockerfile.test
+      args:
+        PG_VERSION: ${PG_VERSION:-17}
     # No persistent volumes needed; everything lives in the container.
