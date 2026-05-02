@@ -11,12 +11,12 @@
   "prereqs": {
     "runtime": {
       "requires": {
-        "PostgreSQL": "14.0"
+        "PostgreSQL": "14.0.0"
       }
     },
     "build": {
       "requires": {
-        "Rust": "1.85"
+        "Rust": "1.85.0"
       }
     }
   },
