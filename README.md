@@ -39,7 +39,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-python` | [PyPI](https://pypi.org/project/kham/) | [kham-python/README.md](kham-python/README.md) | Python bindings via PyO3 / maturin |
 | `kham-wasm` | [npm](https://www.npmjs.com/package/kham-wasm) | [kham-wasm/README.md](kham-wasm/README.md) | WebAssembly bindings via wasm-bindgen |
 | `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | [kham-capi/README.md](kham-capi/README.md) | C FFI with cbindgen-generated header |
-| `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) (coming soon) | [kham-pg/README.md](kham-pg/README.md) | PostgreSQL text search parser for Thai |
+| `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) | [kham-pg/README.md](kham-pg/README.md) | PostgreSQL text search parser for Thai |
 | `kham-sqlite` | — | [kham-sqlite/README.md](kham-sqlite/README.md) | SQLite FTS5 tokenizer for Thai |
 
 ---
@@ -367,7 +367,7 @@ Prerequisites:
 | `no_std` | `kham-core` compiles for `thumbv7em-none-eabihf` |
 | `wasm` | Unit tests (`cargo test -p kham-wasm`) + `wasm-pack build --target web` |
 | `python` | `maturin develop` + `pytest` on Python 3.11 and 3.12 |
-| `pg_regress` | 67 SQL tests across 4 suites in Docker PostgreSQL 17 |
+| `pg_regress` | SQL regress suites (kham_fts, kham_features, kham_thai, kham_operators, kham_ranking, kham_advanced) in Docker PostgreSQL 17 |
 
 ---
 

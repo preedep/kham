@@ -65,14 +65,26 @@ if (token == NULL || len <= 0)
 
 Created in this order:
 1. `CREATE FUNCTION kham_start/gettoken/end/lextypes/headline/dict_lexize` — registers C symbols
-2. `CREATE TEXT SEARCH PARSER kham` — wires up the parser functions
-3. `CREATE TEXT SEARCH TEMPLATE kham_fts_template` + `CREATE TEXT SEARCH DICTIONARY kham_fts_dict` — expands Thai/Named tokens to [word, lk82_soundex, RTGS_romanization]
-4. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through for Latin/Number/Unknown)
-5. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
-6. `ALTER … ADD MAPPING FOR thai, named WITH kham_fts_dict` — phonetic expansion
-7. `ALTER … ADD MAPPING FOR latin, number, unknown WITH kham_dict` — simple pass-through
+2. `CREATE FUNCTION kham_dict_lexize_udom83/kham_dict_lexize_metasound` — udom83 / MetaSound variants (0.7.0+)
+3. `CREATE TEXT SEARCH PARSER kham` — wires up the parser functions
+4. `CREATE TEXT SEARCH TEMPLATE kham_fts_template` + `CREATE TEXT SEARCH DICTIONARY kham_fts_dict` — expands Thai/Named tokens to [word, lk82_soundex, RTGS_romanization, ascii_number?, pos_tag?]; suppresses stopwords
+5. `CREATE TEXT SEARCH TEMPLATE/DICTIONARY kham_fts_template_udom83/kham_fts_dict_udom83` — udom83 soundex variant (0.7.0+)
+6. `CREATE TEXT SEARCH TEMPLATE/DICTIONARY kham_fts_template_metasound/kham_fts_dict_metasound` — MetaSound variant (0.7.0+)
+7. `CREATE TEXT SEARCH DICTIONARY kham_dict` — `simple` template (lowercase pass-through for Latin/Unknown)
+8. `CREATE TEXT SEARCH CONFIGURATION kham` — uses `kham` parser
+9. `ALTER … ADD MAPPING FOR thai, named WITH kham_fts_dict` — phonetic/stopword/POS expansion
+10. `ALTER … ADD MAPPING FOR number WITH kham_fts_dict` — Thai digit normalization (0.7.0+; was kham_dict)
+11. `ALTER … ADD MAPPING FOR latin, unknown WITH kham_dict` — simple pass-through
+12. `CREATE FUNCTION kham_tsvector(text) RETURNS tsvector` — SQL STABLE helper; shorthand for `to_tsvector('kham', …)` (0.7.0+)
+13. `CREATE FUNCTION kham_tsquery(text) RETURNS tsquery` — SQL STABLE helper; shorthand for `plainto_tsquery('kham', …)` (0.7.0+)
 
 Punctuation and emoji have no mapping — PG discards those token types at index time.
+
+**0.7.0 behavior changes vs 0.6.0:**
+- Stopwords suppressed: `kham_fts_dict` returns NULL for Thai stopwords → token omitted from tsvector.
+- Thai number normalization: `number` tokens now route through `kham_fts_dict`, which adds the ASCII form as a colocated lexeme (e.g. ๑๒๓ → ['๑๒๓', '123']).
+- POS lexemes: tokens with known POS emit `pos_<tag>` (e.g. `pos_noun`, `pos_verb`) as an extra colocated lexeme.
+- Two new soundex dict alternatives: `kham_fts_dict_udom83` and `kham_fts_dict_metasound`.
 
 ## README files — two separate documents
 
@@ -143,7 +155,9 @@ Key constraints:
 
 Expected output: `kham-pg/regress/expected/` (committed). Results: `kham-pg/regress/results/` (gitignored).
 
-Test files: `kham_fts.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`, `kham_advanced.sql`
+Test files: `kham_fts.sql`, `kham_features.sql`, `kham_thai.sql`, `kham_operators.sql`, `kham_ranking.sql`, `kham_advanced.sql`
+
+`kham_features.sql` (0.7.0+) covers: stopword suppression, Thai number normalization, udom83/MetaSound dict variants, POS lexeme indexing and querying.
 
 **NE test words:** Use single-syllable words (e.g. จีน) for named entity regress tests — multi-syllable words (e.g. กรุงเทพ) are split by the segmenter before NE tagging. Verify with `Tokenizer::new().segment("candidate")` before adding to the test.
 

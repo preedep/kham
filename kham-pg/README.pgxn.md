@@ -6,12 +6,17 @@ documents can be indexed and queried with `tsvector` / `tsquery`.
 
 Thai has no spaces between words. Standard PostgreSQL parsers treat an entire
 Thai sentence as one token. kham_pg uses the kham newmm segmentation engine to
-split Thai text into correct word boundaries, then expands each token into up
-to three lexemes at the same `tsvector` position:
+split Thai text into correct word boundaries, then expands each Thai or Named
+token into up to six lexemes at the same `tsvector` position:
 
 1. The normalised word itself
 2. Its lk82 Thai Soundex code — enables phonetic-fuzzy search
 3. Its RTGS romanization — enables Latin-script search
+4. Its ASCII form (for Thai digit strings and number words)
+5. A POS lexeme `pos_<tag>` — enables part-of-speech filtering
+
+Thai stopwords (common grammatical particles like กับ, ใน, ของ) are suppressed
+and excluded from the tsvector automatically.
 
 Named entities (persons, places, organisations) are tagged automatically.
 
@@ -40,14 +45,14 @@ Pre-compiled `.so` files are available for **Linux x86_64** and **Linux aarch64*
 
 ```bash
 # 1. Unzip the PGXN distribution (provides control + SQL files)
-unzip kham_pg-0.6.0.zip
-cd kham_pg-0.6.0
+unzip kham_pg-0.7.0.zip
+cd kham_pg-0.7.0
 
 # 2. Download the pre-built .so for your PG version and architecture
 #    Replace PG=17 and ARCH=x86_64 as needed (14–18, x86_64 or aarch64)
 PG=17
 ARCH=x86_64
-VERSION=0.6.0
+VERSION=0.7.0
 curl -fsSL \
   "https://github.com/preedep/kham/releases/download/v${VERSION}/kham-pg-v${VERSION}-pg${PG}-${ARCH}-unknown-linux-gnu.tar.gz" \
   | tar xz   # extracts libkham_pg.so
@@ -89,8 +94,8 @@ available (Linux, macOS).
 PG=17
 sudo apt-get install -y build-essential postgresql-server-dev-${PG}
 
-unzip kham_pg-0.6.0.zip
-cd kham_pg-0.6.0
+unzip kham_pg-0.7.0.zip
+cd kham_pg-0.7.0
 PG_CONFIG=/usr/lib/postgresql/${PG}/bin/pg_config make install
 psql -c "CREATE EXTENSION kham_pg;"
 ```
@@ -102,8 +107,8 @@ psql -c "CREATE EXTENSION kham_pg;"
 PG=17
 brew install postgresql@${PG} gettext
 
-unzip kham_pg-0.6.0.zip
-cd kham_pg-0.6.0
+unzip kham_pg-0.7.0.zip
+cd kham_pg-0.7.0
 PG_CONFIG=$(brew --prefix postgresql@${PG})/bin/pg_config make install
 psql -c "CREATE EXTENSION kham_pg;"
 ```
@@ -129,19 +134,40 @@ SELECT * FROM ts_token_type('kham');
 -- Inspect how the parser splits Thai text
 SELECT * FROM ts_parse('kham', 'กินข้าวกับปลา');
 --  1  กินข้าว
---  1  กับ
+--  1  กับ        ← stopword — will be suppressed in tsvector
 --  1  ปลา
 
--- Build a tsvector — Thai tokens expand to [word, soundex, rtgs]
+-- Build a tsvector — กับ (stopword) is suppressed;
+-- ปลา expands to [word, lk82_soundex, rtgs, pos_noun]
 SELECT to_tsvector('kham', 'กินข้าวกับปลา');
--- '1400':2 '1619':1 '4800':3 'kap':2 'pla':3 'กับ':2 'กินข้าว':1 'ปลา':3
+-- '1619':1 '4800':2 'pla':2 'pos_noun':2 'กินข้าว':1 'ปลา':2
 
 -- Full-text search
 SELECT title FROM articles
 WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา');
 ```
 
-## Phonetic search
+## Stopword suppression
+
+Thai grammatical particles (กับ, ใน, ของ, ที่, และ, …) are in the built-in
+stopword list. The dictionary returns NULL for these tokens so PostgreSQL
+excludes them from the tsvector entirely.
+
+```sql
+-- กับ is a stopword — it is NOT in the tsvector
+SELECT 'กับ' IN (
+    SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา'))
+) AS stopword_present;
+-- f
+
+-- ปลา is a content word — it IS indexed
+SELECT 'ปลา' IN (
+    SELECT lexeme FROM unnest(to_tsvector('kham', 'กินข้าวกับปลา'))
+) AS content_present;
+-- t
+```
+
+## Phonetic search (lk82 Soundex)
 
 Thai/Named tokens are automatically expanded with their lk82 Soundex code.
 Near-homophones share a code and match each other without any extra schema work.
@@ -150,6 +176,11 @@ Near-homophones share a code and match each other without any extra schema work.
 -- Match any word with the same lk82 code as ปลา (4800)
 SELECT title FROM articles
 WHERE to_tsvector('kham', body) @@ to_tsquery('kham', '4800');
+
+-- Find the code stored for a given word
+SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา'))
+WHERE lexeme ~ '^[0-9]';
+-- 4800
 ```
 
 ## RTGS romanization search
@@ -161,6 +192,71 @@ Latin-script queries match Thai documents automatically.
 SELECT title FROM articles
 WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'pla');
 -- matches documents containing ปลา
+```
+
+## Thai number normalization
+
+Thai digit strings (Thai Unicode ๐–๙) and the `number` token type are expanded
+to include their ASCII equivalent as a colocated lexeme, enabling cross-script
+numeric queries.
+
+```sql
+-- ๑๒๓ is indexed as both ๑๒๓ and 123
+SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '123') AS found;
+-- t
+
+-- Inspect the expansion
+SELECT lexeme FROM unnest(to_tsvector('kham', '๑๒๓'));
+-- ๑๒๓
+-- 123
+```
+
+## POS lexeme filtering
+
+Each Thai token whose part of speech is known emits an additional colocated
+lexeme of the form `pos_<tag>` (e.g. `pos_verb`, `pos_noun`, `pos_adj`).
+Use the `::tsquery` cast so the underscore is treated as part of the lexeme.
+
+```sql
+-- Find documents that contain a verb
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@ 'pos_verb'::tsquery;
+
+-- Combine POS filter with content filter
+SELECT title FROM articles
+WHERE to_tsvector('kham', body) @@
+      ('pos_noun'::tsquery && plainto_tsquery('kham', 'กิน'));
+
+-- Inspect POS lexemes for a word
+SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา'))
+WHERE lexeme LIKE 'pos_%';
+-- pos_noun
+```
+
+## Alternative soundex dictionaries
+
+Two additional dictionary variants are available for applications that need
+finer phonetic discrimination:
+
+| Dictionary | Algorithm | Characteristics |
+|---|---|---|
+| `kham_fts_dict` | lk82 | Default; broadest match; consonant-class-based |
+| `kham_fts_dict_udom83` | udom83 | Finer sibilant and liquid distinctions |
+| `kham_fts_dict_metasound` | MetaSound | Per-syllable encoding; most discriminating |
+
+Use a custom configuration to swap in an alternative dictionary:
+
+```sql
+-- Build a configuration backed by udom83 soundex
+CREATE TEXT SEARCH CONFIGURATION kham_udom83 (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR thai, named WITH kham_fts_dict_udom83;
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR latin, number, unknown WITH kham_dict;
+
+-- Index and search with udom83
+SELECT to_tsvector('kham_udom83', 'ปลา') @@ plainto_tsquery('kham_udom83', 'ปลา');
+-- t
 ```
 
 ## Named entity search
@@ -189,16 +285,41 @@ SELECT ts_headline(
 ) FROM articles;
 ```
 
+## kham_tsvector / kham_tsquery helpers
+
+Two SQL convenience functions wrap the built-in `kham` configuration so you don't
+need to repeat the configuration name at every call site:
+
+```sql
+-- Equivalent to to_tsvector('kham', text)
+SELECT kham_tsvector('กินข้าวกับปลา');
+
+-- Equivalent to plainto_tsquery('kham', text)
+SELECT kham_tsquery('ปลา');
+
+-- Full-text search with helpers
+SELECT title FROM articles
+WHERE kham_tsvector(body) @@ kham_tsquery('ปลา');
+```
+
+Both functions are declared `STABLE` so PostgreSQL can use them correctly in
+expression indexes and query plans.
+
 ## GIN index
 
 ```sql
+-- Use the helper in an expression index
+CREATE INDEX articles_fts_idx ON articles
+    USING GIN (kham_tsvector(body));
+
+-- Or the explicit form — both are equivalent
 CREATE INDEX articles_fts_idx ON articles
     USING GIN (to_tsvector('kham', body));
 
 -- Query uses the index automatically
 SELECT title FROM articles
-WHERE to_tsvector('kham', body) @@ plainto_tsquery('kham', 'ปลา')
-ORDER BY ts_rank(to_tsvector('kham', body), plainto_tsquery('kham', 'ปลา')) DESC;
+WHERE kham_tsvector(body) @@ kham_tsquery('ปลา')
+ORDER BY ts_rank(kham_tsvector(body), kham_tsquery('ปลา')) DESC;
 ```
 
 ## Upgrade

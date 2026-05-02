@@ -26,7 +26,7 @@ const integrations: Record<string, IntegrationData> = {
   postgresql: {
     title: 'PostgreSQL FTS',
     icon: '🐘',
-    description: 'kham-pg เป็น extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL ช่วยตัดคำภาษาไทยในการทำ full-text search แทน parser ค่าเริ่มต้นของ PostgreSQL',
+    description: 'kham-pg เป็น extension ค้นหาข้อความแบบ Full-Text สำหรับ PostgreSQL แต่ละ token ภาษาไทยขยายเป็น lexeme สูงสุด 6 ตัวในตำแหน่งเดียวกัน: คำเอง, รหัส soundex lk82, RTGS, รูป ASCII (สำหรับเลขไทย) และ tag ชนิดคำ (POS) คำ stopword จะถูกกรองออกอัตโนมัติ',
     sections: [
       {
         heading: 'สิ่งที่ต้องมีก่อน',
@@ -41,70 +41,110 @@ make -C kham-pg install`,
         lang: 'bash', label: 'shell',
       },
       {
-        heading: 'Load และตั้งค่า',
-        code: `LOAD 'kham';
+        heading: 'Load และใช้งาน',
+        body: 'extension มี configuration kham พร้อมใช้ทันที คำ stopword ภาษาไทยถูกกรองออกอัตโนมัติโดยไม่ต้องตั้งค่าเพิ่ม',
+        code: `-- โหลด extension
+CREATE EXTENSION kham_pg;
 
-CREATE TEXT SEARCH CONFIGURATION kham_cfg (PARSER = kham);
-ALTER TEXT SEARCH CONFIGURATION kham_cfg
-  ADD MAPPING FOR thai    WITH simple;
-ALTER TEXT SEARCH CONFIGURATION kham_cfg
-  ADD MAPPING FOR latin   WITH english_stem;`,
+-- ค้นหาข้อความแบบ full-text ด้วย configuration kham ในตัว
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'ปลา');
+-- t  (กับ เป็น stopword จึงถูกกรองออก; ปลา ถูก index ไว้)`,
         lang: 'sql', label: 'psql',
       },
       {
         heading: 'Index เอกสาร',
         code: `CREATE TABLE articles (
-  id  SERIAL PRIMARY KEY,
-  body TEXT,
-  tsv TSVECTOR
+  id    SERIAL PRIMARY KEY,
+  title TEXT,
+  body  TEXT,
+  tsv   TSVECTOR
 );
 
-UPDATE articles SET tsv = to_tsvector('kham_cfg', body);
-CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);`,
+UPDATE articles
+SET tsv = to_tsvector('kham', coalesce(title, '') || ' ' || coalesce(body, ''));
+
+CREATE INDEX articles_tsv_idx ON articles USING GIN(tsv);
+
+CREATE TRIGGER articles_tsv_update
+  BEFORE INSERT OR UPDATE ON articles
+  FOR EACH ROW EXECUTE FUNCTION
+    tsvector_update_trigger(tsv, 'public.kham', title, body);`,
         lang: 'sql', label: 'psql',
       },
       {
         heading: 'ค้นหาด้วย ts_headline',
         code: `SELECT id,
-  ts_headline('kham_cfg', body, query,
+  ts_headline('kham', body, query,
     'StartSel=<mark>, StopSel=</mark>') AS snippet
 FROM articles,
-     to_tsquery('kham_cfg', 'ข้าว & ปลา') AS query
+     to_tsquery('kham', 'ข้าว & ปลา') AS query
 WHERE tsv @@ query
 ORDER BY ts_rank(tsv, query) DESC;`,
         lang: 'sql', label: 'psql',
       },
       {
+        heading: 'ค้นหาแบบ phonetic และ romanization',
+        body: 'token ภาษาไทยทุกตัวจะขยายด้วยรหัส soundex lk82 และ RTGS romanization — คำพ้องเสียงและ query ภาษาอังกฤษจึงเจอเอกสารภาษาไทยได้ทันที',
+        code: `-- query ภาษาอังกฤษ (RTGS) ค้นหาเอกสารภาษาไทย
+SELECT to_tsvector('kham', 'กินข้าวกับปลา') @@ plainto_tsquery('kham', 'pla');
+-- t  (ปลา → 'pla' ถูก index ไว้ในตำแหน่งเดียวกัน)
+
+-- ค้นหาด้วยรหัส lk82 ของ ปลา (4800)
+SELECT title FROM articles WHERE tsv @@ to_tsquery('kham', '4800');`,
+        lang: 'sql', label: 'psql',
+      },
+      {
+        heading: 'การแปลงตัวเลขไทย',
+        body: 'ตัวเลขไทย (๑๒๓) ถูก index พร้อมกับรูป ASCII (123) ในตำแหน่งเดียวกัน',
+        code: `-- ค้นหา ๑๒๓ ด้วยตัวเลข ASCII
+SELECT to_tsvector('kham', '๑๒๓') @@ plainto_tsquery('kham', '123') AS found;
+-- t`,
+        lang: 'sql', label: 'psql',
+      },
+      {
+        heading: 'การกรองด้วย POS lexeme',
+        body: 'token ที่รู้ชนิดคำจะมี pos_<tag> เป็น lexeme เพิ่ม ใช้ ::tsquery cast เพื่อให้ underscore ไม่ถูกตัดแยก',
+        code: `-- หาเอกสารที่มีคำกริยา
+SELECT title FROM articles WHERE tsv @@ 'pos_verb'::tsquery;
+
+-- ดู POS tags ที่ถูก index สำหรับคำนั้น
+SELECT lexeme FROM unnest(to_tsvector('kham', 'ปลา'))
+WHERE lexeme LIKE 'pos_%';
+-- pos_noun`,
+        lang: 'sql', label: 'psql',
+      },
+      {
+        heading: 'Dictionary soundex variants',
+        body: 'มี dictionary variants สองแบบสำหรับการจับเสียงที่ละเอียดกว่า',
+        code: `-- udom83 soundex
+CREATE TEXT SEARCH CONFIGURATION kham_udom83 (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR thai, named WITH kham_fts_dict_udom83;
+ALTER TEXT SEARCH CONFIGURATION kham_udom83
+    ADD MAPPING FOR latin, number, unknown WITH kham_dict;
+
+-- MetaSound
+CREATE TEXT SEARCH CONFIGURATION kham_metasound (PARSER = kham);
+ALTER TEXT SEARCH CONFIGURATION kham_metasound
+    ADD MAPPING FOR thai, named WITH kham_fts_dict_metasound;
+ALTER TEXT SEARCH CONFIGURATION kham_metasound
+    ADD MAPPING FOR latin, number, unknown WITH kham_dict;`,
+        lang: 'sql', label: 'psql',
+      },
+      {
         heading: 'การจัดอันดับและ field boosting',
         body: 'ใช้ ts_rank() หรือ ts_rank_cd() เรียงผลตามความเกี่ยวข้อง และใช้ setweight() เพิ่มน้ำหนักแต่ละ field — น้ำหนัก A (1.0) > B (0.4) > C (0.2) > D (0.1)',
-        code: `-- จัดอันดับพื้นฐาน (ค่ามากกว่า = เกี่ยวข้องมากกว่า)
+        code: `-- จัดอันดับพื้นฐาน
 SELECT id, ts_rank(tsv, query) AS rank
-FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
+FROM articles, to_tsquery('kham', 'ข้าว') query
 WHERE tsv @@ query
 ORDER BY rank DESC;
 
--- Cover-density rank — ลงโทษ token ที่กระจายห่างกัน เหมาะกับภาษาไทย
-SELECT id, ts_rank_cd(tsv, query) AS rank
-FROM articles, to_tsquery('kham_cfg', 'ข้าว') query
-WHERE tsv @@ query
-ORDER BY rank DESC;
-
--- Field boosting: สร้าง tsvector แยก field พร้อมน้ำหนัก
--- token น้ำหนัก A มีค่า ~5× เทียบกับน้ำหนัก C
+-- Field boosting: token น้ำหนัก A มีค่า ~5× เทียบกับน้ำหนัก C
 UPDATE articles
 SET tsv =
-  setweight(to_tsvector('kham_cfg', coalesce(title, '')), 'A') ||
-  setweight(to_tsvector('kham_cfg', coalesce(body,  '')), 'C');
-
--- กำหนด weight vector เอง {D, C, B, A}
-SELECT id, ts_rank(tsv, query, '{0.1, 0.2, 0.4, 1.0}') AS rank
-FROM articles, to_tsquery('kham_cfg', 'กรุงเทพ') query
-WHERE tsv @@ query
-ORDER BY rank DESC;
-
--- synonym เสียง (RTGS/soundex) ถูก index ที่ตำแหน่งเดียวกับ token หลัก
--- ts_rank จึงให้น้ำหนักเท่ากัน หากต้องการลดน้ำหนัก phonetic match
--- ให้ rerank ใน application code หลัง fetch จาก FTS (คูณ score × 0.3)`,
+  setweight(to_tsvector('kham', coalesce(title, '')), 'A') ||
+  setweight(to_tsvector('kham', coalesce(body,  '')), 'C');`,
         lang: 'sql', label: 'psql',
       },
     ],

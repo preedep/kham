@@ -56,9 +56,10 @@ All FTS modules are `no_std` / `alloc`-only. Pipeline order: normalize → segme
 ### `stopwords` — `StopwordSet`
 
 ```rust
-StopwordSet::builtin()               // 1 029-word built-in list (PyThaiNLP Apache-2.0)
-StopwordSet::from_text(data: &str)   // newline-separated; # lines ignored; BOM stripped
-set.contains(word: &str) -> bool     // O(log n) binary search
+StopwordSet::builtin()                          // 1 029-word built-in list (PyThaiNLP Apache-2.0)
+StopwordSet::from_text(data: &str)             // newline-separated; # lines ignored; BOM stripped
+StopwordSet::builtin_with_extra(extra: &str)   // built-in + caller words, sorted + deduped
+set.contains(word: &str) -> bool               // O(log n) binary search
 set.len() -> usize
 ```
 
@@ -109,7 +110,8 @@ FtsTokenizer::builder()
     .dict_merge(words: &str)           // overlay extra words on the built-in dict (fast, no trie rebuild)
     .build()
 
-fts.segment_for_fts(text) -> Vec<FtsToken>   // all non-whitespace tokens with metadata
+fts.segment_for_fts(text) -> Vec<FtsToken>    // all non-whitespace tokens with metadata
+fts.segment_stream(text)  -> FtsTokenStream  // streaming iterator; .next_index_token() skips stopwords
 fts.index_tokens(text)    -> Vec<FtsToken>   // stopword positions preserved
 fts.lexemes(text)         -> Vec<String>     // text + synonyms + trigrams — used by kham-pg
 ```

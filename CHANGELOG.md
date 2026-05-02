@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [kham-pg 0.7.0] - 2026-05-02
+
+### Added
+
+**kham-core**
+- `StopwordSet::builtin_with_extra(extra: &str) -> StopwordSet` — combines the built-in 1 029-word list with caller-supplied domain stopwords; sorted and deduplicated
+- `FtsTokenStream` — streaming iterator over `FtsToken`; adds `next_index_token()` to advance past stopwords automatically
+- `FtsTokenizer::segment_stream(text) -> FtsTokenStream` — streaming view of `segment_for_fts` output
+
+**kham-pg**
+- Stopword suppression — Thai grammatical particles (กับ, ใน, ของ, …) are suppressed by `kham_fts_dict` and excluded from the tsvector, reducing index noise
+- Thai number normalization — Thai digit strings (๑๒๓) now route through `kham_fts_dict`, which stores both the Thai form and the ASCII equivalent (123) as colocated lexemes; cross-script numeric queries work automatically
+- POS lexeme expansion — tokens with a known part of speech emit `pos_<tag>` (e.g. `pos_noun`, `pos_verb`) as a colocated lexeme; query with `'pos_verb'::tsquery`
+- `kham_fts_dict_udom83` and `kham_fts_dict_metasound` — two new dictionary variants backed by the udom83 and MetaSound soundex algorithms respectively; users can swap dictionaries in custom FTS configurations for finer phonetic discrimination
+- `kham_tsvector(text) → tsvector` — SQL STABLE helper; shorthand for `to_tsvector('kham', text)`
+- `kham_tsquery(text) → tsquery` — SQL STABLE helper; shorthand for `plainto_tsquery('kham', text)`
+- `kham_features` regress suite — 14 SQL tests covering all new features
+
+### Changed
+
+**kham-pg**
+- `number` token type now maps to `kham_fts_dict` instead of `kham_dict` in the built-in `kham` configuration; this enables Thai digit normalization but changes the lexeme output for purely numeric tokens
+
+---
+
 ## [0.6.0] - 2026-05-01
 
 ### Added
