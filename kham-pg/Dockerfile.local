@@ -1,0 +1,57 @@
+# Dockerfile.local — build kham-pg from source and produce a ready-to-run
+# postgres + kham_pg image for local testing.
+#
+# Usage (from repo root):
+#   docker build --build-arg PG_VERSION=17 \
+#     -f kham-pg/Dockerfile.local \
+#     -t kham-pg-local:0.8.0-pg17 .
+#   docker run --rm -e POSTGRES_PASSWORD=secret -p 5432:5432 kham-pg-local:0.8.0-pg17
+
+# ── Stage 1: build ────────────────────────────────────────────────────────────
+ARG PG_VERSION=17
+FROM debian:bookworm-slim AS builder
+ARG PG_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        curl \
+        ca-certificates \
+        pkg-config \
+        gnupg \
+        lsb-release \
+    && curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+       | gpg --dearmor -o /usr/share/keyrings/pgdg.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg.gpg] \
+       https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+       > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+        postgresql-server-dev-${PG_VERSION} \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+    | sh -s -- -y --default-toolchain stable --no-modify-path \
+    && chmod -R a+w /usr/local/rustup /usr/local/cargo
+
+WORKDIR /kham
+COPY . .
+
+ENV PG_CONFIG=/usr/lib/postgresql/${PG_VERSION}/bin/pg_config
+RUN cargo build -p kham-pg --release
+
+# ── Stage 2: runtime (official postgres image) ────────────────────────────────
+ARG PG_VERSION=17
+FROM postgres:${PG_VERSION}-bookworm
+ARG PG_VERSION
+
+COPY --from=builder /kham/target/release/libkham_pg.so \
+     /usr/lib/postgresql/${PG_VERSION}/lib/kham_pg.so
+COPY kham-pg/kham_pg.control \
+     /usr/share/postgresql/${PG_VERSION}/extension/kham_pg.control
+COPY kham-pg/sql/ \
+     /usr/share/postgresql/${PG_VERSION}/extension/

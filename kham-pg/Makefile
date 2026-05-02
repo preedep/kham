@@ -27,7 +27,12 @@ PG_PKGLIBDIR    = $(shell $(PG_CONFIG) --pkglibdir)
 PG_SHAREDIR     = $(shell $(PG_CONFIG) --sharedir)
 EXT_DIR         = $(PG_SHAREDIR)/extension
 
-LIBNAME        := libkham_pg.so
+UNAME_S        := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+  LIBNAME      := libkham_pg.dylib
+else
+  LIBNAME      := libkham_pg.so
+endif
 RELEASE_LIB    := ../target/release/$(LIBNAME)
 
 .PHONY: build install regress regress-matrix regress-update-expected bench dist print-version clean

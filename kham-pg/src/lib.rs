@@ -6,6 +6,12 @@
 //! `*_impl` functions defined here, which use [`FtsTokenizer`] to segment the
 //! document text.
 //!
+//! The parser uses [`FtsTokenizer`] (not the base [`Tokenizer`]) because it
+//! must emit [`TokenKind::Named`] for NE tokens so PostgreSQL routes them to
+//! the correct dictionary mapping.  Stopword filtering, synonym expansion,
+//! soundex, and RTGS romanization are handled downstream by the dictionary
+//! callbacks (`kham_dict_lexize_*`).
+//!
 //! Token-type mapping
 //! ------------------
 //! | PG type | Name    | [`TokenKind`]             |
@@ -21,9 +27,12 @@
 // They have no Rust callers, so Safety docs would be noise.
 #![allow(clippy::missing_safety_doc)]
 
+use std::num::NonZeroUsize;
 use std::os::raw::{c_char, c_int, c_void};
 use std::panic::catch_unwind;
-use std::sync::OnceLock;
+use std::sync::{Mutex, OnceLock};
+
+use lru::LruCache;
 
 use kham_core::fts::FtsTokenizer;
 use kham_core::romanizer::RomanizationMap;
@@ -36,9 +45,16 @@ use kham_core::TokenKind;
 
 /// Per-document parser state allocated in [`kham_start_impl`] and freed in
 /// [`kham_end_impl`].
+///
+/// All token texts are packed into `text_buf` (one allocation for the whole
+/// document); `tokens` records `(byte_offset, byte_len, pg_type)` triples so
+/// `kham_gettoken_impl` can point PostgreSQL directly into the buffer without
+/// any per-token allocation.
 struct KhamState {
-    /// Pre-computed tokens: UTF-8 bytes + PostgreSQL token-type integer.
-    tokens: Vec<(Vec<u8>, c_int)>,
+    /// Concatenated UTF-8 bytes of every non-whitespace token.
+    text_buf: Vec<u8>,
+    /// `(byte_offset_in_text_buf, byte_len, pg_token_type)` per token.
+    tokens: Vec<(usize, usize, c_int)>,
     cursor: usize,
 }
 
@@ -56,11 +72,30 @@ fn kind_to_pg_type(kind: TokenKind) -> c_int {
 }
 
 // ---------------------------------------------------------------------------
+// Cached parser tokenizer — initialised once per process, reused on every call.
+//
+// Uses FtsTokenizer (not the base Tokenizer) so that named entities are tagged
+// TokenKind::Named(_) and PostgreSQL routes them to the correct dictionary.
+// Soundex and RTGS romanization are not configured here — that work is done
+// exclusively in the dictionary callbacks.
+// ---------------------------------------------------------------------------
+
+static PARSER_FTS: OnceLock<FtsTokenizer> = OnceLock::new();
+
+fn parser_fts() -> &'static FtsTokenizer {
+    PARSER_FTS.get_or_init(FtsTokenizer::new)
+}
+
+// ---------------------------------------------------------------------------
 // Impl functions called from shim.c
 // ---------------------------------------------------------------------------
 
 /// Tokenise `text` (non-null-terminated, `len` bytes of UTF-8) and return an
 /// opaque heap pointer to a [`KhamState`].
+///
+/// All non-whitespace token texts are packed into a single `text_buf`
+/// allocation; `tokens` records `(offset, len, pg_type)` triples into it.
+/// This reduces per-document heap allocations from O(n_tokens) to 2.
 ///
 /// Returns `NULL` on panic — the C shim converts `NULL` to a PG error.
 ///
@@ -73,19 +108,25 @@ pub unsafe extern "C" fn kham_start_impl(text: *const c_char, len: c_int) -> *mu
         let bytes = unsafe { std::slice::from_raw_parts(text as *const u8, len as usize) };
         let s = std::str::from_utf8(bytes).unwrap_or("");
 
-        let fts = FtsTokenizer::new();
-        // segment_for_fts: normalise → segment → tag stopwords/synonyms.
-        // We include ALL non-whitespace tokens so that PG dictionaries can
-        // apply their own stopword / normalisation rules.
-        let fts_tokens = fts.segment_for_fts(s);
-
-        let tokens: Vec<(Vec<u8>, c_int)> = fts_tokens
+        let fts_tokens: Vec<_> = parser_fts()
+            .segment_for_fts(s)
             .into_iter()
             .filter(|t| t.kind != TokenKind::Whitespace)
-            .map(|t| (t.text.into_bytes(), kind_to_pg_type(t.kind)))
             .collect();
 
-        Box::into_raw(Box::new(KhamState { tokens, cursor: 0 })) as *mut c_void
+        // Pack all token texts into one contiguous buffer — 2 allocs total.
+        let total: usize = fts_tokens.iter().map(|t| t.text.len()).sum();
+        let mut text_buf = Vec::with_capacity(total);
+        let mut tokens = Vec::with_capacity(fts_tokens.len());
+
+        for ft in fts_tokens {
+            let offset = text_buf.len();
+            let len = ft.text.len();
+            text_buf.extend_from_slice(ft.text.as_bytes());
+            tokens.push((offset, len, kind_to_pg_type(ft.kind)));
+        }
+
+        Box::into_raw(Box::new(KhamState { text_buf, tokens, cursor: 0 })) as *mut c_void
     });
 
     result.unwrap_or(std::ptr::null_mut())
@@ -93,6 +134,7 @@ pub unsafe extern "C" fn kham_start_impl(text: *const c_char, len: c_int) -> *mu
 
 /// Write the next token into `*token` / `*tokenlen` and return its PG type.
 ///
+/// Sets `*token` to point directly into `KhamState::text_buf` — no copy.
 /// Returns `0` when all tokens have been consumed.
 ///
 /// # Safety
@@ -115,15 +157,15 @@ pub unsafe extern "C" fn kham_gettoken_impl(
         return 0; // end of document
     }
 
-    let (text, pg_type) = &state.tokens[state.cursor];
+    let (offset, len, pg_type) = state.tokens[state.cursor];
     state.cursor += 1;
 
     unsafe {
-        *token = text.as_ptr() as *const c_char;
-        *tokenlen = text.len() as c_int;
+        *token = state.text_buf.as_ptr().add(offset) as *const c_char;
+        *tokenlen = len as c_int;
     }
 
-    *pg_type
+    pg_type
 }
 
 /// Free the [`KhamState`] allocated by [`kham_start_impl`].
@@ -153,9 +195,9 @@ pub unsafe extern "C" fn kham_end_impl(state: *mut c_void) {
 // Stopwords are suppressed: if the built-in stopword list contains the token,
 // the function returns 0 (NULL) so PostgreSQL drops it from the tsvector.
 //
-// kham_fts_dict:         lk82 soundex  (default, most widely used)
-// kham_fts_dict_udom83:  udom83 soundex (finer sibilant/liquid distinctions)
-// kham_fts_dict_metasound: MetaSound   (per-syllable encoding)
+// kham_fts_dict:           lk82 soundex  (default, most widely used)
+// kham_fts_dict_udom83:    udom83 soundex (finer sibilant/liquid distinctions)
+// kham_fts_dict_metasound: MetaSound     (per-syllable encoding)
 // ---------------------------------------------------------------------------
 
 /// Up to 6 lexeme slots, each holding a null-terminated UTF-8 string (≤ 127 bytes).
@@ -173,38 +215,79 @@ fn write_slot(slot: &mut [u8; 128], src: &[u8]) {
 }
 
 // ---------------------------------------------------------------------------
-// Lazy FtsTokenizer instances — one per algorithm, shared across calls in a
-// single backend process.  PG is multi-process, so OnceLock is safe here.
+// Per-word lexeme cache
+//
+// `segment_for_fts` on a single word (soundex + RTGS + POS expansion) costs
+// ~0.05 ms.  The same common Thai words repeat across many documents, so we
+// cache the expanded lexeme list keyed on the raw word string.  On a cache hit
+// the dictionary callback becomes a few Vec clones + memcpy into KhamDictOut.
+//
+// Cache capacity: 4 096 unique words per algorithm variant.  Thai working
+// vocabulary for most corpora fits well within this limit.  PostgreSQL backends
+// are single-threaded, so Mutex contention is zero in practice.
 // ---------------------------------------------------------------------------
 
-static DICT_FTS: OnceLock<FtsTokenizer> = OnceLock::new();
-static DICT_FTS_UDOM83: OnceLock<FtsTokenizer> = OnceLock::new();
-static DICT_FTS_METASOUND: OnceLock<FtsTokenizer> = OnceLock::new();
+const DICT_CACHE_CAP: usize = 4096;
 
-fn dict_fts() -> &'static FtsTokenizer {
+/// Cached result for one word: either suppressed (stopword) or up to 6 lexemes.
+#[derive(Clone)]
+enum CachedLexeme {
+    Stopword,
+    Words(Vec<String>),
+}
+
+/// Bundles a dictionary tokenizer with its per-word LRU cache.
+struct DictFts {
+    fts: FtsTokenizer,
+    cache: Mutex<LruCache<String, CachedLexeme>>,
+}
+
+impl DictFts {
+    fn new(fts: FtsTokenizer) -> Self {
+        let cap = NonZeroUsize::new(DICT_CACHE_CAP).unwrap();
+        Self { fts, cache: Mutex::new(LruCache::new(cap)) }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Lazy DictFts instances — one per algorithm, shared across calls in a single
+// backend process.  PG is multi-process so OnceLock is safe here.
+// ---------------------------------------------------------------------------
+
+static DICT_FTS: OnceLock<DictFts> = OnceLock::new();
+static DICT_FTS_UDOM83: OnceLock<DictFts> = OnceLock::new();
+static DICT_FTS_METASOUND: OnceLock<DictFts> = OnceLock::new();
+
+fn dict_fts() -> &'static DictFts {
     DICT_FTS.get_or_init(|| {
-        FtsTokenizer::builder()
-            .soundex(SoundexAlgorithm::Lk82)
-            .romanization(RomanizationMap::builtin())
-            .build()
+        DictFts::new(
+            FtsTokenizer::builder()
+                .soundex(SoundexAlgorithm::Lk82)
+                .romanization(RomanizationMap::builtin())
+                .build(),
+        )
     })
 }
 
-fn dict_fts_udom83() -> &'static FtsTokenizer {
+fn dict_fts_udom83() -> &'static DictFts {
     DICT_FTS_UDOM83.get_or_init(|| {
-        FtsTokenizer::builder()
-            .soundex(SoundexAlgorithm::Udom83)
-            .romanization(RomanizationMap::builtin())
-            .build()
+        DictFts::new(
+            FtsTokenizer::builder()
+                .soundex(SoundexAlgorithm::Udom83)
+                .romanization(RomanizationMap::builtin())
+                .build(),
+        )
     })
 }
 
-fn dict_fts_metasound() -> &'static FtsTokenizer {
+fn dict_fts_metasound() -> &'static DictFts {
     DICT_FTS_METASOUND.get_or_init(|| {
-        FtsTokenizer::builder()
-            .soundex(SoundexAlgorithm::MetaSound)
-            .romanization(RomanizationMap::builtin())
-            .build()
+        DictFts::new(
+            FtsTokenizer::builder()
+                .soundex(SoundexAlgorithm::MetaSound)
+                .romanization(RomanizationMap::builtin())
+                .build(),
+        )
     })
 }
 
@@ -212,55 +295,79 @@ fn dict_fts_metasound() -> &'static FtsTokenizer {
 // Core lexize logic (safe, called from unsafe impls)
 // ---------------------------------------------------------------------------
 
-/// Expand `word` into up to 6 colocated lexemes using `fts`.
-///
-/// Returns 0 if the word is a stopword (PG drops it from the tsvector).
-/// Returns the number of lexemes written into `out` otherwise (≥ 1).
-fn dict_lexize_inner(word: &str, out: &mut KhamDictOut, fts: &FtsTokenizer) -> c_int {
+/// Compute the expanded lexeme list for `word` using `fts` (no cache).
+fn compute_lexeme(word: &str, fts: &FtsTokenizer) -> CachedLexeme {
     let word_owned = word.to_owned();
     let ft = match catch_unwind(std::panic::AssertUnwindSafe(|| {
         fts.segment_for_fts(&word_owned).into_iter().next()
     })) {
         Ok(Some(ft)) => ft,
-        _ => {
-            // Panic or empty input: return bare word as safe fallback.
-            write_slot(&mut out.words[0], word.as_bytes());
-            out.count = 1;
-            return 1;
-        }
+        _ => return CachedLexeme::Words(vec![word.to_owned()]),
     };
 
-    // Stopword suppression: return 0 → PG omits the token from tsvector.
     if ft.is_stop {
-        out.count = 0;
-        return 0;
+        return CachedLexeme::Stopword;
     }
 
-    // Slot 0: normalized word text.
-    write_slot(&mut out.words[0], ft.text.as_bytes());
-    let mut count: usize = 1;
+    let mut lexemes: Vec<String> = Vec::with_capacity(6);
+    lexemes.push(ft.text.clone());
 
-    // Slots 1+: soundex + RTGS + number normalization synonyms from FtsTokenizer.
     for syn in &ft.synonyms {
-        if count >= 5 {
+        if lexemes.len() >= 5 {
             break;
         }
-        write_slot(&mut out.words[count], syn.as_bytes());
-        count += 1;
+        lexemes.push(syn.clone());
     }
 
-    // POS lexeme "pos_<tag>" — enables part-of-speech filtering in queries.
-    // Query with: WHERE tsvector @@ 'pos_verb'::tsquery
     if let Some(pos) = ft.pos {
-        if count < 6 {
-            let pos_lex = format!("pos_{}", pos.as_tag().to_ascii_lowercase());
-            write_slot(&mut out.words[count], pos_lex.as_bytes());
-            count += 1;
+        if lexemes.len() < 6 {
+            lexemes.push(format!("pos_{}", pos.as_tag().to_ascii_lowercase()));
         }
     }
 
-    out.count = count as c_int;
-    count as c_int
+    CachedLexeme::Words(lexemes)
+}
+
+/// Write a [`CachedLexeme`] into `out` and return the PG count value.
+fn apply_lexeme(cached: &CachedLexeme, out: &mut KhamDictOut) -> c_int {
+    match cached {
+        CachedLexeme::Stopword => {
+            out.count = 0;
+            0
+        }
+        CachedLexeme::Words(lexemes) => {
+            let count = lexemes.len();
+            for (i, lex) in lexemes.iter().enumerate() {
+                write_slot(&mut out.words[i], lex.as_bytes());
+            }
+            out.count = count as c_int;
+            count as c_int
+        }
+    }
+}
+
+/// Expand `word` into up to 6 colocated lexemes, consulting the per-word cache
+/// before calling `segment_for_fts`.
+///
+/// Returns 0 if the word is a stopword (PG drops it from the tsvector).
+/// Returns the number of lexemes written into `out` otherwise (≥ 1).
+fn dict_lexize_inner(word: &str, out: &mut KhamDictOut, dict: &DictFts) -> c_int {
+    // Fast path: cache hit.
+    {
+        let mut cache = dict.cache.lock().unwrap();
+        if let Some(cached) = cache.get(word) {
+            return apply_lexeme(cached, out);
+        }
+    }
+
+    // Cache miss: compute and store.
+    let result = compute_lexeme(word, &dict.fts);
+    {
+        let mut cache = dict.cache.lock().unwrap();
+        cache.put(word.to_owned(), result.clone());
+    }
+
+    apply_lexeme(&result, out)
 }
 
 /// Handle raw pointer args, decode UTF-8, delegate to [`dict_lexize_inner`].
@@ -273,7 +380,7 @@ unsafe fn dict_lexize_raw(
     token: *const c_char,
     token_len: c_int,
     out: *mut KhamDictOut,
-    fts: &FtsTokenizer,
+    dict: &DictFts,
 ) -> c_int {
     if token.is_null() || token_len <= 0 || out.is_null() {
         return 0;
@@ -283,7 +390,7 @@ unsafe fn dict_lexize_raw(
         Ok(s) if !s.is_empty() => s,
         _ => return 0,
     };
-    dict_lexize_inner(word, unsafe { &mut *out }, fts)
+    dict_lexize_inner(word, unsafe { &mut *out }, dict)
 }
 
 // ---------------------------------------------------------------------------
