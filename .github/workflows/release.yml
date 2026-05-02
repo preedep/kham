@@ -393,7 +393,7 @@ jobs:
         run: make -C kham-pg dist
       - name: Upload to PGXN
         run: |
-          curl -fsSL \
+          curl --fail-with-body -sSL \
             -u "${{ secrets.PGXN_USERNAME }}:${{ secrets.PGXN_PASSWORD }}" \
             -F "distribution=@kham-pg/kham_pg-$(make -C kham-pg -s print-version).zip" \
             https://manager.pgxn.org/upload
