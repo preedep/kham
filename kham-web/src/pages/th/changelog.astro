@@ -3,7 +3,17 @@ import Layout from '../../layouts/Layout.astro';
 ---
 
 <Layout title="บันทึกการเปลี่ยนแปลง — kham" lang="th"
-  description="บันทึกการเปลี่ยนแปลงทุกเวอร์ชันของ kham — สิ่งที่เปลี่ยนแปลง เพิ่มเติม และแก้ไข">
+  description="บันทึกการเปลี่ยนแปลงทุกเวอร์ชันของ kham — สิ่งที่เปลี่ยนแปลง เพิ่มเติม และแก้ไข"
+  keywords="kham changelog, บันทึกการเปลี่ยนแปลง kham, NLP ภาษาไทย อัปเดต, เวอร์ชัน kham-core, เวอร์ชัน kham-pg"
+  jsonLd={{
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: 'หน้าหลัก', item: 'https://kham.io/th/' },
+      { '@type': 'ListItem', position: 2, name: 'บันทึกการเปลี่ยนแปลง', item: 'https://kham.io/th/changelog' },
+    ],
+  }}
+>
   <div class="max-w-4xl mx-auto px-6 py-16">
     <div class="mb-12">
       <h1 class="text-4xl font-bold text-slate-900 dark:text-slate-100 mb-3">บันทึกการเปลี่ยนแปลง</h1>
