@@ -31,7 +31,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 PORT="${PORT:-9999}"
 HOST="${HOST:-127.0.0.1}"
-export NER_ENGINE="${NER_ENGINE:-thainer}"
+# thainer-v2 = WangchanBERTa-based (no pycrfsuite required, works on Python 3.14+)
+# thainer    = CRF-based (requires pycrfsuite — not available for Python 3.14)
+export NER_ENGINE="${NER_ENGINE:-thainer-v2}"
 
 # ── Python version check ─────────────────────────────────────────────────────
 PYTHON=$(command -v python3 || command -v python || true)
@@ -97,7 +99,7 @@ PYEOF
 echo ""
 echo "──────────────────────────────────────────────────────────────"
 echo " kham-tnc NER Validator"
-echo " Engine : $NER_ENGINE (WangchanBERTa via pythainlp)"
+echo " Engine : $NER_ENGINE  (thainer-v2 = WangchanBERTa; thainer = CRF/Python≤3.13 only)"
 echo " URL    : http://$HOST:$PORT"
 echo ""
 echo " Health check : curl http://$HOST:$PORT/health"

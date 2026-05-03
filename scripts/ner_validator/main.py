@@ -19,9 +19,10 @@ from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
 # ── Config ──────────────────────────────────────────────────────────────────
-# NER engine: "thainer" (default) or "thainer-v2"
-# pythainlp will download the model automatically on first use (~450 MB)
-NER_ENGINE: str = os.getenv("NER_ENGINE", "thainer")
+# NER engine: "thainer-v2" (default, WangchanBERTa-based, no pycrfsuite needed)
+# "thainer" uses CRF (requires pycrfsuite) — not available on Python 3.14
+# pythainlp downloads models automatically via its corpus manager (~450 MB)
+NER_ENGINE: str = os.getenv("NER_ENGINE", "thainer-v2")
 
 # ── Label mapping → kham-core NE tags ────────────────────────────────────────
 _LABEL_MAP: dict[str, str] = {
