@@ -81,6 +81,46 @@ Two sentences in `KNOWN_PYTHAINLP_ERRORS` (scripts/compare_pythainlp.py) where k
 
 ---
 
+## TNC4 (Thai National Corpus v4) — Investigation Items
+
+Source: <https://awirote.medium.com/thai-national-corpus-v-4-tnc4-4778ecbac05b> · Web app: <https://app.stichula.org/py/tnc4/>
+
+**What TNC4 is:** A new web search application built by Prof. Wirote Aroonmanakun (original TNC creator) and hosted by the Sirinat Thai Language Institute (STIL), Chulalongkorn University. It is a research/internal project — **not yet a formal public corpus release** with a downloadable data package. The corpus contains 34 million words with Universal Dependencies POS tags, covering 15 genres (academic, fiction, newspaper, biography, law, etc.) and multiple domains. Corpus history: TNC1 (14M words, 2006) → TNC2 → TNC3 (public, ~100M words on arts.chula.ac.th) → TNC4 (web app only, ~34M, status unknown).
+
+**Current blockers for any data import:**
+- Raw corpus data not confirmed as downloadable (web UI only; CSV export is per-query, not bulk)
+- License for TNC4 raw data not stated (existing `tnc_freq.txt` in kham is CC0 from PyThaiNLP's older TNC extract)
+- UD POS tags would need mapping to kham's 13-category ORCHID scheme (ADR-003)
+
+Two potential high-value imports if raw data becomes available under CC0/CC-BY:
+
+- [ ] **TNC4 frequency data refresh** — TNC4's word-frequency list could replace or supplement `tnc_freq.txt` (current: 106,120 types). Better scores improve DP scorer tiebreaking (`DpScore` field 4) and spell correction ranking. **Action**: contact Prof. Wirote Aroonmanakun (awirote@gmail.com per Medium profile) or STIL to ask about data access and license.
+
+- [ ] **TNC4 POS expansion** — 34M UD-tagged tokens far exceed the current 8,691-entry `pos_th.tsv`. If downloadable under CC-BY, map UD→kham 13-category scheme (see ADR-003) and filter low-confidence annotations (known issue: `สวย` tagged ADP/NUM in edge cases). **Action**: same contact as above; check if `arts.chula.ac.th/ling/tnc3` offers bulk POS data.
+
+**LST20 (non-commercial, not embeddable by default):** NECTEC's LST20 (3.16M words, 288K NE spans, 16 POS tags) — <https://huggingface.co/datasets/lst-nectec/lst20>. Non-commercial restriction means it cannot be embedded in the default build; deferred.
+
+---
+
+## Public dataset imports (available now, no registration)
+
+These datasets are directly downloadable today. Excluded datasets with CC-BY-NC-SA or non-commercial clauses: ORCHID full corpus, InterBEST, LST20, OpenSubtitles.
+
+### CC0 — no attribution required (embed freely)
+
+- [x] **`thainer-corpus-v2`** (PyThaiNLP, CC0) — 2,280 new NE entries appended to `ne_th.tsv` (403 PERSON, 793 PLACE, 1,084 ORG). Script: `scripts/import_thainer_ne.py`. Total ne_th.tsv: 36,668 → 38,950 entries. See ADR-007.
+
+### CC-BY-SA 3.0 — attribution required; keep in separate optional TSV files
+
+- [x] **`UD_Thai-PUD`** (Universal Dependencies, CC-BY-SA 3.0) — 2,407 new POS entries appended to `pos_th.tsv` (PROPN 884, VERB 665, NOUN 662, ADJ 134, …). Script: `scripts/import_ud_pud_pos.py`. Total pos_th.tsv: 8,993 → 11,404 entries. Segmentation sentences in `testdata/reference/ud_pud.txt` (F1 0.663, excluded from benchmark). See ADR-007.
+
+### CC-BY-SA 4.0 — attribution required; keep in separate optional TSV files
+
+- [x] **Thai Wikipedia word frequency** — `kham-core/data/wiki_freq.tsv` created (CC-BY-SA-4.0); 19,890 entries from 500 articles, 7,640 wiki-only new words. Script: `scripts/import_wiki_freq.py --max-articles N`. **Not yet loaded** by FreqMap — needs `FreqMap::from_two_sources` API. See ADR-007.
+- [ ] **`FreqMap::from_two_sources(tnc: &[u8], wiki: &[u8])`** — load both frequency files; wiki entries supplement TNC with a minimum-token-length filter (≥ 2 Thai chars) to exclude segmentation fragments like `ร์`.
+
+---
+
 ## PyThaiNLP corpus imports
 
 Source: <https://github.com/PyThaiNLP/pythainlp/tree/main/pythainlp/corpus>
@@ -147,3 +187,126 @@ with zero schema change.
 - [x] **Android build** — kham-sqlite built for arm64-v8a, armeabi-v7a, x86_64, x86 via NDK in release CI; iOS static lib deferred
 - [x] **Spelling correction** — shipped in v0.6.0; see v0.6.0 section above
 - [ ] **Word embeddings / semantic similarity** — requires ML inference; defer indefinitely
+
+---
+
+## kham-tnc — Professional Thai Corpus Analysis Tool
+
+A self-hosted web application for professional corpus linguistics research, built entirely on `kham-core`. Fills the same niche as TNC4 (Chulalongkorn) but open-source, self-hostable, and user-corpus-first (bring your own text).
+
+### Architecture
+
+```
+kham-tnc/
+├── src/
+│   ├── main.rs          # axum web server entry point
+│   ├── indexer.rs       # corpus ingestion: segment → POS/NE tag → write to SQLite
+│   ├── corpus.rs        # corpus registry (multiple named corpora)
+│   ├── kwic.rs          # KWIC search and concordance
+│   ├── freq.rs          # frequency list builder
+│   ├── collocate.rs     # collocation statistics (MI, logDice, t-score, LL)
+│   ├── ngram.rs         # n-gram frequency and pattern search
+│   ├── keyword.rs       # keyword comparison across two corpora
+│   ├── query.rs         # query parser: word, POS filter, NE filter, wildcard, proximity
+│   └── api.rs           # REST JSON API (mirrors web UI)
+├── static/              # HTMX + Tailwind frontend (no npm build step)
+│   ├── index.html
+│   ├── app.js
+│   └── style.css
+├── Cargo.toml           # depends on kham-core, axum, rusqlite, serde
+└── CLAUDE.md
+```
+
+**Storage:** SQLite — one DB per corpus. Each DB has:
+- `tokens` table: `(doc_id, pos, word, pos_tag, ne_tag, char_start, char_end)`
+- `docs` table: `(doc_id, filename, genre, domain, char_count, token_count)`
+- FTS5 virtual table via `kham-sqlite` for full-text search
+
+### Phase 1 — Core Analysis (MVP)
+
+**Corpus management**
+- [ ] Upload plain-text files (.txt, .csv) via web UI or CLI (`kham-tnc index corpus.txt --genre news`)
+- [ ] Corpus overview: document count, token count, type count, genre/domain breakdown
+- [ ] Multiple corpora — switch between them in the UI; one SQLite DB per corpus
+
+**KWIC / Concordance**
+- [ ] Search by exact word — returns N concordance lines (default 50) with left/right context
+- [ ] Wildcard search: `ภาษา*` (prefix), `*ศาสตร์` (suffix), `*ภาษา*` (contains)
+- [ ] Proximity search: `word1 <1-5> word2` — two words within N positions of each other
+- [ ] Sort concordance by: left context, node word, right context, document, random
+- [ ] Genre/domain filter on all searches
+- [ ] Paginate results; export concordance as CSV
+
+**Frequency analysis**
+- [ ] Word frequency list — total, per-genre, per-domain; normalized (per million words)
+- [ ] Filter by POS tag (`--pos NOUN`), NE type (`--ne PLACE`), min frequency threshold
+- [ ] Dispersion score — how evenly a word is spread across documents (Juilland's D)
+- [ ] Export frequency table as CSV/TSV
+
+**Collocation analysis**
+- [ ] Given a node word, compute collocates in L1–L5 / R1–R5 span (configurable)
+- [ ] Statistics computed: **MI**, **logDice**, **t-score**, **log-likelihood (LL)**, **Dice**, raw freq
+- [ ] Filter by collocation direction (left-only, right-only, both), minimum co-occurrence count
+- [ ] Sort by any statistic; export as CSV
+
+### Phase 2 — Linguistic Depth
+
+**POS-aware search**
+- [ ] POS constraint in query: `[pos=NOUN]`, `[pos=VERB] ของ [pos=NOUN]`
+- [ ] Show POS distribution for a search term — how often tagged as VERB vs NOUN vs ADJ, etc.
+- [ ] NE constraint: `[ne=PLACE]` — find all PLACE tokens; frequency by NE type
+
+**N-gram analysis**
+- [ ] Bigram and trigram frequency lists with MI / logDice scores
+- [ ] Pattern search: `การ [pos=VERB]` — fixed word + POS slot
+- [ ] Cluster view: all N-grams containing a given word
+
+**Visualizations (web UI)**
+- [ ] Frequency trend chart — word frequency by document order or date (if metadata available)
+- [ ] Dispersion plot — dot matrix showing where a word appears in the corpus
+- [ ] Genre/domain bar chart per search result
+- [ ] Collocation heatmap: L5–R5 span × frequency strength
+
+**Thai-specific features**
+- [ ] Phonetic search: find all words that sound like the query (lk82 / MetaSound)
+- [ ] RTGS display toggle — show romanized form alongside each token in concordance
+- [ ] NE highlighting in concordance lines (Person=blue, Place=green, Org=orange)
+- [ ] Compound-word boundary display: render segmentation boundaries visually (กิน|ข้าว)
+
+### Phase 3 — Professional Features
+
+**Multi-corpus comparison**
+- [ ] Keyword analysis — compare two corpora; rank words by keyness (log-likelihood or %DIFF)
+- [ ] Frequency ratio: word is N× more common in corpus A than corpus B
+- [ ] Side-by-side concordance from two corpora for the same query
+
+**Corpus statistics**
+- [ ] Vocabulary growth curve (type-token ratio by sample size)
+- [ ] Average word length, sentence length distributions
+- [ ] Hapax legomena (words appearing exactly once) list
+
+**REST API**
+- [ ] All analysis endpoints available as JSON API (`/api/kwic`, `/api/freq`, `/api/collocate`, etc.)
+- [ ] API key auth for multi-user deployments
+- [ ] OpenAPI spec generated from route annotations
+
+**Deployment**
+- [ ] Single binary — `kham-tnc serve --corpus mydata.sqlite --port 8080`
+- [ ] Docker image: `nickmsft/kham-tnc`
+- [ ] CLI mode — all analysis runs headlessly: `kham-tnc freq --corpus my.sqlite --word ภาษา`
+
+### Comparison with TNC4
+
+| Feature | TNC4 (Chula) | kham-tnc |
+|---|---|---|
+| Corpus | Fixed (34M words) | User-supplied (any size) |
+| Self-hosted | No | Yes |
+| Open source | No | Yes |
+| POS search | NOUN filter only | Full 13-category constraint |
+| NE search | No | PERSON / PLACE / ORG filter |
+| Phonetic search | No | lk82 / MetaSound |
+| RTGS display | No | Yes |
+| Collocate stats | MI, LL | MI, logDice, t-score, LL, Dice |
+| Export | CSV | CSV, JSON, TSV |
+| API | No | REST JSON |
+| Multi-corpus compare | No | Yes (Phase 3) |
