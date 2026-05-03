@@ -40,10 +40,18 @@ impl CorpusDb {
                 char_end   INTEGER NOT NULL
             );
 
-            CREATE INDEX IF NOT EXISTS idx_tokens_word   ON tokens(word);
-            CREATE INDEX IF NOT EXISTS idx_tokens_doc_id ON tokens(doc_id);
+            CREATE INDEX IF NOT EXISTS idx_tokens_word    ON tokens(word);
+            CREATE INDEX IF NOT EXISTS idx_tokens_doc_id  ON tokens(doc_id);
             CREATE INDEX IF NOT EXISTS idx_tokens_pos_tag ON tokens(pos_tag);
             CREATE INDEX IF NOT EXISTS idx_tokens_ne_tag  ON tokens(ne_tag);
+
+            CREATE TABLE IF NOT EXISTS corrections (
+                word        TEXT NOT NULL PRIMARY KEY,
+                correct_pos TEXT,
+                correct_ne  TEXT,
+                note        TEXT,
+                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+            );
         ",
         )?;
         Ok(())
@@ -90,6 +98,74 @@ impl CorpusDb {
         Ok(())
     }
 
+    pub fn save_correction(
+        &self,
+        word: &str,
+        correct_pos: Option<&str>,
+        correct_ne: Option<&str>,
+        note: Option<&str>,
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO corrections (word, correct_pos, correct_ne, note)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(word) DO UPDATE SET
+               correct_pos = excluded.correct_pos,
+               correct_ne  = excluded.correct_ne,
+               note        = excluded.note,
+               created_at  = datetime('now')",
+            params![word, correct_pos, correct_ne, note],
+        )?;
+        Ok(())
+    }
+
+    pub fn delete_correction(&self, word: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM corrections WHERE word = ?1", params![word])?;
+        Ok(())
+    }
+
+    pub fn list_corrections(&self, limit: usize, offset: usize) -> Result<Vec<Correction>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT word, correct_pos, correct_ne, note, created_at
+             FROM corrections
+             ORDER BY created_at DESC
+             LIMIT ?1 OFFSET ?2",
+        )?;
+        let rows = stmt.query_map(params![limit as i64, offset as i64], |r| {
+            Ok(Correction {
+                word: r.get(0)?,
+                correct_pos: r.get(1)?,
+                correct_ne: r.get(2)?,
+                note: r.get(3)?,
+                created_at: r.get(4)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn export_corrections_pos(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT word, correct_pos FROM corrections
+             WHERE correct_pos IS NOT NULL AND correct_pos != ''
+             ORDER BY word",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn export_corrections_ne(&self) -> Result<Vec<(String, String)>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT word, correct_ne FROM corrections
+             WHERE correct_ne IS NOT NULL AND correct_ne != ''
+             ORDER BY word",
+        )?;
+        let rows = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
     pub fn corpus_stats(&self) -> Result<CorpusStats> {
         let doc_count: i64 = self
             .conn
@@ -125,4 +201,13 @@ pub struct CorpusStats {
     pub doc_count: i64,
     pub token_count: i64,
     pub type_count: i64,
+}
+
+#[derive(serde::Serialize)]
+pub struct Correction {
+    pub word: String,
+    pub correct_pos: Option<String>,
+    pub correct_ne: Option<String>,
+    pub note: Option<String>,
+    pub created_at: String,
 }

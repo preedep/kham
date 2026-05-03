@@ -3,8 +3,9 @@ use crate::{collocate, freq, kwic};
 use anyhow::Result;
 use axum::{
     extract::{Query, State},
-    response::{Html, Json},
-    routing::get,
+    http::header,
+    response::{Html, IntoResponse, Json, Response},
+    routing::{delete, get, post},
     Router,
 };
 use serde::Deserialize;
@@ -25,6 +26,10 @@ pub async fn serve(corpus_path: &str, port: u16) -> Result<()> {
         .route("/api/kwic", get(kwic_handler))
         .route("/api/freq", get(freq_handler))
         .route("/api/collocate", get(collocate_handler))
+        .route("/api/corrections", get(corrections_list_handler))
+        .route("/api/correct", post(correct_save_handler))
+        .route("/api/correct", delete(correct_delete_handler))
+        .route("/api/corrections/export", get(corrections_export_handler))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
@@ -118,6 +123,140 @@ async fn collocate_handler(
         Ok(entries) => Json(serde_json::json!({ "results": entries })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
+}
+
+#[derive(Deserialize)]
+struct CorrectBody {
+    word: String,
+    correct_pos: Option<String>,
+    correct_ne: Option<String>,
+    note: Option<String>,
+}
+
+async fn correct_save_handler(
+    State(s): State<Arc<AppState>>,
+    Json(body): Json<CorrectBody>,
+) -> Json<serde_json::Value> {
+    let db = s.db.lock().unwrap();
+    match db.save_correction(
+        &body.word,
+        body.correct_pos.as_deref(),
+        body.correct_ne.as_deref(),
+        body.note.as_deref(),
+    ) {
+        Ok(()) => Json(serde_json::json!({ "ok": true })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+#[derive(Deserialize)]
+struct WordParam {
+    word: String,
+}
+
+async fn correct_delete_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<WordParam>,
+) -> Json<serde_json::Value> {
+    let db = s.db.lock().unwrap();
+    match db.delete_correction(&p.word) {
+        Ok(()) => Json(serde_json::json!({ "ok": true })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+#[derive(Deserialize)]
+struct CorrectionsListParams {
+    #[serde(default = "default_corrections_limit")]
+    limit: usize,
+    #[serde(default)]
+    offset: usize,
+}
+
+async fn corrections_list_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<CorrectionsListParams>,
+) -> Json<serde_json::Value> {
+    let db = s.db.lock().unwrap();
+    match db.list_corrections(p.limit, p.offset) {
+        Ok(rows) => Json(serde_json::json!({ "results": rows })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+#[derive(Deserialize)]
+struct ExportParams {
+    #[serde(default = "default_export_format")]
+    format: String,
+}
+
+async fn corrections_export_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<ExportParams>,
+) -> Response {
+    let db = s.db.lock().unwrap();
+    match p.format.as_str() {
+        "ne_tsv" => match db.export_corrections_ne() {
+            Ok(rows) => {
+                let body = rows
+                    .into_iter()
+                    .map(|(w, ne)| format!("{w}\t{ne}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (
+                    [
+                        (
+                            header::CONTENT_TYPE,
+                            "text/tab-separated-values; charset=utf-8",
+                        ),
+                        (
+                            header::CONTENT_DISPOSITION,
+                            "attachment; filename=\"ne_corrections.tsv\"",
+                        ),
+                    ],
+                    body,
+                )
+                    .into_response()
+            }
+            Err(e) => {
+                (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            }
+        },
+        _ => match db.export_corrections_pos() {
+            Ok(rows) => {
+                let body = rows
+                    .into_iter()
+                    .map(|(w, pos)| format!("{w}\t{pos}"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                (
+                    [
+                        (
+                            header::CONTENT_TYPE,
+                            "text/tab-separated-values; charset=utf-8",
+                        ),
+                        (
+                            header::CONTENT_DISPOSITION,
+                            "attachment; filename=\"pos_corrections.tsv\"",
+                        ),
+                    ],
+                    body,
+                )
+                    .into_response()
+            }
+            Err(e) => {
+                (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
+            }
+        },
+    }
+}
+
+fn default_corrections_limit() -> usize {
+    200
+}
+
+fn default_export_format() -> String {
+    "pos_tsv".to_string()
 }
 
 fn default_context() -> usize {

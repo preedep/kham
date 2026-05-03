@@ -141,6 +141,11 @@
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white" data-tab="kwic" onclick="switchTab('kwic')">KWIC</button>
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="freq" onclick="switchTab('freq')">ความถี่</button>
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="colloc" onclick="switchTab('colloc')">Collocation</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 flex items-center gap-1.5" data-tab="correct" onclick="switchTab('correct')">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+      Corrections
+      <span id="correctBadge" class="hidden min-w-[18px] h-[18px] px-1 rounded-full bg-amber-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">0</span>
+    </button>
   </div>
 
   <!-- Loading -->
@@ -224,7 +229,117 @@
     </div>
   </div>
 
+  <!-- ── Corrections Panel ───────────────────────────────────────────────────── -->
+  <div class="tab-panel" id="panel-correct">
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">การแก้ไข POS / NE Tags</h2>
+          <p class="text-xs text-slate-400 mt-0.5">คลิก <kbd class="px-1 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-xs">✎</kbd> ที่คำในแท็บ KWIC หรือ ความถี่ เพื่อบันทึกการแก้ไข</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="exportCorrections('pos_tsv')"
+            class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-medium text-slate-600 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            pos_th.tsv patch
+          </button>
+          <button onclick="exportCorrections('ne_tsv')"
+            class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-medium text-slate-600 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            ne_th.tsv patch
+          </button>
+          <button onclick="loadCorrections()"
+            class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-medium transition-colors">โหลด</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100/80 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <th class="px-5 py-3 text-left font-semibold">คำ</th>
+              <th class="px-5 py-3 text-left font-semibold">POS ที่ถูกต้อง</th>
+              <th class="px-5 py-3 text-left font-semibold">NE ที่ถูกต้อง</th>
+              <th class="px-5 py-3 text-left font-semibold">หมายเหตุ</th>
+              <th class="px-5 py-3 text-left font-semibold">บันทึกเมื่อ</th>
+              <th class="px-5 py-3 text-center font-semibold">ลบ</th>
+            </tr>
+          </thead>
+          <tbody id="correctTbody" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="6" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">คลิก "โหลด" เพื่อดูรายการแก้ไข</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="correctPagination" class="flex items-center justify-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700"></div>
+    </div>
+  </div>
+
 </main>
+
+<!-- ── Tag Editor Modal ────────────────────────────────────────────────────── -->
+<div id="tagModal" style="display:none" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeTagModal()">
+  <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-2xl w-full max-w-sm p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h3 class="font-semibold text-slate-800 dark:text-slate-100">แก้ไข Tag</h3>
+      <button onclick="closeTagModal()" class="p-1 rounded text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div class="mb-4">
+      <p class="text-xs text-slate-400 mb-1 uppercase tracking-wide font-semibold">คำ</p>
+      <p id="modalWord" class="text-lg font-bold text-blue-600 dark:text-blue-400 font-mono"></p>
+      <p id="modalCurrentTags" class="text-xs text-slate-400 mt-0.5"></p>
+    </div>
+    <div class="space-y-3 mb-5">
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">POS ที่ถูกต้อง</label>
+        <div class="flex flex-wrap gap-1.5" id="posTagPills">
+          <button class="tag-pill tag-pill-pos active" data-val="" onclick="selectTagPill(this,'pos')">— ไม่ระบุ</button>
+          <button class="tag-pill tag-pill-pos" data-val="NOUN" onclick="selectTagPill(this,'pos')">NOUN</button>
+          <button class="tag-pill tag-pill-pos" data-val="VERB" onclick="selectTagPill(this,'pos')">VERB</button>
+          <button class="tag-pill tag-pill-pos" data-val="ADJ" onclick="selectTagPill(this,'pos')">ADJ</button>
+          <button class="tag-pill tag-pill-pos" data-val="ADV" onclick="selectTagPill(this,'pos')">ADV</button>
+          <button class="tag-pill tag-pill-pos" data-val="PROPN" onclick="selectTagPill(this,'pos')">PROPN</button>
+          <button class="tag-pill tag-pill-pos" data-val="PRON" onclick="selectTagPill(this,'pos')">PRON</button>
+          <button class="tag-pill tag-pill-pos" data-val="NUM" onclick="selectTagPill(this,'pos')">NUM</button>
+          <button class="tag-pill tag-pill-pos" data-val="DET" onclick="selectTagPill(this,'pos')">DET</button>
+          <button class="tag-pill tag-pill-pos" data-val="ADP" onclick="selectTagPill(this,'pos')">ADP</button>
+          <button class="tag-pill tag-pill-pos" data-val="PART" onclick="selectTagPill(this,'pos')">PART</button>
+          <button class="tag-pill tag-pill-pos" data-val="CCONJ" onclick="selectTagPill(this,'pos')">CCONJ</button>
+          <button class="tag-pill tag-pill-pos" data-val="PUNCT" onclick="selectTagPill(this,'pos')">PUNCT</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">NE ที่ถูกต้อง</label>
+        <div class="flex flex-wrap gap-1.5" id="neTagPills">
+          <button class="tag-pill tag-pill-ne active" data-val="" onclick="selectTagPill(this,'ne')">— ไม่ระบุ</button>
+          <button class="tag-pill tag-pill-ne" data-val="PERSON" onclick="selectTagPill(this,'ne')">PERSON</button>
+          <button class="tag-pill tag-pill-ne" data-val="PLACE" onclick="selectTagPill(this,'ne')">PLACE</button>
+          <button class="tag-pill tag-pill-ne" data-val="ORG" onclick="selectTagPill(this,'ne')">ORG</button>
+          <button class="tag-pill tag-pill-ne" data-val="DATE" onclick="selectTagPill(this,'ne')">DATE</button>
+          <button class="tag-pill tag-pill-ne" data-val="TIME" onclick="selectTagPill(this,'ne')">TIME</button>
+          <button class="tag-pill tag-pill-ne" data-val="MONEY" onclick="selectTagPill(this,'ne')">MONEY</button>
+          <button class="tag-pill tag-pill-ne" data-val="MISC" onclick="selectTagPill(this,'ne')">MISC</button>
+        </div>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-1.5">หมายเหตุ (ไม่บังคับ)</label>
+        <input id="modalNote" type="text" placeholder="เหตุผลที่แก้ไข…"
+          class="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="submitTagCorrection()"
+        class="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm transition-colors">
+        บันทึกการแก้ไข
+      </button>
+      <button onclick="closeTagModal()"
+        class="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:border-slate-400 text-sm transition-colors">
+        ยกเลิก
+      </button>
+    </div>
+    <p id="modalStatus" class="text-xs text-center mt-2 h-4"></p>
+  </div>
+</div>
 
 <!-- ── Footer ─────────────────────────────────────────────────────────────── -->
 <footer class="border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
@@ -249,6 +364,45 @@
 .pill:hover { border-color: #3b82f6; color: #3b82f6; }
 .pill.active { background: #eff6ff; border-color: #3b82f6; color: #2563eb; font-weight: 600; }
 .dark .pill.active { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93c5fd; }
+
+/* Tag editor modal pills */
+.tag-pill {
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.dark .tag-pill { border-color: #475569; color: #94a3b8; }
+.tag-pill:hover { border-color: #3b82f6; color: #3b82f6; }
+.tag-pill-pos.active { background: #eff6ff; border-color: #3b82f6; color: #2563eb; font-weight: 600; }
+.dark .tag-pill-pos.active { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93c5fd; }
+.tag-pill-ne.active { background: #fef3c7; border-color: #d97706; color: #92400e; font-weight: 600; }
+.dark .tag-pill-ne.active { background: rgba(217,119,6,0.15); border-color: #d97706; color: #fbbf24; }
+
+/* Edit button inline */
+.edit-tag-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.12s;
+  vertical-align: middle;
+  margin-left: 3px;
+  flex-shrink: 0;
+}
+.edit-tag-btn:hover { border-color: #3b82f6; color: #3b82f6; background: #eff6ff; }
+.dark .edit-tag-btn:hover { background: rgba(59,130,246,0.15); }
 </style>
 
 <script>
@@ -324,6 +478,7 @@ function switchTab(tab) {
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
   if (tab === 'colloc' && S.query) loadColloc();
+  if (tab === 'correct') loadCorrections(0);
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -379,7 +534,12 @@ function renderKwic(rows, lim, page) {
     return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
       <td class="px-4 py-2.5 text-right text-slate-500 dark:text-slate-400 kwic-left text-sm max-w-xs truncate" title="${esc(left)}">${esc(left)}</td>
       <td class="px-3 py-2.5 text-center whitespace-nowrap">
-        <span class="inline-block px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-semibold text-sm">${esc(r.node)}</span>
+        <span class="inline-flex items-center gap-0.5">
+          <span class="inline-block px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-semibold text-sm">${esc(r.node)}</span>
+          <button class="edit-tag-btn" title="แก้ไข Tag" onclick="openTagModal('${esc(r.node)}','','')">
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+        </span>
       </td>
       <td class="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-sm max-w-xs truncate" title="${esc(right)}">${esc(right)}</td>
       <td class="px-4 py-2.5 font-mono text-xs text-slate-400 dark:text-slate-500 max-w-[160px] truncate" title="${esc(r.filename||'')}">${esc(fname)}</td>
@@ -446,9 +606,23 @@ function renderFreqTable(rows, page) {
 
   const trs = rows.map((r,i) => {
     const barW = Math.max(2, Math.round(r.count/maxCount*120));
+    const posTag = r.pos_tag || '';
+    const neTag = r.ne_tag || '';
+    const posColor = {NOUN:'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',VERB:'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',ADJ:'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',ADV:'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',PROPN:'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',NUM:'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300'}[posTag]||'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400';
+    const neColor = {PERSON:'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',PLACE:'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',ORG:'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'}[neTag]||'';
+    const posEl = posTag ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${posColor}">${esc(posTag)}</span>` : '';
+    const neEl = neTag ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${neColor}">${esc(neTag)}</span>` : '';
     return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
       <td class="px-5 py-2.5 font-mono text-blue-600 dark:text-blue-400 font-semibold">${fmt(r.count)}</td>
-      <td class="px-5 py-2.5 font-semibold">${esc(r.word)}</td>
+      <td class="px-5 py-2.5">
+        <span class="inline-flex items-center gap-1.5 flex-wrap">
+          <span class="font-semibold">${esc(r.word)}</span>
+          ${posEl}${neEl}
+          <button class="edit-tag-btn" title="แก้ไข Tag" onclick="openTagModal('${esc(r.word)}','${esc(posTag)}','${esc(neTag)}')">
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+        </span>
+      </td>
       <td class="px-5 py-2.5 font-mono text-right text-slate-500 dark:text-slate-400">${fmt(r.docs)}</td>
       <td class="px-5 py-2.5">
         <div class="flex items-center gap-2">
@@ -667,6 +841,178 @@ function renderCollocCharts(top) {
 function errMsg(msg) {
   return `<div class="mx-5 my-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">⚠ ${esc(msg)}</div>`;
 }
+
+// ─── Tag Editor Modal ─────────────────────────────────────────────────────────
+const M = { word: '', selectedPos: '', selectedNe: '' };
+
+function openTagModal(word, currentPos, currentNe) {
+  M.word = word;
+  M.selectedPos = currentPos || '';
+  M.selectedNe  = currentNe  || '';
+
+  document.getElementById('modalWord').textContent = word;
+  document.getElementById('modalCurrentTags').textContent =
+    [currentPos && `POS: ${currentPos}`, currentNe && `NE: ${currentNe}`].filter(Boolean).join('  ·  ') || 'ยังไม่มี tag';
+  document.getElementById('modalNote').value = '';
+  document.getElementById('modalStatus').textContent = '';
+
+  document.querySelectorAll('.tag-pill-pos').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === M.selectedPos);
+  });
+  document.querySelectorAll('.tag-pill-ne').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === M.selectedNe);
+  });
+
+  document.getElementById('tagModal').style.display = 'flex';
+  document.getElementById('modalNote').focus();
+}
+
+function closeTagModal() {
+  document.getElementById('tagModal').style.display = 'none';
+}
+
+function selectTagPill(btn, type) {
+  if (type === 'pos') {
+    document.querySelectorAll('.tag-pill-pos').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    M.selectedPos = btn.dataset.val;
+  } else {
+    document.querySelectorAll('.tag-pill-ne').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    M.selectedNe = btn.dataset.val;
+  }
+}
+
+async function submitTagCorrection() {
+  const note = document.getElementById('modalNote').value.trim();
+  const statusEl = document.getElementById('modalStatus');
+  statusEl.textContent = 'กำลังบันทึก…';
+  statusEl.className = 'text-xs text-center mt-2 h-4 text-slate-400';
+
+  try {
+    const resp = await fetch('/api/correct', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        word: M.word,
+        correct_pos: M.selectedPos || null,
+        correct_ne:  M.selectedNe  || null,
+        note: note || null,
+      }),
+    });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    statusEl.textContent = 'บันทึกแล้ว ✓';
+    statusEl.className = 'text-xs text-center mt-2 h-4 text-green-600 dark:text-green-400';
+    updateCorrectBadge();
+    setTimeout(closeTagModal, 800);
+  } catch(e) {
+    statusEl.textContent = '⚠ ' + e.message;
+    statusEl.className = 'text-xs text-center mt-2 h-4 text-red-500';
+  }
+}
+
+// ─── Corrections Tab ──────────────────────────────────────────────────────────
+S.correctPage = 0;
+const CORRECT_LIMIT = 200;
+
+async function updateCorrectBadge() {
+  try {
+    const data = await api('/api/corrections', { limit: 1, offset: 0 });
+    const count = (data.results || []).length;
+    // Load full count
+    const full = await api('/api/corrections', { limit: 9999 });
+    const n = (full.results || []).length;
+    const badge = document.getElementById('correctBadge');
+    if (n > 0) {
+      badge.textContent = n > 99 ? '99+' : String(n);
+      badge.classList.remove('hidden');
+    } else {
+      badge.classList.add('hidden');
+    }
+  } catch(_) {}
+}
+
+async function loadCorrections(page = 0) {
+  S.correctPage = page;
+  try {
+    const data = await api('/api/corrections', { limit: CORRECT_LIMIT, offset: page * CORRECT_LIMIT });
+    renderCorrections(data.results || [], page);
+  } catch(e) {
+    document.getElementById('correctTbody').innerHTML =
+      `<tr><td colspan="6" class="px-5 py-4">${errMsg(e.message)}</td></tr>`;
+  }
+}
+
+function renderCorrections(rows, page) {
+  const posColor = {NOUN:'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',VERB:'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',ADJ:'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',ADV:'bg-orange-100 text-orange-700',PROPN:'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'};;
+  const neColor = {PERSON:'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',PLACE:'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',ORG:'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300'};
+
+  if (!rows.length) {
+    document.getElementById('correctTbody').innerHTML =
+      '<tr><td colspan="6" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">ยังไม่มีการแก้ไข — คลิก ✎ ที่คำในแท็บ KWIC หรือ ความถี่</td></tr>';
+    document.getElementById('correctPagination').innerHTML = '';
+    return;
+  }
+
+  const trs = rows.map(r => {
+    const posEl = r.correct_pos
+      ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${posColor[r.correct_pos]||'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}">${esc(r.correct_pos)}</span>`
+      : '<span class="text-slate-400 dark:text-slate-500 text-xs">—</span>';
+    const neEl = r.correct_ne
+      ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${neColor[r.correct_ne]||'bg-slate-100 text-slate-500'}">${esc(r.correct_ne)}</span>`
+      : '<span class="text-slate-400 dark:text-slate-500 text-xs">—</span>';
+    return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+      <td class="px-5 py-2.5">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="font-semibold">${esc(r.word)}</span>
+          <button class="edit-tag-btn" title="แก้ไขอีกครั้ง" onclick="openTagModal('${esc(r.word)}','${esc(r.correct_pos||'')}','${esc(r.correct_ne||'')}')">
+            <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+          </button>
+        </span>
+      </td>
+      <td class="px-5 py-2.5">${posEl}</td>
+      <td class="px-5 py-2.5">${neEl}</td>
+      <td class="px-5 py-2.5 text-xs text-slate-500 dark:text-slate-400">${esc(r.note||'')}</td>
+      <td class="px-5 py-2.5 font-mono text-xs text-slate-400 dark:text-slate-500">${esc((r.created_at||'').replace('T',' ').slice(0,16))}</td>
+      <td class="px-5 py-2.5 text-center">
+        <button onclick="deleteCorrection('${esc(r.word)}')" title="ลบ"
+          class="p-1 rounded text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('correctTbody').innerHTML = trs;
+
+  const hasPrev = page > 0;
+  const hasNext = rows.length >= CORRECT_LIMIT;
+  document.getElementById('correctPagination').innerHTML = `
+    <button onclick="loadCorrections(${page-1})" ${!hasPrev?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">← ก่อนหน้า</button>
+    <span class="text-xs font-mono text-slate-400">หน้า ${page+1}</span>
+    <button onclick="loadCorrections(${page+1})" ${!hasNext?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">ถัดไป →</button>`;
+}
+
+async function deleteCorrection(word) {
+  if (!confirm(`ลบการแก้ไขสำหรับ "${word}"?`)) return;
+  try {
+    const resp = await fetch('/api/correct?' + new URLSearchParams({ word }), { method: 'DELETE' });
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error);
+    loadCorrections(S.correctPage);
+    updateCorrectBadge();
+  } catch(e) {
+    alert('ลบไม่สำเร็จ: ' + e.message);
+  }
+}
+
+function exportCorrections(format) {
+  window.open('/api/corrections/export?format=' + format, '_blank');
+}
+
+// Load badge count on init
+updateCorrectBadge();
 </script>
 </body>
 </html>
