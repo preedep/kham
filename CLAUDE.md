@@ -144,3 +144,4 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 | [ADR-005](doc/adr-005-frequency-corpus-merge.md) | Frequency Corpus Merge — TTC Included, Phupha Excluded |
 | [ADR-006](doc/adr-006-wikipedia-ne-import.md) | Wikipedia Thai Titles — NE PLACE/ORG Import |
 | [ADR-007](doc/adr-007-public-dataset-imports.md) | Public Dataset Imports — thainer (CC0), UD_Thai-PUD (CC-BY-SA-3.0), Thai Wikipedia freq (CC-BY-SA-4.0) |
+| [ADR-008](doc/adr-008-multi-label-ne-corrections.md) | Multi-Label NE Tags — pipe-delimited in kham-tnc corrections only; kham-core stays single-label |

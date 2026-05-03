@@ -216,9 +216,16 @@ async fn corrections_export_handler(
     match p.format.as_str() {
         "ne_tsv" => match db.export_corrections_ne() {
             Ok(rows) => {
+                // Expand pipe-delimited multi-label corrections into one TSV row per tag.
+                // Per ADR-008: kham-core uses last-entry-wins, so primary label should be last.
                 let body = rows
                     .into_iter()
-                    .map(|(w, ne)| format!("{w}\t{ne}"))
+                    .flat_map(|(w, ne)| {
+                        ne.split('|')
+                            .filter(|t| !t.is_empty())
+                            .map(|t| format!("{w}\t{t}"))
+                            .collect::<Vec<_>>()
+                    })
                     .collect::<Vec<_>>()
                     .join("\n");
                 (

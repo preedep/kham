@@ -960,8 +960,10 @@ function openTagModal(word, currentPos, currentNe, context = '') {
   document.querySelectorAll('.tag-pill-pos').forEach(b => {
     b.classList.toggle('active', b.dataset.val === M.selectedPos);
   });
+  // NE is multi-select: activate all labels from pipe-delimited string
+  const neSet = new Set(M.selectedNe ? M.selectedNe.split('|') : ['']);
   document.querySelectorAll('.tag-pill-ne').forEach(b => {
-    b.classList.toggle('active', b.dataset.val === M.selectedNe);
+    b.classList.toggle('active', neSet.has(b.dataset.val));
   });
 
   document.getElementById('tagModal').style.display = 'flex';
@@ -1013,10 +1015,9 @@ async function suggestTag() {
 
 function applyAISuggestion() {
   if (!M.aiSuggestion?.ne) return;
-  document.querySelectorAll('.tag-pill-ne').forEach(b => {
-    b.classList.toggle('active', b.dataset.val === M.aiSuggestion.ne);
-  });
-  M.selectedNe = M.aiSuggestion.ne;
+  // Toggle AI-suggested tag on without clearing existing selections (ADR-008: multi-label)
+  const btn = document.querySelector(`.tag-pill-ne[data-val="${M.aiSuggestion.ne}"]`);
+  if (btn && !btn.classList.contains('active')) selectTagPill(btn, 'ne');
   document.getElementById('modalAIResult').style.display = 'none';
 }
 
@@ -1026,9 +1027,23 @@ function selectTagPill(btn, type) {
     btn.classList.add('active');
     M.selectedPos = btn.dataset.val;
   } else {
-    document.querySelectorAll('.tag-pill-ne').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    M.selectedNe = btn.dataset.val;
+    // NE is multi-select (ADR-008). "— ไม่ระบุ" clears all; any tag toggles independently.
+    if (btn.dataset.val === '') {
+      document.querySelectorAll('.tag-pill-ne').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      M.selectedNe = '';
+    } else {
+      document.querySelector('.tag-pill-ne[data-val=""]').classList.remove('active');
+      btn.classList.toggle('active');
+      const selected = [...document.querySelectorAll('.tag-pill-ne.active')]
+        .map(b => b.dataset.val).filter(v => v !== '');
+      if (selected.length === 0) {
+        document.querySelector('.tag-pill-ne[data-val=""]').classList.add('active');
+        M.selectedNe = '';
+      } else {
+        M.selectedNe = selected.join('|');
+      }
+    }
   }
 }
 
@@ -1109,7 +1124,9 @@ function renderCorrections(rows, page) {
       ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${posColor[r.correct_pos]||'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}">${esc(r.correct_pos)}</span>`
       : '<span class="text-slate-400 dark:text-slate-500 text-xs">—</span>';
     const neEl = r.correct_ne
-      ? `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${neColor[r.correct_ne]||'bg-slate-100 text-slate-500'}">${esc(r.correct_ne)}</span>`
+      ? r.correct_ne.split('|').filter(t=>t).map(t =>
+          `<span class="px-1.5 py-0.5 rounded text-[10px] font-semibold font-mono ${neColor[t]||'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400'}">${esc(t)}</span>`
+        ).join(' ')
       : '<span class="text-slate-400 dark:text-slate-500 text-xs">—</span>';
     return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
       <td class="px-5 py-2.5">
