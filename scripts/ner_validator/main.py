@@ -14,6 +14,7 @@ Endpoints:
 """
 
 import os
+import sys
 
 import uvicorn
 from fastapi import FastAPI, Query
@@ -117,60 +118,60 @@ def _predict(word: str, context: str) -> ValidateResponse:
     Run NER and POS tagging on `context` (or `word` alone if no context) and
     return the best matching NE + POS for the target `word`.
 
-    Overlap strategy: prefer exact token match; fall back to substring overlap.
+    Each stage is wrapped independently — a POS failure never drops the NE
+    result, and vice versa.  Overlap strategy: exact token match preferred;
+    fallback to first substring overlap.
     """
-    from pythainlp.tag import pos_tag
-    from pythainlp.tokenize import word_tokenize
-
     text = context.strip() or word
-
-    # ── NER ──────────────────────────────────────────────────────────────────
-    # _ner_tagger.tag() tokenises internally and returns [(token, BIO_label), ...]
-    tagged_ner: list[tuple[str, str]] = _ner_tagger.tag(text)
-
-    best_ne_raw: str | None = None
-    for tok, bio in tagged_ner:
-        if bio == "O":
-            continue
-        if tok == word:                        # exact match preferred
-            best_ne_raw = bio
-            break
-        if best_ne_raw is None and (word in tok or tok in word):
-            best_ne_raw = bio                  # remember first substring hit
 
     ne: str | None = None
     raw_ne_label: str | None = None
-    if best_ne_raw:
-        raw_ne_label = best_ne_raw.split("-", 1)[1] if "-" in best_ne_raw else best_ne_raw
-        ne = _NE_MAP.get(raw_ne_label.upper())
-
-    # ── POS ───────────────────────────────────────────────────────────────────
-    # Tokenise then POS-tag; prefer exact token match over substring overlap.
-    tokens: list[str] = word_tokenize(text, engine="newmm")
-    pos_tagged: list[tuple[str, str]] = pos_tag(
-        tokens, engine=POS_ENGINE, corpus=POS_CORPUS
-    )
-
     pos: str | None = None
     raw_pos_label: str | None = None
-    partial: tuple[str, str] | None = None
 
-    for tok, ptag in pos_tagged:
-        if tok == word:
+    # ── NER ──────────────────────────────────────────────────────────────────
+    try:
+        tagged_ner: list[tuple[str, str]] = _ner_tagger.tag(text)
+        best_ne_raw: str | None = None
+        for tok, bio in tagged_ner:
+            if bio == "O":
+                continue
+            if tok == word:
+                best_ne_raw = bio
+                break
+            if best_ne_raw is None and (word in tok or tok in word):
+                best_ne_raw = bio
+        if best_ne_raw:
+            raw_ne_label = best_ne_raw.split("-", 1)[1] if "-" in best_ne_raw else best_ne_raw
+            ne = _NE_MAP.get(raw_ne_label.upper())
+    except Exception as exc:
+        print(f"[NER] error for word={word!r}: {exc}", file=sys.stderr)
+
+    # ── POS ───────────────────────────────────────────────────────────────────
+    try:
+        from pythainlp.tag import pos_tag
+        from pythainlp.tokenize import word_tokenize
+
+        tokens: list[str] = word_tokenize(text, engine="newmm")
+        pos_tagged: list[tuple[str, str]] = pos_tag(tokens, engine=POS_ENGINE, corpus=POS_CORPUS)
+
+        partial: tuple[str, str] | None = None
+        for tok, ptag in pos_tagged:
+            if tok == word:
+                raw_pos_label = ptag
+                pos = _POS_MAP.get(ptag.upper())
+                partial = None
+                break
+            if partial is None and (word in tok or tok in word):
+                partial = (tok, ptag)
+        if raw_pos_label is None and partial:
+            _, ptag = partial
             raw_pos_label = ptag
             pos = _POS_MAP.get(ptag.upper())
-            partial = None   # exact match wins; stop looking
-            break
-        if partial is None and (word in tok or tok in word):
-            partial = (tok, ptag)
+    except Exception as exc:
+        print(f"[POS] error for word={word!r}: {exc}", file=sys.stderr)
 
-    if raw_pos_label is None and partial:
-        _, ptag = partial
-        raw_pos_label = ptag
-        pos = _POS_MAP.get(ptag.upper())
-
-    # Fallback: if an NE was found but no POS could be determined, named entities
-    # in Thai are almost always PROPN (proper nouns).
+    # Fallback: named entities are almost always PROPN in Thai
     if ne and pos is None:
         pos = "PROPN"
         raw_pos_label = "PROPN (inferred from NE)"
