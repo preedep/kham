@@ -8,6 +8,7 @@ members = [
     "kham-capi",
     "kham-pg",
     "kham-sqlite",
+    "kham-tnc",
 ]
 # kham-python requires `maturin develop`; kham-wasm requires `wasm-pack build`.
 # kham-pg requires pg_config in PATH (or PG_CONFIG env var) to build.

@@ -15,7 +15,7 @@ Batteries-included Thai NLP library in Rust. Segmentation, spell correction, key
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
 | `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
 | `kham-web/` | Astro website for kham.io — landing page, live WASM demo, docs, API reference. → [doc/web-roadmap.md](doc/web-roadmap.md) |
-| `kham-tnc/` | Professional Thai corpus analysis web tool — KWIC, collocation (MI/logDice/LL), frequency, POS/NE search, phonetic search, multi-corpus comparison. → [doc/roadmap.md § kham-tnc](doc/roadmap.md) *(planned)* |
+| `kham-tnc/` | Professional Thai corpus analysis web tool — KWIC, collocation (MI/logDice/LL), frequency, POS/NE search, phonetic search, multi-corpus comparison. → [kham-tnc/CLAUDE.md](kham-tnc/CLAUDE.md) |
 
 ## Commands
 

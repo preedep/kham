@@ -59,6 +59,11 @@ kham-pg/kham_pg-*.zip
 # Claude Code — personal memory (per-developer, not shared)
 .claude/projects/
 
+# kham-tnc — runtime corpus databases (user data, not committed)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+
 # macOS
 .DS_Store
 

@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="th" class="scroll-smooth">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>kham-tnc · Thai Corpus Analysis</title>
+<!-- Dark mode init before render to prevent FOUC -->
+<script>
+  (function(){
+    var t=localStorage.getItem('kham-theme');
+    var p=window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if(t==='dark'||(t===null&&p)) document.documentElement.classList.add('dark');
+  })();
+</script>
+<script>tailwind={config:{darkMode:'class'}}</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<style>
+  .kwic-left { direction: rtl; unicode-bidi: plaintext; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { animation: spin 0.75s linear infinite; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+  .sort-arrow { opacity: 0.4; font-size: 0.7rem; }
+  th.sorted .sort-arrow { opacity: 1; color: #3b82f6; }
+  .freq-bar { background: linear-gradient(90deg,#3b82f6,#60a5fa); border-radius: 2px; height: 6px; min-width: 2px; }
+  [x-cloak] { display: none; }
+</style>
+</head>
+<body class="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col min-h-screen transition-colors">
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header class="border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-sm sticky top-0 z-50 transition-colors">
+  <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <a href="/" class="font-bold text-xl tracking-tight bg-gradient-to-r from-blue-600 to-blue-400 bg-clip-text text-transparent">kham-tnc</a>
+      <span class="hidden sm:inline text-slate-400 dark:text-slate-600">|</span>
+      <span class="hidden sm:inline text-sm text-slate-500 dark:text-slate-400">Thai Corpus Analysis</span>
+    </div>
+    <div class="flex items-center gap-3">
+      <!-- Corpus stats chips -->
+      <div id="headerStats" class="hidden sm:flex items-center gap-2 text-xs font-mono">
+        <span id="chipDocs" class="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">—</span>
+        <span id="chipTokens" class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">—</span>
+        <span id="chipTypes" class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">—</span>
+      </div>
+      <!-- Dark mode toggle -->
+      <button onclick="toggleDark()" title="Toggle dark mode"
+        class="p-2 rounded-lg text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+        <svg id="iconSun" class="hidden w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707M17.657 17.657l-.707-.707M6.343 6.343l-.707-.707M12 7a5 5 0 100 10A5 5 0 0012 7z"/></svg>
+        <svg id="iconMoon" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ── Hero / Search ──────────────────────────────────────────────────────── -->
+<section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 text-white py-10 px-4">
+  <div class="max-w-3xl mx-auto text-center mb-8">
+    <h1 class="text-3xl sm:text-4xl font-bold tracking-tight mb-2">เครื่องมือวิเคราะห์คลังข้อมูลภาษาไทย</h1>
+    <p class="text-slate-400">KWIC · Collocation · Frequency · POS · NE — powered by <span class="text-blue-400 font-semibold">kham-core</span></p>
+  </div>
+  <div class="max-w-3xl mx-auto">
+    <!-- Search input -->
+    <div class="flex gap-2 mb-4">
+      <div class="relative flex-1">
+        <svg class="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input id="searchInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder="พิมพ์คำที่ต้องการค้นหา…"
+          class="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-800/80 border border-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-base transition">
+      </div>
+      <button onclick="doSearch()" id="btnSearch"
+        class="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold transition-colors shadow-lg whitespace-nowrap">
+        ค้นหา
+      </button>
+    </div>
+    <!-- Options row -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div>
+        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wide">บริบทซ้าย-ขวา</label>
+        <input id="ctxSize" type="number" min="1" max="30" value="10"
+          class="w-full px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wide">จำนวนตัวอย่าง</label>
+        <input id="limitInput" type="number" min="10" max="500" value="50"
+          class="w-full px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Min freq</label>
+        <input id="minFreq" type="number" min="1" max="100" value="2"
+          class="w-full px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+      <div>
+        <label class="block text-xs text-slate-400 mb-1 uppercase tracking-wide">Colloc span</label>
+        <input id="collocSpan" type="number" min="1" max="10" value="5"
+          class="w-full px-3 py-2 rounded-lg bg-slate-800/80 border border-slate-700 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono">
+      </div>
+    </div>
+    <!-- Help toggle -->
+    <button onclick="toggleHelp()" id="helpToggle"
+      class="mt-3 text-xs text-slate-400 hover:text-slate-300 flex items-center gap-1 transition-colors">
+      <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4m0-4h.01"/></svg>
+      ตัวอย่างการค้นหา
+      <span id="helpArrow" class="transition-transform">▼</span>
+    </button>
+    <div id="helpBody" style="display:none" class="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">กิน</code>
+        <p class="text-slate-400 text-xs">ค้นหาคำว่า "กิน" พร้อมบริบท</p>
+      </div>
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">ข้าว</code>
+        <p class="text-slate-400 text-xs">ดู KWIC, ความถี่ และ collocation</p>
+      </div>
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">ภาษาไทย</code>
+        <p class="text-slate-400 text-xs">ค้นหาวลีหรือคำยาว</p>
+      </div>
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">กรุงเทพ</code>
+        <p class="text-slate-400 text-xs">Named Entity — PLACE</p>
+      </div>
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">การ</code>
+        <p class="text-slate-400 text-xs">คำนำหน้า — ดู collocation</p>
+      </div>
+      <div class="bg-slate-800/60 rounded-lg p-3 text-sm border border-slate-700">
+        <code class="text-blue-400 font-mono text-xs block mb-1">ประเทศ</code>
+        <p class="text-slate-400 text-xs">ดูบริบทและการใช้งาน</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Main Content ───────────────────────────────────────────────────────── -->
+<main class="flex-1 max-w-7xl mx-auto w-full px-4 py-6">
+
+  <!-- Tab bar -->
+  <div class="flex gap-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl p-1 w-fit mb-6 border border-slate-200 dark:border-slate-700">
+    <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white" data-tab="kwic" onclick="switchTab('kwic')">KWIC</button>
+    <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="freq" onclick="switchTab('freq')">ความถี่</button>
+    <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="colloc" onclick="switchTab('colloc')">Collocation</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="loading" class="hidden flex-col items-center justify-center py-16 gap-3 text-slate-400">
+    <svg class="spinner w-8 h-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+    </svg>
+    <span class="text-sm">กำลังค้นหา…</span>
+  </div>
+
+  <!-- ── KWIC Panel ────────────────────────────────────────────────────────── -->
+  <div class="tab-panel active" id="panel-kwic">
+    <div id="kwicContent">
+      <div class="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
+        <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <p class="text-base font-medium mb-1">พิมพ์คำที่ต้องการค้นหา</p>
+        <p class="text-sm">ผลลัพธ์ KWIC concordance จะแสดงที่นี่</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Frequency Panel ───────────────────────────────────────────────────── -->
+  <div class="tab-panel" id="panel-freq">
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <!-- Controls -->
+      <div class="p-4 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">POS</span>
+          <div id="posFilters" class="flex flex-wrap gap-1">
+            <button class="pill active" data-pos="" onclick="setPosFilter(this,'')">ทั้งหมด</button>
+            <button class="pill" data-pos="NOUN" onclick="setPosFilter(this,'NOUN')">NOUN</button>
+            <button class="pill" data-pos="VERB" onclick="setPosFilter(this,'VERB')">VERB</button>
+            <button class="pill" data-pos="ADJ" onclick="setPosFilter(this,'ADJ')">ADJ</button>
+            <button class="pill" data-pos="ADV" onclick="setPosFilter(this,'ADV')">ADV</button>
+            <button class="pill" data-pos="PROPN" onclick="setPosFilter(this,'PROPN')">PROPN</button>
+            <button class="pill" data-pos="NUM" onclick="setPosFilter(this,'NUM')">NUM</button>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">NE</span>
+          <div id="neFilters" class="flex flex-wrap gap-1">
+            <button class="pill active" data-ne="" onclick="setNeFilter(this,'')">ทั้งหมด</button>
+            <button class="pill" data-ne="PERSON" onclick="setNeFilter(this,'PERSON')">PERSON</button>
+            <button class="pill" data-ne="PLACE" onclick="setNeFilter(this,'PLACE')">PLACE</button>
+            <button class="pill" data-ne="ORG" onclick="setNeFilter(this,'ORG')">ORG</button>
+          </div>
+        </div>
+        <button onclick="loadFreq(0)" class="ml-auto px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium transition-colors">โหลด</button>
+      </div>
+      <!-- Table header -->
+      <div class="px-5 py-2 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">รายการความถี่คำ</h2>
+        <span id="freqCount" class="text-xs font-mono text-blue-600 dark:text-blue-400">—</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100/80 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <th class="px-5 py-3 text-left font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400 sorted" onclick="sortFreq('count')" id="fth-count">ความถี่ <span class="sort-arrow">↓</span></th>
+              <th class="px-5 py-3 text-left font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="sortFreq('word')" id="fth-word">คำ <span class="sort-arrow">↕</span></th>
+              <th class="px-5 py-3 text-right font-semibold cursor-pointer hover:text-blue-600 dark:hover:text-blue-400" onclick="sortFreq('docs')" id="fth-docs">เอกสาร <span class="sort-arrow">↕</span></th>
+              <th class="px-5 py-3 text-left font-semibold">ต่อล้านคำ</th>
+            </tr>
+          </thead>
+          <tbody id="freqTbody" class="divide-y divide-slate-200 dark:divide-slate-700/50"></tbody>
+        </table>
+      </div>
+      <div id="freqPagination" class="flex items-center justify-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700"></div>
+    </div>
+  </div>
+
+  <!-- ── Collocation Panel ─────────────────────────────────────────────────── -->
+  <div class="tab-panel" id="panel-colloc">
+    <div id="collocContent">
+      <div class="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
+        <svg class="w-12 h-12 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+        <p class="text-base font-medium mb-1">ค้นหาคำเพื่อดู Collocation</p>
+        <p class="text-sm">MI · logDice · t-score · Log-likelihood จะแสดงที่นี่</p>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Footer ─────────────────────────────────────────────────────────────── -->
+<footer class="border-t border-slate-200 dark:border-slate-800 py-4 text-center text-xs text-slate-400 dark:text-slate-600">
+  kham-tnc · Thai Corpus Analysis · Powered by <a href="https://github.com/preedep/kham" class="text-blue-500 hover:underline">kham-core</a>
+</footer>
+
+<!-- ── Pill button styles via Tailwind (dynamic classes) ─────────────────── -->
+<style>
+.pill {
+  padding: 0.2rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-color: #e2e8f0;
+  color: #64748b;
+  background: transparent;
+}
+.dark .pill { border-color: #475569; color: #94a3b8; }
+.pill:hover { border-color: #3b82f6; color: #3b82f6; }
+.pill.active { background: #eff6ff; border-color: #3b82f6; color: #2563eb; font-weight: 600; }
+.dark .pill.active { background: rgba(59,130,246,0.15); border-color: #3b82f6; color: #93c5fd; }
+</style>
+
+<script>
+// ─── State ────────────────────────────────────────────────────────────────────
+const S = {
+  query: '',
+  kwicPage: 0,
+  freqPage: 0,
+  freqPos: '',
+  freqNe: '',
+  freqSort: 'count',
+  freqDir: 'desc',
+  freqRows: [],
+  collocSort: 'log_dice',
+  charts: {},
+};
+const LIMIT = 50;
+const FREQ_LIMIT = 100;
+
+// ─── Dark mode ────────────────────────────────────────────────────────────────
+function toggleDark() {
+  const isDark = document.documentElement.classList.toggle('dark');
+  localStorage.setItem('kham-theme', isDark ? 'dark' : 'light');
+  document.getElementById('iconSun').classList.toggle('hidden', !isDark);
+  document.getElementById('iconMoon').classList.toggle('hidden', isDark);
+}
+// Set initial icon state
+;(function(){
+  const isDark = document.documentElement.classList.contains('dark');
+  document.getElementById('iconSun').classList.toggle('hidden', !isDark);
+  document.getElementById('iconMoon').classList.toggle('hidden', isDark);
+})();
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+async function api(path, params = {}) {
+  const filtered = Object.fromEntries(Object.entries(params).filter(([,v])=>v!==''&&v!=null));
+  const qs = new URLSearchParams(filtered);
+  const r = await fetch(path + (qs.toString() ? '?' + qs : ''));
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+(async function init() {
+  try {
+    const s = await api('/api/stats');
+    document.getElementById('chipDocs').textContent = fmt(s.doc_count) + ' docs';
+    document.getElementById('chipTokens').textContent = fmt(s.token_count) + ' tokens';
+    document.getElementById('chipTypes').textContent = fmt(s.type_count) + ' types';
+    document.getElementById('headerStats').classList.remove('hidden');
+  } catch(_) {}
+  loadFreq(0);
+})();
+
+// ─── Utils ────────────────────────────────────────────────────────────────────
+function fmt(n) { return n==null||isNaN(n)?'—':Number(n).toLocaleString('en-US'); }
+function fmtF(n,d=2) { return n==null||isNaN(n)?'—':Number(n).toFixed(d); }
+function esc(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function setLoading(on) {
+  const el = document.getElementById('loading');
+  el.style.display = on ? 'flex' : 'none';
+  document.getElementById('results')?.style && (document.getElementById('results').style.opacity = on ? '0.4' : '1');
+}
+
+// ─── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const active = b.dataset.tab === tab;
+    b.className = `tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors ${active
+      ? 'bg-blue-600 text-white'
+      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'}`;
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
+  if (tab === 'colloc' && S.query) loadColloc();
+}
+
+// ─── Search ───────────────────────────────────────────────────────────────────
+function doSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) { document.getElementById('searchInput').focus(); return; }
+  S.query = q;
+  const activeTab = document.querySelector('.tab-btn.bg-blue-600')?.dataset?.tab || 'kwic';
+  if (activeTab === 'kwic') loadKwic(0);
+  else if (activeTab === 'colloc') loadColloc();
+  else { switchTab('kwic'); loadKwic(0); }
+}
+document.getElementById('searchInput').addEventListener('keydown', e => { if(e.key==='Enter') doSearch(); });
+
+// ─── Help toggle ──────────────────────────────────────────────────────────────
+function toggleHelp() {
+  const body = document.getElementById('helpBody');
+  const isHidden = body.style.display === 'none' || body.style.display === '';
+  body.style.display = isHidden ? 'grid' : 'none';
+  document.getElementById('helpArrow').style.transform = isHidden ? 'rotate(180deg)' : '';
+}
+
+// ─── KWIC ─────────────────────────────────────────────────────────────────────
+async function loadKwic(page) {
+  if (!S.query) return;
+  S.kwicPage = page;
+  const el = document.getElementById('kwicContent');
+  el.innerHTML = '<div class="flex items-center justify-center py-16 gap-3 text-slate-400"><svg class="spinner w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg><span class="text-sm">กำลังค้นหา…</span></div>';
+
+  try {
+    const ctx = parseInt(document.getElementById('ctxSize').value) || 10;
+    const lim = parseInt(document.getElementById('limitInput').value) || 50;
+    const data = await api('/api/kwic', { word: S.query, context: ctx, limit: lim, offset: page * lim });
+    renderKwic(data.results || [], lim, page);
+  } catch(e) {
+    el.innerHTML = errMsg(e.message);
+  }
+}
+
+function renderKwic(rows, lim, page) {
+  const el = document.getElementById('kwicContent');
+  if (!rows.length) {
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
+      <svg class="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <p class="font-medium mb-1">ไม่พบ "<span class="text-slate-600 dark:text-slate-300">${esc(S.query)}</span>" ในคลัง</p>
+      <p class="text-sm">ลองตรวจสอบการสะกดคำ หรือเพิ่มข้อมูลก่อน</p></div>`;
+    return;
+  }
+  const trs = rows.map((r, i) => {
+    const left = (r.left||[]).join(' ');
+    const right = (r.right||[]).join(' ');
+    const fname = (r.filename||'doc').split('/').pop();
+    return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+      <td class="px-4 py-2.5 text-right text-slate-500 dark:text-slate-400 kwic-left text-sm max-w-xs truncate" title="${esc(left)}">${esc(left)}</td>
+      <td class="px-3 py-2.5 text-center whitespace-nowrap">
+        <span class="inline-block px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-semibold text-sm">${esc(r.node)}</span>
+      </td>
+      <td class="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-sm max-w-xs truncate" title="${esc(right)}">${esc(right)}</td>
+      <td class="px-4 py-2.5 font-mono text-xs text-slate-400 dark:text-slate-500 max-w-[160px] truncate" title="${esc(r.filename||'')}">${esc(fname)}</td>
+    </tr>`;
+  }).join('');
+
+  const hasPrev = page > 0;
+  const hasNext = rows.length >= lim;
+
+  el.innerHTML = `
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex items-center justify-between">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          KWIC — <span class="text-blue-600 dark:text-blue-400">${esc(S.query)}</span>
+        </h2>
+        <span class="text-xs font-mono text-blue-600 dark:text-blue-400">${rows.length} รายการ</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100/80 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <th class="px-4 py-2.5 text-right font-semibold w-2/5">บริบทซ้าย</th>
+              <th class="px-3 py-2.5 text-center font-semibold">คำค้นหา</th>
+              <th class="px-4 py-2.5 text-left font-semibold w-2/5">บริบทขวา</th>
+              <th class="px-4 py-2.5 text-left font-semibold">เอกสาร</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">${trs}</tbody>
+        </table>
+      </div>
+      <div class="flex items-center justify-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700">
+        <button onclick="loadKwic(${page-1})" ${!hasPrev?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">← ก่อนหน้า</button>
+        <span class="text-xs font-mono text-slate-400">หน้า ${page+1}</span>
+        <button onclick="loadKwic(${page+1})" ${!hasNext?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">ถัดไป →</button>
+      </div>
+    </div>`;
+}
+
+// ─── Frequency ────────────────────────────────────────────────────────────────
+async function loadFreq(page) {
+  S.freqPage = page;
+  try {
+    const mf = parseInt(document.getElementById('minFreq').value) || 2;
+    const data = await api('/api/freq', {
+      pos: S.freqPos || undefined,
+      ne: S.freqNe || undefined,
+      min_freq: mf,
+      limit: FREQ_LIMIT,
+      offset: page * FREQ_LIMIT,
+    });
+    S.freqRows = data.results || [];
+    renderFreqTable(S.freqRows, page);
+  } catch(e) {
+    document.getElementById('freqTbody').innerHTML = `<tr><td colspan="4" class="px-5 py-3">${errMsg(e.message)}</td></tr>`;
+  }
+}
+
+function renderFreqTable(rows, page) {
+  document.getElementById('freqCount').textContent = `${fmt(rows.length)} รายการ`;
+  const maxCount = rows.length ? Math.max(...rows.map(r=>r.count)) : 1;
+  const off = (page??S.freqPage) * FREQ_LIMIT;
+
+  const posColors = {NOUN:'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300', VERB:'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300', ADJ:'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300', ADV:'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300', PROPN:'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300', NUM:'bg-orange-100 text-orange-700', PRON:'bg-violet-100 text-violet-700'};
+
+  const trs = rows.map((r,i) => {
+    const barW = Math.max(2, Math.round(r.count/maxCount*120));
+    return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+      <td class="px-5 py-2.5 font-mono text-blue-600 dark:text-blue-400 font-semibold">${fmt(r.count)}</td>
+      <td class="px-5 py-2.5 font-semibold">${esc(r.word)}</td>
+      <td class="px-5 py-2.5 font-mono text-right text-slate-500 dark:text-slate-400">${fmt(r.docs)}</td>
+      <td class="px-5 py-2.5">
+        <div class="flex items-center gap-2">
+          <div class="freq-bar" style="width:${barW}px"></div>
+          <span class="font-mono text-xs text-slate-500 dark:text-slate-400">${fmtF(r.per_million)}</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('freqTbody').innerHTML = trs ||
+    '<tr><td colspan="4" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">ไม่มีข้อมูล — เพิ่มข้อมูลโดยใช้คำสั่ง index ก่อน</td></tr>';
+
+  const hasPrev = S.freqPage > 0;
+  const hasNext = rows.length >= FREQ_LIMIT;
+  document.getElementById('freqPagination').innerHTML = `
+    <button onclick="loadFreq(${S.freqPage-1})" ${!hasPrev?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">← ก่อนหน้า</button>
+    <span class="text-xs font-mono text-slate-400">หน้า ${S.freqPage+1}</span>
+    <button onclick="loadFreq(${S.freqPage+1})" ${!hasNext?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">ถัดไป →</button>`;
+}
+
+function sortFreq(col) {
+  if (S.freqSort === col) S.freqDir = S.freqDir==='desc'?'asc':'desc';
+  else { S.freqSort = col; S.freqDir = 'desc'; }
+  ['count','word','docs'].forEach(c => {
+    const th = document.getElementById('fth-'+c);
+    if (!th) return;
+    th.classList.toggle('sorted', c===S.freqSort);
+    th.querySelector('.sort-arrow').textContent = c===S.freqSort ? (S.freqDir==='desc'?'↓':'↑') : '↕';
+  });
+  const sorted = [...S.freqRows].sort((a,b)=>{
+    const av=a[col], bv=b[col];
+    const cmp=typeof av==='string'?av.localeCompare(bv,'th'):av-bv;
+    return S.freqDir==='desc'?-cmp:cmp;
+  });
+  renderFreqTable(sorted, S.freqPage);
+}
+
+function setPosFilter(btn, pos) {
+  document.querySelectorAll('#posFilters .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  S.freqPos = pos; loadFreq(0);
+}
+
+function setNeFilter(btn, ne) {
+  document.querySelectorAll('#neFilters .pill').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  S.freqNe = ne; loadFreq(0);
+}
+
+// ─── Collocation ──────────────────────────────────────────────────────────────
+async function loadColloc() {
+  if (!S.query) return;
+  const el = document.getElementById('collocContent');
+  el.innerHTML = '<div class="flex items-center justify-center py-16 gap-3 text-slate-400"><svg class="spinner w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg><span class="text-sm">กำลังคำนวณ collocation…</span></div>';
+  try {
+    const span = parseInt(document.getElementById('collocSpan').value) || 5;
+    const mf = parseInt(document.getElementById('minFreq').value) || 2;
+    const data = await api('/api/collocate', { word: S.query, left: span, right: span, min_freq: mf });
+    renderColloc(data.results || []);
+  } catch(e) {
+    el.innerHTML = errMsg(e.message);
+  }
+}
+
+function renderColloc(rows) {
+  const el = document.getElementById('collocContent');
+  el.__rows = rows;
+
+  if (!rows.length) {
+    el.innerHTML = `<div class="flex flex-col items-center justify-center py-20 text-slate-400 dark:text-slate-500">
+      <svg class="w-10 h-10 mb-3 opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      <p class="font-medium mb-1">ไม่พบ Collocation สำหรับ "<span class="text-slate-600 dark:text-slate-300">${esc(S.query)}</span>"</p>
+      <p class="text-sm">ลองเพิ่มข้อมูลในคลัง หรือลด min freq</p></div>`;
+    return;
+  }
+
+  const sorted = [...rows].sort((a,b) => b[S.collocSort] - a[S.collocSort]);
+
+  const scoreBadge = (v, threshold=3) => {
+    if (v > threshold) return 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300';
+    if (v > 0) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300';
+    return 'bg-slate-100 text-slate-500 dark:bg-slate-700 dark:text-slate-400';
+  };
+
+  const trs = sorted.map(r => `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors cursor-pointer" onclick="document.getElementById('searchInput').value='${esc(r.word)}';doSearch()">
+    <td class="px-5 py-2.5 font-semibold text-blue-700 dark:text-blue-400 hover:underline">${esc(r.word)}</td>
+    <td class="px-5 py-2.5 font-mono text-blue-600 dark:text-blue-400 font-semibold">${fmt(r.freq)}</td>
+    <td class="px-5 py-2.5"><span class="px-2 py-0.5 rounded text-xs font-mono font-semibold ${scoreBadge(r.mi)}">${fmtF(r.mi)}</span></td>
+    <td class="px-5 py-2.5"><span class="px-2 py-0.5 rounded text-xs font-mono font-semibold ${scoreBadge(r.log_dice,5)}">${fmtF(r.log_dice)}</span></td>
+    <td class="px-5 py-2.5"><span class="px-2 py-0.5 rounded text-xs font-mono font-semibold ${scoreBadge(r.t_score,2)}">${fmtF(r.t_score)}</span></td>
+    <td class="px-5 py-2.5"><span class="px-2 py-0.5 rounded text-xs font-mono font-semibold ${scoreBadge(r.log_likelihood,10)}">${fmtF(r.log_likelihood,1)}</span></td>
+  </tr>`).join('');
+
+  const sortBtns = ['freq','mi','log_dice','t_score','log_likelihood'].map(f =>
+    `<button onclick="setCollocSort('${f}')" data-sort="${f}"
+      class="px-2.5 py-1 rounded text-xs font-mono border transition-colors ${S.collocSort===f
+        ? 'bg-blue-50 dark:bg-blue-950 border-blue-400 text-blue-600 dark:text-blue-400'
+        : 'border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:border-blue-400 hover:text-blue-600'}">${f==='log_likelihood'?'LL':f==='log_dice'?'logDice':f}</button>`
+  ).join('');
+
+  el.innerHTML = `
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center gap-3 justify-between">
+        <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">
+          Collocation — <span class="text-blue-600 dark:text-blue-400">${esc(S.query)}</span>
+          <span class="ml-2 text-xs font-mono text-blue-600 dark:text-blue-400">${rows.length} คำ</span>
+        </h2>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-slate-400">เรียงตาม:</span>
+          ${sortBtns}
+        </div>
+      </div>
+      <!-- Charts -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-5">
+        <div class="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">Top 15 Collocates (logDice)</p>
+          <div style="height:280px"><canvas id="cBarChart"></canvas></div>
+        </div>
+        <div class="bg-white dark:bg-slate-900/50 rounded-xl border border-slate-200 dark:border-slate-700 p-4">
+          <p class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide mb-3">MI vs Log-likelihood</p>
+          <div style="height:280px"><canvas id="cScatterChart"></canvas></div>
+        </div>
+      </div>
+      <!-- Table -->
+      <div class="overflow-x-auto border-t border-slate-200 dark:border-slate-700">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100/80 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <th class="px-5 py-2.5 text-left font-semibold">คำ</th>
+              <th class="px-5 py-2.5 text-left font-semibold">ความถี่</th>
+              <th class="px-5 py-2.5 text-left font-semibold">MI</th>
+              <th class="px-5 py-2.5 text-left font-semibold">logDice</th>
+              <th class="px-5 py-2.5 text-left font-semibold">t-score</th>
+              <th class="px-5 py-2.5 text-left font-semibold">LL</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">${trs}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  // Render charts after DOM is ready
+  setTimeout(() => renderCollocCharts(sorted.slice(0,20)), 50);
+}
+
+function setCollocSort(field) {
+  S.collocSort = field;
+  const rows = document.getElementById('collocContent').__rows;
+  if (rows) renderColloc(rows);
+}
+
+function renderCollocCharts(top) {
+  if (S.charts.bar) { S.charts.bar.destroy(); }
+  if (S.charts.scatter) { S.charts.scatter.destroy(); }
+
+  const isDark = document.documentElement.classList.contains('dark');
+  const gridColor = isDark ? 'rgba(100,116,139,0.2)' : 'rgba(148,163,184,0.3)';
+  const tickColor = isDark ? '#94a3b8' : '#64748b';
+  const labelColor = isDark ? '#e2e8f0' : '#1e293b';
+
+  const byLD = [...top].sort((a,b)=>b.log_dice-a.log_dice).slice(0,15);
+
+  const barCtx = document.getElementById('cBarChart');
+  if (barCtx) {
+    S.charts.bar = new Chart(barCtx, {
+      type: 'bar',
+      data: {
+        labels: byLD.map(r=>r.word),
+        datasets: [{
+          data: byLD.map(r=>r.log_dice),
+          backgroundColor: 'rgba(59,130,246,0.7)',
+          borderColor: '#3b82f6',
+          borderWidth: 1,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: gridColor }, ticks: { color: tickColor } },
+          y: { grid: { display: false }, ticks: { color: labelColor, font: { size: 12 } } },
+        }
+      }
+    });
+  }
+
+  const scatterCtx = document.getElementById('cScatterChart');
+  if (scatterCtx) {
+    S.charts.scatter = new Chart(scatterCtx, {
+      type: 'scatter',
+      data: {
+        datasets: [{
+          data: top.map(r=>({ x: r.mi, y: r.log_likelihood, label: r.word })),
+          backgroundColor: 'rgba(59,130,246,0.65)',
+          pointRadius: 6, pointHoverRadius: 8,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx=>`${ctx.raw.label}: MI=${ctx.raw.x.toFixed(2)}, LL=${ctx.raw.y.toFixed(1)}` } }
+        },
+        scales: {
+          x: { title: { display: true, text: 'MI', color: tickColor }, grid: { color: gridColor }, ticks: { color: tickColor } },
+          y: { title: { display: true, text: 'Log-likelihood', color: tickColor }, grid: { color: gridColor }, ticks: { color: tickColor } },
+        }
+      }
+    });
+  }
+}
+
+// ─── Error ────────────────────────────────────────────────────────────────────
+function errMsg(msg) {
+  return `<div class="mx-5 my-3 p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">⚠ ${esc(msg)}</div>`;
+}
+</script>
+</body>
+</html>
