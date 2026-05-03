@@ -1006,17 +1006,24 @@ async function suggestTag() {
       return;
     }
     M.aiSuggestion = data;
-    if (data.ne) {
-      const pct = data.confidence ? ` (${(data.confidence * 100).toFixed(0)}%)` : '';
-      textEl.textContent = `WangchanBERTa แนะนำ: NE = ${data.ne}${pct}`;
-      if (data.raw_label && data.raw_label !== data.ne) {
-        textEl.textContent += `  [raw: ${data.raw_label}]`;
-      }
+    const hasSuggestion = data.pos || data.ne;
+    if (hasSuggestion) {
+      const parts = [];
+      if (data.pos) parts.push(`POS = <strong>${esc(data.pos)}</strong>`);
+      if (data.ne)  parts.push(`NE = <strong>${esc(data.ne)}</strong>`);
+      const pct = data.confidence ? ` <span class="opacity-60">(${(data.confidence * 100).toFixed(0)}%)</span>` : '';
+      const rawHint = [
+        data.pos_raw_label && data.pos_raw_label !== data.pos ? `pos:${data.pos_raw_label}` : '',
+        data.raw_label     && data.raw_label !== data.ne      ? `ne:${data.raw_label}`      : '',
+      ].filter(Boolean).join(' ');
+      textEl.innerHTML = `WangchanBERTa แนะนำ: ${parts.join('  ·  ')}${pct}`
+        + (rawHint ? ` <span class="opacity-50 text-[10px]">[${esc(rawHint)}]</span>` : '');
+      document.getElementById('btnApplyAI').style.display = '';
       resultEl.style.display = 'flex';
     } else {
-      textEl.textContent = 'ไม่พบ Named Entity สำหรับคำนี้';
-      resultEl.style.display = 'flex';
+      textEl.textContent = 'ไม่พบ POS / NE สำหรับคำนี้';
       document.getElementById('btnApplyAI').style.display = 'none';
+      resultEl.style.display = 'flex';
     }
     label.textContent = 'Suggest AI';
   } catch(e) {
@@ -1029,10 +1036,17 @@ async function suggestTag() {
 }
 
 function applyAISuggestion() {
-  if (!M.aiSuggestion?.ne) return;
-  // Toggle AI-suggested tag on without clearing existing selections (ADR-008: multi-label)
-  const btn = document.querySelector(`.tag-pill-ne[data-val="${M.aiSuggestion.ne}"]`);
-  if (btn && !btn.classList.contains('active')) selectTagPill(btn, 'ne');
+  if (!M.aiSuggestion) return;
+  // Apply POS suggestion (single-select — replaces current POS choice)
+  if (M.aiSuggestion.pos) {
+    const posBtn = document.querySelector(`.tag-pill-pos[data-val="${M.aiSuggestion.pos}"]`);
+    if (posBtn) selectTagPill(posBtn, 'pos');
+  }
+  // Apply NE suggestion (multi-select toggle — appends without clearing, ADR-008)
+  if (M.aiSuggestion.ne) {
+    const neBtn = document.querySelector(`.tag-pill-ne[data-val="${M.aiSuggestion.ne}"]`);
+    if (neBtn && !neBtn.classList.contains('active')) selectTagPill(neBtn, 'ne');
+  }
   document.getElementById('modalAIResult').style.display = 'none';
 }
 

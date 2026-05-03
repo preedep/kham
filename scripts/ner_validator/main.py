@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-kham-tnc NER Validator sidecar.
+kham-tnc NER + POS Validator sidecar.
 
-Uses pythainlp's ThaiNER (WangchanBERTa-based) for Named Entity Recognition.
+Uses pythainlp's ThaiNER (WangchanBERTa-based) for Named Entity Recognition
+and pythainlp's perceptron tagger for Part-of-Speech tagging.
 pythainlp manages model downloads via its own corpus manager — no HuggingFace
 login required.
 
 Endpoints:
   GET  /health                   — liveness check
-  POST /validate                 — predict NE tag for a word in context
+  POST /validate                 — predict NE + POS for a word in context
   GET  /validate?word=X&context= — same, via GET (browser-friendly)
 """
 
@@ -18,14 +19,20 @@ import uvicorn
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
 
-# ── Config ──────────────────────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────────────────
 # NER engine: "thainer-v2" (default, WangchanBERTa-based, no pycrfsuite needed)
 # "thainer" uses CRF (requires pycrfsuite) — not available on Python 3.14
-# pythainlp downloads models automatically via its corpus manager (~450 MB)
 NER_ENGINE: str = os.getenv("NER_ENGINE", "thainer-v2")
 
-# ── Label mapping → kham-core NE tags ────────────────────────────────────────
-_LABEL_MAP: dict[str, str] = {
+# POS engine and corpus (perceptron is fast, no large model download)
+# corpus "orchid_ud" maps ORCHID tagset to Universal Dependencies tags,
+# which closely match kham-core's 13-category POS scheme (ADR-003).
+POS_ENGINE: str = os.getenv("POS_ENGINE", "perceptron")
+POS_CORPUS: str = os.getenv("POS_CORPUS", "orchid_ud")
+
+# ── Label maps ───────────────────────────────────────────────────────────────
+
+_NE_MAP: dict[str, str] = {
     "PERSON": "PERSON",
     "PER": "PERSON",
     "LOCATION": "PLACE",
@@ -41,23 +48,53 @@ _LABEL_MAP: dict[str, str] = {
     "MISC": "MISC",
 }
 
-app = FastAPI(title="kham-tnc NER Validator", version="1.1.0")
-_tagger = None  # loaded on startup
+# Maps UD / ORCHID_UD tags → kham-core 13-category scheme (ADR-003).
+# Tags not in this map (e.g. X, INTJ) are dropped (None → no POS suggestion).
+_POS_MAP: dict[str, str | None] = {
+    "NOUN":  "NOUN",
+    "VERB":  "VERB",
+    "ADJ":   "ADJ",
+    "ADV":   "ADV",
+    "PROPN": "PROPN",
+    "PRON":  "PRON",
+    "NUM":   "NUM",
+    "DET":   "DET",
+    "ADP":   "ADP",
+    "PART":  "PART",
+    "CCONJ": "CCONJ",
+    "SCONJ": "CCONJ",   # kham-core has no SCONJ; CCONJ is closest
+    "AUX":   "VERB",    # kham-core has no AUX
+    "PUNCT": "PUNCT",
+    "SYM":   "PUNCT",
+    "INTJ":  "PART",
+    "X":     None,      # unknown / foreign — no suggestion
+}
+
+app = FastAPI(title="kham-tnc NER + POS Validator", version="1.2.0")
+_ner_tagger = None   # loaded on startup
+_pos_ready = False   # True after warm-up
 
 
 @app.on_event("startup")
-async def _load_model() -> None:
-    global _tagger
+async def _load_models() -> None:
+    global _ner_tagger, _pos_ready
     print(f"Loading ThaiNER model via pythainlp (engine={NER_ENGINE}) …")
     from pythainlp.tag import NER as ThaiNER  # noqa: PLC0415
 
-    _tagger = ThaiNER(engine=NER_ENGINE)
-    # Warm-up: triggers model download if not cached
-    _tagger.tag("ทดสอบ")
-    print("Model ready.")
+    _ner_tagger = ThaiNER(engine=NER_ENGINE)
+    _ner_tagger.tag("ทดสอบ")   # triggers download if not cached
+    print("NER model ready.")
+
+    print(f"Warming up POS tagger (engine={POS_ENGINE}, corpus={POS_CORPUS}) …")
+    from pythainlp.tag import pos_tag          # noqa: PLC0415
+    from pythainlp.tokenize import word_tokenize  # noqa: PLC0415
+
+    pos_tag(word_tokenize("ทดสอบ"), engine=POS_ENGINE, corpus=POS_CORPUS)
+    _pos_ready = True
+    print("POS tagger ready.")
 
 
-# ── Schemas ──────────────────────────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class ValidateRequest(BaseModel):
     word: str
@@ -66,51 +103,98 @@ class ValidateRequest(BaseModel):
 
 class ValidateResponse(BaseModel):
     word: str
-    ne: str | None        # kham-core NE tag or None
-    confidence: float     # 1.0 when found; pythainlp NER doesn't expose scores
-    raw_label: str | None # original BIO label (e.g. "B-LOCATION")
+    ne: str | None = None           # kham-core NE tag, or None
+    pos: str | None = None          # kham-core POS tag, or None
+    confidence: float = 0.0         # 1.0 when at least one tag found
+    raw_label: str | None = None    # original BIO NE label (e.g. "B-LOCATION")
+    pos_raw_label: str | None = None  # raw POS label before mapping (e.g. "PROPN")
 
 
 # ── Prediction logic ──────────────────────────────────────────────────────────
 
 def _predict(word: str, context: str) -> ValidateResponse:
     """
-    Tag `context` (or `word` alone if no context) and find the NE label
-    for any token that overlaps with `word`.
-    """
-    text = context.strip() or word
-    # tagged: list of (token_word, bio_ne_label), e.g. [('กรุงเทพ', 'B-LOCATION'), ...]
-    tagged: list[tuple[str, str]] = _tagger.tag(text)
+    Run NER and POS tagging on `context` (or `word` alone if no context) and
+    return the best matching NE + POS for the target `word`.
 
-    best_raw: str | None = None
-    for tok, bio in tagged:
+    Overlap strategy: prefer exact token match; fall back to substring overlap.
+    """
+    from pythainlp.tag import pos_tag
+    from pythainlp.tokenize import word_tokenize
+
+    text = context.strip() or word
+
+    # ── NER ──────────────────────────────────────────────────────────────────
+    # _ner_tagger.tag() tokenises internally and returns [(token, BIO_label), ...]
+    tagged_ner: list[tuple[str, str]] = _ner_tagger.tag(text)
+
+    best_ne_raw: str | None = None
+    for tok, bio in tagged_ner:
         if bio == "O":
             continue
-        # Overlap check: word contains token or token contains word
-        if word in tok or tok in word:
-            best_raw = bio
+        if tok == word:                        # exact match preferred
+            best_ne_raw = bio
             break
+        if best_ne_raw is None and (word in tok or tok in word):
+            best_ne_raw = bio                  # remember first substring hit
 
-    if best_raw is None:
-        return ValidateResponse(word=word, ne=None, confidence=0.0, raw_label=None)
+    ne: str | None = None
+    raw_ne_label: str | None = None
+    if best_ne_raw:
+        raw_ne_label = best_ne_raw.split("-", 1)[1] if "-" in best_ne_raw else best_ne_raw
+        ne = _NE_MAP.get(raw_ne_label.upper())
 
-    # Strip BIO prefix: "B-LOCATION" → "LOCATION"
-    raw_label = best_raw.split("-", 1)[1] if "-" in best_raw else best_raw
-    ne = _LABEL_MAP.get(raw_label.upper())
+    # ── POS ───────────────────────────────────────────────────────────────────
+    # Tokenise then POS-tag; prefer exact token match over substring overlap.
+    tokens: list[str] = word_tokenize(text, engine="newmm")
+    pos_tagged: list[tuple[str, str]] = pos_tag(
+        tokens, engine=POS_ENGINE, corpus=POS_CORPUS
+    )
 
+    pos: str | None = None
+    raw_pos_label: str | None = None
+    partial: tuple[str, str] | None = None
+
+    for tok, ptag in pos_tagged:
+        if tok == word:
+            raw_pos_label = ptag
+            pos = _POS_MAP.get(ptag.upper())
+            partial = None   # exact match wins; stop looking
+            break
+        if partial is None and (word in tok or tok in word):
+            partial = (tok, ptag)
+
+    if raw_pos_label is None and partial:
+        _, ptag = partial
+        raw_pos_label = ptag
+        pos = _POS_MAP.get(ptag.upper())
+
+    # Fallback: if an NE was found but no POS could be determined, named entities
+    # in Thai are almost always PROPN (proper nouns).
+    if ne and pos is None:
+        pos = "PROPN"
+        raw_pos_label = "PROPN (inferred from NE)"
+
+    found = ne is not None or pos is not None
     return ValidateResponse(
         word=word,
         ne=ne,
-        confidence=1.0,
-        raw_label=best_raw,
+        pos=pos,
+        confidence=1.0 if found else 0.0,
+        raw_label=raw_ne_label,
+        pos_raw_label=raw_pos_label,
     )
 
 
-# ── Routes ───────────────────────────────────────────────────────────────────
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": _tagger is not None, "engine": NER_ENGINE}
+    return {
+        "ok": _ner_tagger is not None and _pos_ready,
+        "ner_engine": NER_ENGINE,
+        "pos_engine": f"{POS_ENGINE}/{POS_CORPUS}",
+    }
 
 
 @app.post("/validate", response_model=ValidateResponse)
@@ -131,7 +215,7 @@ def validate_get(
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="kham-tnc NER Validator")
+    parser = argparse.ArgumentParser(description="kham-tnc NER + POS Validator")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=9999)
     parser.add_argument("--reload", action="store_true")

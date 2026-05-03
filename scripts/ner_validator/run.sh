@@ -34,6 +34,8 @@ HOST="${HOST:-127.0.0.1}"
 # thainer-v2 = WangchanBERTa-based (no pycrfsuite required, works on Python 3.14+)
 # thainer    = CRF-based (requires pycrfsuite — not available for Python 3.14)
 export NER_ENGINE="${NER_ENGINE:-thainer-v2}"
+export POS_ENGINE="${POS_ENGINE:-perceptron}"
+export POS_CORPUS="${POS_CORPUS:-orchid_ud}"
 
 # ── Python version check ─────────────────────────────────────────────────────
 PYTHON=$(command -v python3 || command -v python || true)
@@ -80,7 +82,7 @@ if [ ! -f "$VENV_DIR/.installed" ]; then
   echo "Dependencies installed."
 fi
 
-# ── Pre-download pythainlp NER model ─────────────────────────────────────────
+# ── Pre-download / warm-up models ────────────────────────────────────────────
 echo "Checking pythainlp NER model (engine=$NER_ENGINE) …"
 "$PYTHON" - <<PYEOF
 import os, sys
@@ -88,18 +90,34 @@ engine = os.environ["NER_ENGINE"]
 try:
     from pythainlp.tag import NER as ThaiNER
     tagger = ThaiNER(engine=engine)
-    tagger.tag("ทดสอบ")  # triggers download if needed
-    print(f"  Model ready: {engine}")
+    tagger.tag("ทดสอบ")
+    print(f"  NER model ready: {engine}")
 except Exception as e:
     print(f"  WARNING: {e}", file=sys.stderr)
-    print("  Model will be downloaded on first request.")
+    print("  NER model will be downloaded on first request.")
+PYEOF
+
+echo "Checking pythainlp POS tagger (engine=$POS_ENGINE corpus=$POS_CORPUS) …"
+"$PYTHON" - <<PYEOF
+import os, sys
+engine = os.environ.get("POS_ENGINE", "perceptron")
+corpus = os.environ.get("POS_CORPUS", "orchid_ud")
+try:
+    from pythainlp.tokenize import word_tokenize
+    from pythainlp.tag import pos_tag
+    pos_tag(word_tokenize("ทดสอบ"), engine=engine, corpus=corpus)
+    print(f"  POS tagger ready: {engine}/{corpus}")
+except Exception as e:
+    print(f"  WARNING: {e}", file=sys.stderr)
+    print("  POS tagger will be initialised on first request.")
 PYEOF
 
 # ── Start the server ─────────────────────────────────────────────────────────
 echo ""
 echo "──────────────────────────────────────────────────────────────"
 echo " kham-tnc NER Validator"
-echo " Engine : $NER_ENGINE  (thainer-v2 = WangchanBERTa; thainer = CRF/Python≤3.13 only)"
+echo " NER    : $NER_ENGINE  (thainer-v2 = WangchanBERTa; thainer = CRF/Python≤3.13 only)
+ POS    : $POS_ENGINE/$POS_CORPUS"
 echo " URL    : http://$HOST:$PORT"
 echo ""
 echo " Health check : curl http://$HOST:$PORT/health"
