@@ -937,7 +937,7 @@ let _validatorAvailable = false;
   } catch(_) { _validatorAvailable = false; }
 })();
 
-function openTagModal(word, currentPos, currentNe, context = '') {
+async function openTagModal(word, currentPos, currentNe, context = '') {
   M.word = word;
   M.selectedPos = currentPos || '';
   M.selectedNe  = currentNe  || '';
@@ -951,23 +951,38 @@ function openTagModal(word, currentPos, currentNe, context = '') {
   document.getElementById('modalStatus').textContent = '';
   document.getElementById('modalAIResult').style.display = 'none';
 
-  // Show/hide AI suggest button based on validator availability
   const btnAI = document.getElementById('btnSuggestAI');
   btnAI.style.display = _validatorAvailable ? 'flex' : 'none';
   document.getElementById('btnSuggestLabel').textContent = 'Suggest AI';
   btnAI.disabled = false;
 
+  document.getElementById('tagModal').style.display = 'flex';
+  document.getElementById('modalNote').focus();
+
+  // Async-load existing correction so pills reflect what's already saved.
+  // This ensures the UI shows the full merged NE state before the user edits.
+  try {
+    const data = await api('/api/corrections', { word, limit: 1, offset: 0 });
+    const saved = (data.results || []).find(r => r.word === word);
+    if (saved) {
+      if (saved.correct_pos) M.selectedPos = saved.correct_pos;
+      if (saved.correct_ne)  M.selectedNe  = saved.correct_ne;
+      if (saved.note)        document.getElementById('modalNote').value = saved.note;
+      document.getElementById('modalCurrentTags').textContent =
+        [saved.correct_pos && `POS: ${saved.correct_pos}`,
+         saved.correct_ne  && `NE: ${saved.correct_ne}`].filter(Boolean).join('  ·  ')
+        || 'ยังไม่มี tag (correction)';
+    }
+  } catch(_) {}
+
+  // Sync pills to final M state (after possible correction override)
   document.querySelectorAll('.tag-pill-pos').forEach(b => {
     b.classList.toggle('active', b.dataset.val === M.selectedPos);
   });
-  // NE is multi-select: activate all labels from pipe-delimited string
   const neSet = new Set(M.selectedNe ? M.selectedNe.split('|') : ['']);
   document.querySelectorAll('.tag-pill-ne').forEach(b => {
     b.classList.toggle('active', neSet.has(b.dataset.val));
   });
-
-  document.getElementById('tagModal').style.display = 'flex';
-  document.getElementById('modalNote').focus();
 }
 
 function closeTagModal() {

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, OptionalExtension};
 
 pub struct CorpusDb {
     pub conn: Connection,
@@ -105,6 +105,19 @@ impl CorpusDb {
         correct_ne: Option<&str>,
         note: Option<&str>,
     ) -> Result<()> {
+        // Merge incoming NE tags with any already stored for this word (ADR-008).
+        let existing_ne: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT correct_ne FROM corrections WHERE word = ?1",
+                params![word],
+                |r| r.get(0),
+            )
+            .optional()?
+            .flatten();
+
+        let merged_ne = merge_ne_tags(existing_ne.as_deref(), correct_ne);
+
         self.conn.execute(
             "INSERT INTO corrections (word, correct_pos, correct_ne, note)
              VALUES (?1, ?2, ?3, ?4)
@@ -113,7 +126,7 @@ impl CorpusDb {
                correct_ne  = excluded.correct_ne,
                note        = excluded.note,
                created_at  = datetime('now')",
-            params![word, correct_pos, correct_ne, note],
+            params![word, correct_pos, merged_ne, note],
         )?;
         Ok(())
     }
@@ -124,14 +137,20 @@ impl CorpusDb {
         Ok(())
     }
 
-    pub fn list_corrections(&self, limit: usize, offset: usize) -> Result<Vec<Correction>> {
+    pub fn list_corrections(
+        &self,
+        word_filter: Option<&str>,
+        limit: usize,
+        offset: usize,
+    ) -> Result<Vec<Correction>> {
         let mut stmt = self.conn.prepare(
             "SELECT word, correct_pos, correct_ne, note, created_at
              FROM corrections
+             WHERE (?1 IS NULL OR word = ?1)
              ORDER BY created_at DESC
-             LIMIT ?1 OFFSET ?2",
+             LIMIT ?2 OFFSET ?3",
         )?;
-        let rows = stmt.query_map(params![limit as i64, offset as i64], |r| {
+        let rows = stmt.query_map(params![word_filter, limit as i64, offset as i64], |r| {
             Ok(Correction {
                 word: r.get(0)?,
                 correct_pos: r.get(1)?,
@@ -219,4 +238,30 @@ pub struct Correction {
     pub correct_ne: Option<String>,
     pub note: Option<String>,
     pub created_at: String,
+}
+
+/// Merge pipe-delimited NE tag strings, deduplicating without changing existing order.
+/// New tags not already present in `existing` are appended in the order they appear in `new`.
+/// Returns `None` if the result would be empty.
+fn merge_ne_tags(existing: Option<&str>, new: Option<&str>) -> Option<String> {
+    let mut seen = std::collections::HashSet::new();
+    let mut tags: Vec<&str> = Vec::new();
+
+    for tag in existing
+        .unwrap_or("")
+        .split('|')
+        .chain(new.unwrap_or("").split('|'))
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+    {
+        if seen.insert(tag) {
+            tags.push(tag);
+        }
+    }
+
+    if tags.is_empty() {
+        None
+    } else {
+        Some(tags.join("|"))
+    }
 }

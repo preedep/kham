@@ -185,6 +185,7 @@ async fn correct_delete_handler(
 
 #[derive(Deserialize)]
 struct CorrectionsListParams {
+    word: Option<String>,
     #[serde(default = "default_corrections_limit")]
     limit: usize,
     #[serde(default)]
@@ -196,7 +197,7 @@ async fn corrections_list_handler(
     Query(p): Query<CorrectionsListParams>,
 ) -> Json<serde_json::Value> {
     let db = s.db.lock().unwrap();
-    match db.list_corrections(p.limit, p.offset) {
+    match db.list_corrections(p.word.as_deref(), p.limit, p.offset) {
         Ok(rows) => Json(serde_json::json!({ "results": rows })),
         Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
     }
