@@ -43,6 +43,7 @@ Thai word segmentation engine written in Rust. Fast, `no_std`-compatible core li
 | `kham-capi` | [crates.io](https://crates.io/crates/kham-capi) | [kham-capi/README.md](kham-capi/README.md) | C FFI with cbindgen-generated header |
 | `kham-pg` | [PGXN](https://pgxn.org/dist/kham_pg/) | [kham-pg/README.md](kham-pg/README.md) | PostgreSQL text search parser for Thai |
 | `kham-sqlite` | — | [kham-sqlite/README.md](kham-sqlite/README.md) | SQLite FTS5 tokenizer for Thai |
+| `kham-tnc` | — | [kham-tnc/CLAUDE.md](kham-tnc/CLAUDE.md) | Self-hosted Thai corpus analysis web tool (KWIC, collocation, frequency, POS/NE search) |
 
 ---
 

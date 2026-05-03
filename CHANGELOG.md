@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+**kham-tnc** (new crate)
+- New `kham-tnc` crate: self-hosted Thai corpus analysis web tool built on `kham-core` + axum + SQLite
+- `kham-tnc index <file>` — segment text via `FtsTokenizer`, write `docs` + `tokens` tables to SQLite
+- `kham-tnc serve` — axum web server with REST API and embedded single-file web UI
+- `GET /api/stats` — corpus overview (doc count, token count, type count)
+- `GET /api/kwic` — KWIC concordance search with configurable context window and pagination
+- `GET /api/freq` — word frequency list with POS/NE filter, per-million normalization, pagination
+- `GET /api/collocate` — collocate statistics: MI, logDice, t-score, log-likelihood
+- Web UI (`static/index.html`): kham-web slate/blue theme, dark/light mode, Chart.js bar + scatter charts for collocation, sortable tables, POS/NE filter pills
+
+---
+
 ## [0.8.2] - 2026-05-03
 
 ### Added

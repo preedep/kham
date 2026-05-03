@@ -200,21 +200,16 @@ A self-hosted web application for professional corpus linguistics research, buil
 ```
 kham-tnc/
 ├── src/
-│   ├── main.rs          # axum web server entry point
-│   ├── indexer.rs       # corpus ingestion: segment → POS/NE tag → write to SQLite
-│   ├── corpus.rs        # corpus registry (multiple named corpora)
-│   ├── kwic.rs          # KWIC search and concordance
-│   ├── freq.rs          # frequency list builder
-│   ├── collocate.rs     # collocation statistics (MI, logDice, t-score, LL)
-│   ├── ngram.rs         # n-gram frequency and pattern search
-│   ├── keyword.rs       # keyword comparison across two corpora
-│   ├── query.rs         # query parser: word, POS filter, NE filter, wildcard, proximity
-│   └── api.rs           # REST JSON API (mirrors web UI)
-├── static/              # HTMX + Tailwind frontend (no npm build step)
-│   ├── index.html
-│   ├── app.js
-│   └── style.css
-├── Cargo.toml           # depends on kham-core, axum, rusqlite, serde
+│   ├── main.rs          # CLI entry — Serve / Index subcommands (axum web server)
+│   ├── corpus.rs        # CorpusDb: SQLite schema, insert helpers, stats
+│   ├── indexer.rs       # index_file(): segment via FtsTokenizer → write tokens table
+│   ├── kwic.rs          # KWIC concordance search with configurable context window
+│   ├── freq.rs          # word frequency list with POS/NE filter, per-million normalization
+│   ├── collocate.rs     # collocation stats: MI, logDice, t-score, log-likelihood
+│   └── api.rs           # axum REST handlers + serve(); embeds static/index.html
+├── static/
+│   └── index.html       # single-file SPA: kham-web theme, Tailwind CDN, Chart.js
+├── Cargo.toml           # depends on kham-core, axum, tokio, rusqlite, serde
 └── CLAUDE.md
 ```
 
@@ -226,29 +221,34 @@ kham-tnc/
 ### Phase 1 — Core Analysis (MVP)
 
 **Corpus management**
-- [ ] Upload plain-text files (.txt, .csv) via web UI or CLI (`kham-tnc index corpus.txt --genre news`)
-- [ ] Corpus overview: document count, token count, type count, genre/domain breakdown
-- [ ] Multiple corpora — switch between them in the UI; one SQLite DB per corpus
+- [x] Index plain-text files via CLI (`kham-tnc index corpus.txt --genre news --domain news`)
+- [x] Corpus overview: document count, token count, type count (`GET /api/stats`)
+- [ ] Upload via web UI (drag-and-drop or file picker)
+- [ ] Multiple corpora selector in the UI; one SQLite DB per corpus
 
 **KWIC / Concordance**
-- [ ] Search by exact word — returns N concordance lines (default 50) with left/right context
-- [ ] Wildcard search: `ภาษา*` (prefix), `*ศาสตร์` (suffix), `*ภาษา*` (contains)
-- [ ] Proximity search: `word1 <1-5> word2` — two words within N positions of each other
-- [ ] Sort concordance by: left context, node word, right context, document, random
-- [ ] Genre/domain filter on all searches
-- [ ] Paginate results; export concordance as CSV
+- [x] Search by exact word — returns N concordance lines with configurable left/right context (`GET /api/kwic`)
+- [x] Paginate results
+- [ ] Wildcard search: `ภาษา*` (prefix), `*ศาสตร์` (suffix)
+- [ ] Sort concordance by: left context, right context, document
+- [ ] Genre/domain filter
+- [ ] Export concordance as CSV
 
 **Frequency analysis**
-- [ ] Word frequency list — total, per-genre, per-domain; normalized (per million words)
-- [ ] Filter by POS tag (`--pos NOUN`), NE type (`--ne PLACE`), min frequency threshold
-- [ ] Dispersion score — how evenly a word is spread across documents (Juilland's D)
-- [ ] Export frequency table as CSV/TSV
+- [x] Word frequency list normalized per million words (`GET /api/freq`)
+- [x] Filter by POS tag and NE type
+- [x] Sortable table (count / word / docs)
+- [x] Paginate results
+- [ ] Dispersion score (Juilland's D)
+- [ ] Export as CSV/TSV
 
 **Collocation analysis**
-- [ ] Given a node word, compute collocates in L1–L5 / R1–R5 span (configurable)
-- [ ] Statistics computed: **MI**, **logDice**, **t-score**, **log-likelihood (LL)**, **Dice**, raw freq
-- [ ] Filter by collocation direction (left-only, right-only, both), minimum co-occurrence count
-- [ ] Sort by any statistic; export as CSV
+- [x] Given a node word, compute collocates with configurable L/R span (`GET /api/collocate`)
+- [x] Statistics: **MI**, **logDice**, **t-score**, **log-likelihood (LL)**, raw freq
+- [x] Sort by any statistic
+- [x] Chart.js bar chart (logDice top 15) + MI vs LL scatter plot
+- [ ] Direction filter (left-only / right-only)
+- [ ] Export as CSV
 
 ### Phase 2 — Linguistic Depth
 
@@ -287,14 +287,15 @@ kham-tnc/
 - [ ] Hapax legomena (words appearing exactly once) list
 
 **REST API**
-- [ ] All analysis endpoints available as JSON API (`/api/kwic`, `/api/freq`, `/api/collocate`, etc.)
+- [x] Core analysis endpoints: `GET /api/stats`, `/api/kwic`, `/api/freq`, `/api/collocate`
 - [ ] API key auth for multi-user deployments
 - [ ] OpenAPI spec generated from route annotations
 
 **Deployment**
-- [ ] Single binary — `kham-tnc serve --corpus mydata.sqlite --port 8080`
+- [x] Single binary — `kham-tnc serve --corpus mydata.sqlite --port 8080`
+- [x] CLI indexer — `kham-tnc index file.txt --corpus my.sqlite --genre news`
 - [ ] Docker image: `nickmsft/kham-tnc`
-- [ ] CLI mode — all analysis runs headlessly: `kham-tnc freq --corpus my.sqlite --word ภาษา`
+- [ ] CLI headless analysis: `kham-tnc freq --corpus my.sqlite --word ภาษา`
 
 ### Comparison with TNC4
 
