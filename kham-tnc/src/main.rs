@@ -24,6 +24,9 @@ enum Command {
         /// Port to listen on
         #[arg(long, default_value_t = 8080)]
         port: u16,
+        /// URL of the NER validator sidecar (e.g. http://127.0.0.1:9999)
+        #[arg(long)]
+        validator_url: Option<String>,
     },
     /// Index a text file into a corpus
     Index {
@@ -53,8 +56,12 @@ async fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Serve { corpus, port } => {
-            api::serve(&corpus, port).await?;
+        Command::Serve {
+            corpus,
+            port,
+            validator_url,
+        } => {
+            api::serve(&corpus, port, validator_url).await?;
         }
         Command::Index {
             file,

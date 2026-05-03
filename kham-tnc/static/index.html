@@ -285,9 +285,27 @@
       </button>
     </div>
     <div class="mb-4">
-      <p class="text-xs text-slate-400 mb-1 uppercase tracking-wide font-semibold">คำ</p>
-      <p id="modalWord" class="text-lg font-bold text-blue-600 dark:text-blue-400 font-mono"></p>
-      <p id="modalCurrentTags" class="text-xs text-slate-400 mt-0.5"></p>
+      <div class="flex items-start justify-between gap-2">
+        <div>
+          <p class="text-xs text-slate-400 mb-1 uppercase tracking-wide font-semibold">คำ</p>
+          <p id="modalWord" class="text-lg font-bold text-blue-600 dark:text-blue-400 font-mono"></p>
+          <p id="modalCurrentTags" class="text-xs text-slate-400 mt-0.5"></p>
+        </div>
+        <!-- AI suggest button — hidden until validator availability is confirmed -->
+        <button id="btnSuggestAI" onclick="suggestTag()" style="display:none"
+          class="mt-1 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold transition-colors whitespace-nowrap shadow-sm">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+          <span id="btnSuggestLabel">Suggest AI</span>
+        </button>
+      </div>
+      <!-- AI suggestion result chip -->
+      <div id="modalAIResult" style="display:none"
+        class="mt-2 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-violet-50 dark:bg-violet-950/30 border border-violet-200 dark:border-violet-800 text-xs">
+        <svg class="w-3.5 h-3.5 text-violet-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+        <span id="modalAIText" class="text-violet-700 dark:text-violet-300 font-medium"></span>
+        <button onclick="applyAISuggestion()" id="btnApplyAI"
+          class="ml-auto px-2 py-0.5 rounded bg-violet-600 hover:bg-violet-500 text-white font-semibold transition-colors">ใช้</button>
+      </div>
     </div>
     <div class="space-y-3 mb-5">
       <div>
@@ -531,12 +549,15 @@ function renderKwic(rows, lim, page) {
     const left = (r.left||[]).join('​');   // zero-width space — no visible gaps in Thai
     const right = (r.right||[]).join('​');
     const fname = (r.filename||'doc').split('/').pop();
+    // Build a plain-text context sentence for the AI validator
+    const ctxSentence = ((r.left||[]).join('') + r.node + (r.right||[]).join('')).replace(/​/g,'');
+    const ctxEsc = esc(ctxSentence).replace(/'/g, '&#39;');
     return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
       <td class="px-4 py-2.5 text-right text-slate-500 dark:text-slate-400 kwic-left text-sm max-w-xs truncate" title="${esc(left)}">${esc(left)}</td>
       <td class="px-3 py-2.5 text-center whitespace-nowrap">
         <span class="inline-flex items-center gap-0.5">
           <span class="inline-block px-2.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 font-semibold text-sm">${esc(r.node)}</span>
-          <button class="edit-tag-btn" title="แก้ไข Tag" onclick="openTagModal('${esc(r.node)}','','')">
+          <button class="edit-tag-btn" title="แก้ไข Tag" onclick="openTagModal('${esc(r.node)}','','','${ctxEsc}')">
             <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
           </button>
         </span>
@@ -843,18 +864,36 @@ function errMsg(msg) {
 }
 
 // ─── Tag Editor Modal ─────────────────────────────────────────────────────────
-const M = { word: '', selectedPos: '', selectedNe: '' };
+const M = { word: '', selectedPos: '', selectedNe: '', context: '', aiSuggestion: null };
 
-function openTagModal(word, currentPos, currentNe) {
+// Check if validator is available once on page load
+let _validatorAvailable = false;
+(async function checkValidator() {
+  try {
+    const r = await api('/api/suggest', { word: 'test', context: '' });
+    _validatorAvailable = r.available !== false;
+  } catch(_) { _validatorAvailable = false; }
+})();
+
+function openTagModal(word, currentPos, currentNe, context = '') {
   M.word = word;
   M.selectedPos = currentPos || '';
   M.selectedNe  = currentNe  || '';
+  M.context = context;
+  M.aiSuggestion = null;
 
   document.getElementById('modalWord').textContent = word;
   document.getElementById('modalCurrentTags').textContent =
     [currentPos && `POS: ${currentPos}`, currentNe && `NE: ${currentNe}`].filter(Boolean).join('  ·  ') || 'ยังไม่มี tag';
   document.getElementById('modalNote').value = '';
   document.getElementById('modalStatus').textContent = '';
+  document.getElementById('modalAIResult').style.display = 'none';
+
+  // Show/hide AI suggest button based on validator availability
+  const btnAI = document.getElementById('btnSuggestAI');
+  btnAI.style.display = _validatorAvailable ? 'flex' : 'none';
+  document.getElementById('btnSuggestLabel').textContent = 'Suggest AI';
+  btnAI.disabled = false;
 
   document.querySelectorAll('.tag-pill-pos').forEach(b => {
     b.classList.toggle('active', b.dataset.val === M.selectedPos);
@@ -869,6 +908,54 @@ function openTagModal(word, currentPos, currentNe) {
 
 function closeTagModal() {
   document.getElementById('tagModal').style.display = 'none';
+}
+
+async function suggestTag() {
+  const btn = document.getElementById('btnSuggestAI');
+  const label = document.getElementById('btnSuggestLabel');
+  const resultEl = document.getElementById('modalAIResult');
+  const textEl = document.getElementById('modalAIText');
+
+  btn.disabled = true;
+  label.textContent = 'กำลังวิเคราะห์…';
+  resultEl.style.display = 'none';
+
+  try {
+    const data = await api('/api/suggest', { word: M.word, context: M.context });
+    if (!data.available) {
+      label.textContent = 'ไม่มี Validator';
+      return;
+    }
+    M.aiSuggestion = data;
+    if (data.ne) {
+      const pct = data.confidence ? ` (${(data.confidence * 100).toFixed(0)}%)` : '';
+      textEl.textContent = `WangchanBERTa แนะนำ: NE = ${data.ne}${pct}`;
+      if (data.raw_label && data.raw_label !== data.ne) {
+        textEl.textContent += `  [raw: ${data.raw_label}]`;
+      }
+      resultEl.style.display = 'flex';
+    } else {
+      textEl.textContent = 'ไม่พบ Named Entity สำหรับคำนี้';
+      resultEl.style.display = 'flex';
+      document.getElementById('btnApplyAI').style.display = 'none';
+    }
+    label.textContent = 'Suggest AI';
+  } catch(e) {
+    label.textContent = 'Error';
+    textEl.textContent = '⚠ ' + e.message;
+    resultEl.style.display = 'flex';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function applyAISuggestion() {
+  if (!M.aiSuggestion?.ne) return;
+  document.querySelectorAll('.tag-pill-ne').forEach(b => {
+    b.classList.toggle('active', b.dataset.val === M.aiSuggestion.ne);
+  });
+  M.selectedNe = M.aiSuggestion.ne;
+  document.getElementById('modalAIResult').style.display = 'none';
 }
 
 function selectTagPill(btn, type) {

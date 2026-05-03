@@ -14,11 +14,26 @@ use tokio::net::TcpListener;
 
 struct AppState {
     db: Mutex<CorpusDb>,
+    validator_url: Option<String>,
+    http: reqwest::Client,
 }
 
-pub async fn serve(corpus_path: &str, port: u16) -> Result<()> {
+pub async fn serve(corpus_path: &str, port: u16, validator_url: Option<String>) -> Result<()> {
     let db = CorpusDb::open(corpus_path)?;
-    let state = Arc::new(AppState { db: Mutex::new(db) });
+
+    if let Some(ref url) = validator_url {
+        tracing::info!("NER validator: {url}");
+    } else {
+        tracing::info!("NER validator: not configured (pass --validator-url to enable)");
+    }
+
+    let state = Arc::new(AppState {
+        db: Mutex::new(db),
+        validator_url,
+        http: reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(15))
+            .build()?,
+    });
 
     let app = Router::new()
         .route("/", get(index_handler))
@@ -30,6 +45,7 @@ pub async fn serve(corpus_path: &str, port: u16) -> Result<()> {
         .route("/api/correct", post(correct_save_handler))
         .route("/api/correct", delete(correct_delete_handler))
         .route("/api/corrections/export", get(corrections_export_handler))
+        .route("/api/suggest", get(suggest_handler))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
@@ -248,6 +264,44 @@ async fn corrections_export_handler(
                 (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
             }
         },
+    }
+}
+
+// ── NER Suggest ───────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SuggestParams {
+    word: String,
+    #[serde(default)]
+    context: String,
+}
+
+async fn suggest_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<SuggestParams>,
+) -> Json<serde_json::Value> {
+    let Some(ref base_url) = s.validator_url else {
+        return Json(serde_json::json!({ "available": false }));
+    };
+
+    let url = format!("{base_url}/validate");
+    match s
+        .http
+        .post(&url)
+        .json(&serde_json::json!({ "word": p.word, "context": p.context }))
+        .send()
+        .await
+    {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(mut v) => {
+                v["available"] = serde_json::json!(true);
+                Json(v)
+            }
+            Err(e) => {
+                Json(serde_json::json!({ "available": false, "error": format!("parse: {e}") }))
+            }
+        },
+        Err(e) => Json(serde_json::json!({ "available": false, "error": format!("connect: {e}") })),
     }
 }
 
