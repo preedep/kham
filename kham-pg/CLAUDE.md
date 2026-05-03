@@ -105,6 +105,18 @@ sql/                — all *.sql files from kham-pg/sql/
 
 Requires GitHub secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`.
 
+**`latest` tag — source from the assembled manifest, not per-arch images.**
+
+The `docker_manifest` job creates `latest` by referencing the already-assembled `${VERSION}-pg17` multi-arch manifest:
+
+```bash
+docker buildx imagetools create \
+  --tag "${IMAGE}:latest" \
+  "${IMAGE}:${VERSION}-pg17"   # ← correct: use the assembled manifest
+```
+
+Do **not** reassemble `latest` from per-arch images (`${VERSION}-pg17-amd64` / `${VERSION}-pg17-arm64`) independently. Doing so creates a separate manifest list that may diverge from `${VERSION}-pg17` if the CI workflow runs multiple times or jobs overlap, resulting in `latest` pointing to a stale or differently-built image.
+
 **`Dockerfile.hub` is for distribution only.** For local regress testing use `docker/Dockerfile.test` via `make regress`.
 
 ## README files — two separate documents

@@ -34,13 +34,14 @@ pre-built binary is not available for your platform.
 A ready-to-use Docker image is available on Docker Hub. Pull and run.
 
 ```bash
-# PostgreSQL 17 with kham_pg pre-installed (multi-arch: amd64 + arm64)
+# PostgreSQL 17 with kham_pg pre-installed (latest = PG 17, multi-arch: amd64 + arm64)
 docker run --rm -e POSTGRES_PASSWORD=secret \
   -p 5432:5432 nickmsft/kham-pg:latest
 
-# Specific PostgreSQL version (14–18)
+# Specific PostgreSQL version — available tags:
+#   v0.8.1-pg14  v0.8.1-pg16  v0.8.1-pg17  v0.8.1-pg18
 docker run --rm -e POSTGRES_PASSWORD=secret \
-  -p 5432:5432 nickmsft/kham-pg:0.8.1-pg17
+  -p 5432:5432 nickmsft/kham-pg:v0.8.1-pg17
 
 # Connect and use immediately
 psql -h localhost -U postgres -c "
@@ -54,11 +55,10 @@ psql -h localhost -U postgres -c "
 | Tag | PostgreSQL | Architectures |
 |-----|-----------|---------------|
 | `latest` | 17 | linux/amd64, linux/arm64 |
-| `0.8.1-pg17` | 17 | linux/amd64, linux/arm64 |
-| `0.7.0-pg18` | 18 | linux/amd64, linux/arm64 |
-| `0.7.0-pg16` | 16 | linux/amd64, linux/arm64 |
-| `0.7.0-pg15` | 15 | linux/amd64, linux/arm64 |
-| `0.7.0-pg14` | 14 | linux/amd64, linux/arm64 |
+| `v0.8.1-pg17` | 17 | linux/amd64, linux/arm64 |
+| `v0.8.1-pg18` | 18 | linux/amd64, linux/arm64 |
+| `v0.8.1-pg16` | 16 | linux/amd64, linux/arm64 |
+| `v0.8.1-pg14` | 14 | linux/amd64, linux/arm64 |
 
 Source: <https://hub.docker.com/r/nickmsft/kham-pg>
 
