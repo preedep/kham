@@ -17,6 +17,7 @@ Tracks pending improvements, data imports, and feature work post-v0.3.0.
 | v0.6.0 | SpellChecker, KeyExtractor, spell/keyword bindings (WASM/Python/CAPI), kham-sqlite custom synonyms/dict/Windows/Android, CI pytest + wasm tests |
 | v0.7.0 | Stopword suppression, Thai number normalization, udom83/MetaSound soundex dict variants, POS lexeme expansion (`pos_verb`, `pos_noun`, …), `kham_features` regress suite |
 | v0.8.0 | `Token::confidence: f32`, `TokenStream` streaming iterator, `SpellChecker::correct_text` / `did_you_mean`, `RomanizationMap::romanize_sentence`, `KeyExtractor::extract_phrases`, CLI `--format` / `--confidence` / `--min-confidence` / `--romanize` |
+| v0.8.2 | NE gazetteer 36,668 → 38,950 entries (thainer CC0), POS table 8,993 → 11,404 entries (UD_Thai-PUD CC-BY-SA-3.0), `wiki_freq.tsv` supplemental frequency data (CC-BY-SA-4.0, not yet loaded), import scripts |
 
 ---
 

@@ -39,9 +39,9 @@ docker run --rm -e POSTGRES_PASSWORD=secret \
   -p 5432:5432 nickmsft/kham-pg:latest
 
 # Specific PostgreSQL version — available tags:
-#   v0.8.1-pg14  v0.8.1-pg16  v0.8.1-pg17  v0.8.1-pg18
+#   v0.8.2-pg14  v0.8.2-pg16  v0.8.2-pg17  v0.8.2-pg18
 docker run --rm -e POSTGRES_PASSWORD=secret \
-  -p 5432:5432 nickmsft/kham-pg:v0.8.1-pg17
+  -p 5432:5432 nickmsft/kham-pg:v0.8.2-pg17
 
 # Connect and use immediately
 psql -h localhost -U postgres -c "
@@ -55,10 +55,10 @@ psql -h localhost -U postgres -c "
 | Tag | PostgreSQL | Architectures |
 |-----|-----------|---------------|
 | `latest` | 17 | linux/amd64, linux/arm64 |
-| `v0.8.1-pg17` | 17 | linux/amd64, linux/arm64 |
-| `v0.8.1-pg18` | 18 | linux/amd64, linux/arm64 |
-| `v0.8.1-pg16` | 16 | linux/amd64, linux/arm64 |
-| `v0.8.1-pg14` | 14 | linux/amd64, linux/arm64 |
+| `v0.8.2-pg17` | 17 | linux/amd64, linux/arm64 |
+| `v0.8.2-pg18` | 18 | linux/amd64, linux/arm64 |
+| `v0.8.2-pg16` | 16 | linux/amd64, linux/arm64 |
+| `v0.8.2-pg14` | 14 | linux/amd64, linux/arm64 |
 
 Source: <https://hub.docker.com/r/nickmsft/kham-pg>
 
