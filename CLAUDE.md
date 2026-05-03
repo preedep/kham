@@ -15,6 +15,7 @@ Batteries-included Thai NLP library in Rust. Segmentation, spell correction, key
 | `kham-sqlite/` | SQLite FTS5 tokenizer extension (`cdylib`). → [kham-sqlite/CLAUDE.md](kham-sqlite/CLAUDE.md) |
 | `kham-bench-accuracy/` | Accuracy benchmark — word-boundary P/R/F1 against `kham-core/testdata/`; not in default-members |
 | `kham-web/` | Astro website for kham.io — landing page, live WASM demo, docs, API reference. → [doc/web-roadmap.md](doc/web-roadmap.md) |
+| `kham-tnc/` | Professional Thai corpus analysis web tool — KWIC, collocation (MI/logDice/LL), frequency, POS/NE search, phonetic search, multi-corpus comparison. → [doc/roadmap.md § kham-tnc](doc/roadmap.md) *(planned)* |
 
 ## Commands
 
@@ -142,3 +143,4 @@ In bindings, `char_span: Range<usize>` is flattened to `char_start` / `char_end`
 | [ADR-004](doc/adr-004-family-names-import.md) | Family Names Import and License Correction (CC-BY-SA-4.0) |
 | [ADR-005](doc/adr-005-frequency-corpus-merge.md) | Frequency Corpus Merge — TTC Included, Phupha Excluded |
 | [ADR-006](doc/adr-006-wikipedia-ne-import.md) | Wikipedia Thai Titles — NE PLACE/ORG Import |
+| [ADR-007](doc/adr-007-public-dataset-imports.md) | Public Dataset Imports — thainer (CC0), UD_Thai-PUD (CC-BY-SA-3.0), Thai Wikipedia freq (CC-BY-SA-4.0) |

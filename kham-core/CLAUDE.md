@@ -35,7 +35,8 @@ Pure Rust, `no_std` / `alloc`-only segmentation and FTS library. All modules liv
 - `tok.segment_stream(text: &'t str) -> TokenStream<'t>` — streaming; `.next_word()` / `.next_known()` / `.next_above_confidence(f32)`
 - Trie: Double-Array Trie, O(n) lookup — no external trie-building utilities
 - Never ship BEST corpus or non-CC0 data
-- Frequency data: `tnc_freq.txt` (Apache-2.0, PyThaiNLP) embedded separately — loaded into `FreqMap`, used by newmm DP scorer as tiebreaker; do not merge into the trie binary
+- Frequency data: `tnc_freq.txt` (CC0, PyThaiNLP) embedded separately — loaded into `FreqMap`, used by newmm DP scorer as tiebreaker; do not merge into the trie binary
+- `wiki_freq.tsv` (CC-BY-SA-4.0, Thai Wikipedia) — supplemental frequency list extracted from 500 Wikipedia articles; kept separate from `tnc_freq.txt` (different licenses); **not yet loaded** — requires a future `FreqMap::from_two_sources` API
 - Stopword data: `stopwords_th.txt` (Apache-2.0, PyThaiNLP) — attribution header must be kept
 
 ## Segmenter DP Scoring
@@ -154,7 +155,7 @@ Supported range: 0 (`ศูนย์`) through multi-billion values (`u64`). Spe
 **TSV tags:** `NOUN VERB ADJ ADV PART PROPN PRON NUM CLAS CONJ AUX DET PREP`
 
 ```rust
-PosTagger::builtin()                        // ~230 entries, hand-curated
+PosTagger::builtin()                        // 11,404 entries (hand-curated + ORCHID CC-BY-4.0 + UD_Thai-PUD CC-BY-SA-3.0)
 PosTagger::from_tsv(data: &str)            // last duplicate wins; unknown tags skipped
 tagger.tag(word: &str) -> Option<PosTag>   // None if OOV; Copy
 
@@ -172,7 +173,7 @@ Data: `kham-core/data/pos_th.tsv` — sections grouped by tag with `# ── NOU
 `NamedEntityKind` is defined in `token.rs` (not `ne.rs`) to avoid circular imports.
 
 ```rust
-NeTagger::builtin()                         // ~400 entries: provinces, countries (full list), cities, orgs
+NeTagger::builtin()                         // 38,950 entries: provinces, countries, cities, person names, family names, orgs, Wikipedia titles, thainer corpus
 NeTagger::from_tsv(data: &str)             // last duplicate wins
 tagger.tag(word: &str) -> Option<NamedEntityKind>
 tagger.tag_tokens(tokens: Vec<Token>, source: &str) -> Vec<Token>
@@ -185,7 +186,7 @@ NamedEntityKind::Place.as_str() -> &'static str   // "Place"
 
 **Multi-token matching:** `tag_tokens` tries spans of 5→1 consecutive Thai tokens; first gazetteer hit wins. Compound names split by the segmenter (e.g. กรุง+เทพ → กรุงเทพ) are merged into one `Named` token with combined spans. TSV entries must match the segmenter's concatenated output exactly — verify with `Tokenizer::new().segment("candidate")`.
 
-Data: `kham-core/data/ne_th.tsv` — Thai provinces (77), full country list from PyThaiNLP (~246, Apache-2.0), world cities, regions, organisations, universities, public figures (~400 total).
+Data: `kham-core/data/ne_th.tsv` — 38,950 entries across PERSON/PLACE/ORG. Sources: Thai provinces, full country list (PyThaiNLP CC0), Wikipedia titles (CC-BY-SA-4.0), person/family names (CC-BY-SA-4.0), thainer-corpus-v2 (CC0). See `doc/roadmap.md` PyThaiNLP corpus imports section for import history.
 
 ### `soundex` — Thai phonetic encoding
 
@@ -291,6 +292,7 @@ kex.extract_phrases(text: &str, max_n: usize) -> Vec<Keyword>  // bigram/trigram
   - `basic.txt` — pure Thai; all tokens must be `TokenKind::Thai`
   - `mixed_script.txt` — Thai + Latin + Number
   - `normalization.txt` — asserts `normalize()` is idempotent then segments correctly
+  - `reference/` — reference files **not** scanned by `kham-bench-accuracy`; `ud_pud.txt` = 1,000 sentences from UD_Thai-PUD (CC-BY-SA-3.0) showing kham vs UD tokenization differences (F1 0.663 — divergences are mostly transliterated names kham doesn't know)
 - Edge cases to always test: สระลอย, วรรณยุกต์ซ้อน, zero-width chars, `ธนาคาร100แห่ง`, empty string, single char
 
 ## Performance

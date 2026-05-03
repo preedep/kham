@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.2] - 2026-05-03
+
+### Added
+
+**kham-core data**
+- NE gazetteer expanded from 36,668 → **38,950 entries** via `pythainlp/thainer-corpus-v2` (CC0): +403 PERSON, +793 PLACE, +1,084 ORG; import script: `scripts/import_thainer_ne.py`
+- POS table expanded from 8,993 → **11,404 entries** via `UD_Thai-PUD` (CC-BY-SA-3.0, Universal Dependencies): +884 PROPN, +665 VERB, +662 NOUN, +134 ADJ, +34 ADV, and more; UPOS mapped to kham 13-category scheme (ADR-003); import script: `scripts/import_ud_pud_pos.py`
+- `kham-core/data/wiki_freq.tsv` — supplemental word-frequency file (CC-BY-SA-4.0) from 500 Thai Wikipedia articles; 19,890 entries, 7,640 wiki-only new words; kept separate from CC0 `tnc_freq.txt`; not yet loaded by FreqMap; import script: `scripts/import_wiki_freq.py`
+- `kham-core/testdata/reference/ud_pud.txt` — 1,000 UD_Thai-PUD segmentation sentences for manual divergence analysis (excluded from accuracy benchmark; F1 vs kham = 0.663)
+
+---
+
 ## [Unreleased] — 0.8.0
 
 ### Added

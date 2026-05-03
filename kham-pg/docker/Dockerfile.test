@@ -87,9 +87,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install extension files into PG's directories (paths via pg_config)
 COPY --from=builder /kham/target/release/libkham_pg.so /tmp/kham_pg.so
 COPY kham-pg/kham_pg.control                           /tmp/kham_pg.control
-COPY kham-pg/sql/kham_pg--0.8.1.sql                   /tmp/kham_pg--0.8.1.sql
+COPY kham-pg/sql/kham_pg--0.8.2.sql                   /tmp/kham_pg--0.8.2.sql
 COPY kham-pg/sql/kham_pg--0.7.0--0.8.0.sql            /tmp/kham_pg--0.7.0--0.8.0.sql
 COPY kham-pg/sql/kham_pg--0.8.0--0.8.1.sql            /tmp/kham_pg--0.8.0--0.8.1.sql
+COPY kham-pg/sql/kham_pg--0.8.1--0.8.2.sql            /tmp/kham_pg--0.8.1--0.8.2.sql
 
 RUN set -e; \
     PG_CONFIG=/usr/lib/postgresql/${PG_VERSION}/bin/pg_config; \
@@ -97,9 +98,10 @@ RUN set -e; \
     PG_EXTDIR=$($PG_CONFIG --sharedir)/extension; \
     install -m 755 /tmp/kham_pg.so                  "$PG_PKGLIBDIR/kham_pg.so"; \
     install -m 644 /tmp/kham_pg.control             "$PG_EXTDIR/kham_pg.control"; \
-    install -m 644 /tmp/kham_pg--0.8.1.sql          "$PG_EXTDIR/kham_pg--0.8.1.sql"; \
+    install -m 644 /tmp/kham_pg--0.8.2.sql          "$PG_EXTDIR/kham_pg--0.8.2.sql"; \
     install -m 644 /tmp/kham_pg--0.7.0--0.8.0.sql   "$PG_EXTDIR/kham_pg--0.7.0--0.8.0.sql"; \
-    install -m 644 /tmp/kham_pg--0.8.0--0.8.1.sql   "$PG_EXTDIR/kham_pg--0.8.0--0.8.1.sql"
+    install -m 644 /tmp/kham_pg--0.8.0--0.8.1.sql   "$PG_EXTDIR/kham_pg--0.8.0--0.8.1.sql"; \
+    install -m 644 /tmp/kham_pg--0.8.1--0.8.2.sql   "$PG_EXTDIR/kham_pg--0.8.1--0.8.2.sql"
 
 # Regression test input files
 COPY kham-pg/regress /kham/kham-pg/regress

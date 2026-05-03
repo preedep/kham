@@ -51,7 +51,7 @@ export const ui = {
     'demo.coming.title': 'Coming in v0.9',
     // Getting Started
     'gs.title': 'Getting Started',
-    'gs.subtitle': 'kham v0.8.1 — pick your target and be up and running in minutes.',
+    'gs.subtitle': 'kham v0.8.2 — pick your target and be up and running in minutes.',
     'gs.install': 'Install',
     'gs.usage': 'Usage',
     'gs.full-guide': 'Full integration guide →',
@@ -121,7 +121,7 @@ export const ui = {
     'demo.coming.title': 'เพิ่มเติมใน v0.9',
     // Getting Started
     'gs.title': 'เริ่มต้นใช้งาน',
-    'gs.subtitle': 'kham v0.8.1 — เลือกแพลตฟอร์มที่ต้องการและเริ่มใช้งานได้ภายในไม่กี่นาที',
+    'gs.subtitle': 'kham v0.8.2 — เลือกแพลตฟอร์มที่ต้องการและเริ่มใช้งานได้ภายในไม่กี่นาที',
     'gs.install': 'ติดตั้ง',
     'gs.usage': 'การใช้งาน',
     'gs.full-guide': 'คู่มือการใช้งานแบบเต็ม →',
