@@ -491,8 +491,7 @@ jobs:
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/kham-pg"
           docker buildx imagetools create \
             --tag "${IMAGE}:latest" \
-            "${IMAGE}:${VERSION}-pg17-amd64" \
-            "${IMAGE}:${VERSION}-pg17-arm64"
+            "${IMAGE}:${VERSION}-pg17"
 
   # ---------------------------------------------------------------------------
   # GitHub Release — auto-generate notes and attach all artifacts as assets
