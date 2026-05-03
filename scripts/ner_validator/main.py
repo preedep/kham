@@ -2,8 +2,9 @@
 """
 kham-tnc NER Validator sidecar.
 
-Wraps WangchanBERTa (ThaiNER) and exposes a simple REST API so that
-kham-tnc can suggest NE tags for Thai words in context.
+Uses pythainlp's ThaiNER (WangchanBERTa-based) for Named Entity Recognition.
+pythainlp manages model downloads via its own corpus manager — no HuggingFace
+login required.
 
 Endpoints:
   GET  /health                   — liveness check
@@ -12,19 +13,15 @@ Endpoints:
 """
 
 import os
-import re
 
 import uvicorn
 from fastapi import FastAPI, Query
 from pydantic import BaseModel
-from transformers import pipeline
 
 # ── Config ──────────────────────────────────────────────────────────────────
-MODEL_NAME = os.getenv(
-    "NER_MODEL",
-    "airesearch/wangchanberta-base-att-spm-uncased-finetuned-thainer",
-)
-DEVICE = int(os.getenv("NER_DEVICE", "-1"))  # -1 = CPU; 0 = first GPU / MPS
+# NER engine: "thainer" (default) or "thainer-v2"
+# pythainlp will download the model automatically on first use (~450 MB)
+NER_ENGINE: str = os.getenv("NER_ENGINE", "thainer")
 
 # ── Label mapping → kham-core NE tags ────────────────────────────────────────
 _LABEL_MAP: dict[str, str] = {
@@ -40,24 +37,22 @@ _LABEL_MAP: dict[str, str] = {
     "TIME": "TIME",
     "MONEY": "MONEY",
     "PERCENT": "MISC",
-    "CARDINAL": "MISC",
     "MISC": "MISC",
 }
 
-app = FastAPI(title="kham-tnc NER Validator", version="1.0.0")
-_ner: object = None  # loaded on startup
+app = FastAPI(title="kham-tnc NER Validator", version="1.1.0")
+_tagger = None  # loaded on startup
 
 
 @app.on_event("startup")
 async def _load_model() -> None:
-    global _ner
-    print(f"Loading NER model: {MODEL_NAME}  (device={DEVICE})")
-    _ner = pipeline(
-        "token-classification",
-        model=MODEL_NAME,
-        aggregation_strategy="simple",
-        device=DEVICE,
-    )
+    global _tagger
+    print(f"Loading ThaiNER model via pythainlp (engine={NER_ENGINE}) …")
+    from pythainlp.tag import NER as ThaiNER  # noqa: PLC0415
+
+    _tagger = ThaiNER(engine=NER_ENGINE)
+    # Warm-up: triggers model download if not cached
+    _tagger.tag("ทดสอบ")
     print("Model ready.")
 
 
@@ -70,46 +65,43 @@ class ValidateRequest(BaseModel):
 
 class ValidateResponse(BaseModel):
     word: str
-    ne: str | None       # kham-core tag (PERSON / PLACE / ORG / DATE / …) or None
-    confidence: float
-    raw_label: str | None  # original model label before mapping
+    ne: str | None        # kham-core NE tag or None
+    confidence: float     # 1.0 when found; pythainlp NER doesn't expose scores
+    raw_label: str | None # original BIO label (e.g. "B-LOCATION")
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
+# ── Prediction logic ──────────────────────────────────────────────────────────
 
 def _predict(word: str, context: str) -> ValidateResponse:
-    """Run NER and find the entity that best matches `word` in `context`."""
+    """
+    Tag `context` (or `word` alone if no context) and find the NE label
+    for any token that overlaps with `word`.
+    """
     text = context.strip() or word
-    entities = _ner(text)
+    # tagged: list of (token_word, bio_ne_label), e.g. [('กรุงเทพ', 'B-LOCATION'), ...]
+    tagged: list[tuple[str, str]] = _tagger.tag(text)
 
-    word_start = text.find(word)
-    if word_start == -1:
-        # Word not literally present in context — run NER on the word alone
-        entities = _ner(word)
-        text = word
-        word_start = 0
-    word_end = word_start + len(word)
+    best_raw: str | None = None
+    for tok, bio in tagged:
+        if bio == "O":
+            continue
+        # Overlap check: word contains token or token contains word
+        if word in tok or tok in word:
+            best_raw = bio
+            break
 
-    # Find the entity with the greatest overlap with the word span
-    best: dict | None = None
-    for ent in entities:
-        e_start: int = ent.get("start", 0)
-        e_end: int = ent.get("end", len(text))
-        overlap = min(word_end, e_end) - max(word_start, e_start)
-        if overlap > 0:
-            if best is None or ent["score"] > best["score"]:
-                best = ent
-
-    if best is None:
+    if best_raw is None:
         return ValidateResponse(word=word, ne=None, confidence=0.0, raw_label=None)
 
-    raw = best["entity_group"]
-    ne = _LABEL_MAP.get(raw.upper())
+    # Strip BIO prefix: "B-LOCATION" → "LOCATION"
+    raw_label = best_raw.split("-", 1)[1] if "-" in best_raw else best_raw
+    ne = _LABEL_MAP.get(raw_label.upper())
+
     return ValidateResponse(
         word=word,
         ne=ne,
-        confidence=round(float(best["score"]), 4),
-        raw_label=raw,
+        confidence=1.0,
+        raw_label=best_raw,
     )
 
 
@@ -117,7 +109,7 @@ def _predict(word: str, context: str) -> ValidateResponse:
 
 @app.get("/health")
 def health() -> dict:
-    return {"ok": _ner is not None, "model": MODEL_NAME}
+    return {"ok": _tagger is not None, "engine": NER_ENGINE}
 
 
 @app.post("/validate", response_model=ValidateResponse)

@@ -1,12 +1,11 @@
 # kham-tnc NER Validator dependencies
 fastapi>=0.110
 uvicorn[standard]>=0.27
-# transformers + sentencepiece for WangchanBERTa SPM tokenizer
+# pythainlp manages its own model downloads — no HuggingFace login required
+# NER engine "thainer" uses WangchanBERTa internally via pythainlp's corpus manager
+pythainlp>=5.0
+# torch: macOS PyPI wheel is always CPU (no CUDA on macOS).
+# Linux GPU: add --index-url https://download.pytorch.org/whl/cu121
+torch>=2.2
 transformers>=4.38
 sentencepiece>=0.1.99
-# torch: CPU-only wheel is much smaller (~300 MB vs 2 GB for CUDA)
-# On Apple Silicon macOS, MPS acceleration is included in the standard wheel.
-# To use GPU on Linux, replace with: torch>=2.2 --index-url https://download.pytorch.org/whl/cu121
-torch>=2.2 --index-url https://download.pytorch.org/whl/cpu
-# Optional: speeds up tokenization
-protobuf>=4.0

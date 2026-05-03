@@ -5,21 +5,18 @@
 # Usage:
 #   chmod +x scripts/ner_validator/run.sh
 #
-#   First time (creates venv, downloads model ~750 MB):
+#   First time (creates venv, downloads model ~600 MB total):
 #     ./scripts/ner_validator/run.sh
 #
-#   Subsequent runs:
+#   Subsequent runs (fast, model already cached by pythainlp):
 #     ./scripts/ner_validator/run.sh
 #
 #   Custom port / host:
 #     PORT=9998 ./scripts/ner_validator/run.sh
 #     HOST=0.0.0.0 ./scripts/ner_validator/run.sh
 #
-#   Different NER model:
-#     NER_MODEL=pythainlp/thainer-corpus-v2-base-model ./scripts/ner_validator/run.sh
-#
-#   GPU / Apple Silicon MPS (set device index; -1 = CPU):
-#     NER_DEVICE=0 ./scripts/ner_validator/run.sh
+#   Different NER engine (thainer or thainer-v2):
+#     NER_ENGINE=thainer-v2 ./scripts/ner_validator/run.sh
 #
 # After starting, test with:
 #   curl http://localhost:9999/health
@@ -34,8 +31,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/.venv"
 PORT="${PORT:-9999}"
 HOST="${HOST:-127.0.0.1}"
-export NER_MODEL="${NER_MODEL:-airesearch/wangchanberta-base-att-spm-uncased-finetuned-thainer}"
-export NER_DEVICE="${NER_DEVICE:--1}"
+export NER_ENGINE="${NER_ENGINE:-thainer}"
 
 # ── Python version check ─────────────────────────────────────────────────────
 PYTHON=$(command -v python3 || command -v python || true)
@@ -44,15 +40,24 @@ if [ -z "$PYTHON" ]; then
   exit 1
 fi
 
-PY_VERSION=$("$PYTHON" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
 PY_MAJOR=$("$PYTHON" -c "import sys; print(sys.version_info.major)")
 PY_MINOR=$("$PYTHON" -c "import sys; print(sys.version_info.minor)")
+PY_VERSION="$PY_MAJOR.$PY_MINOR"
 
 if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 9 ]; }; then
   echo "ERROR: Python 3.9+ required (found $PY_VERSION)" >&2
   exit 1
 fi
 echo "Python $PY_VERSION — OK"
+
+# ── Stale venv detection: delete if requirements.txt changed ─────────────────
+# (This handles the case where requirements.txt was updated after .venv was created)
+if [ -d "$VENV_DIR" ] && [ -f "$VENV_DIR/.installed" ]; then
+  if [ "$SCRIPT_DIR/requirements.txt" -nt "$VENV_DIR/.installed" ]; then
+    echo "requirements.txt changed — removing old virtual environment …"
+    rm -rf "$VENV_DIR"
+  fi
+fi
 
 # ── Virtual environment ───────────────────────────────────────────────────────
 if [ ! -d "$VENV_DIR" ]; then
@@ -64,37 +69,35 @@ fi
 source "$VENV_DIR/bin/activate"
 
 # ── Install / upgrade dependencies ──────────────────────────────────────────
-if [ ! -f "$VENV_DIR/.installed" ] || [ "$SCRIPT_DIR/requirements.txt" -nt "$VENV_DIR/.installed" ]; then
-  echo "Installing dependencies (first run: ~750 MB download including model) …"
-  pip install --quiet --upgrade pip
-  pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
+if [ ! -f "$VENV_DIR/.installed" ]; then
+  echo "Installing dependencies …"
+  echo "(First run downloads PyTorch + pythainlp models ~600 MB — be patient)"
+  pip install --quiet --no-cache-dir --upgrade pip
+  pip install --quiet --no-cache-dir -r "$SCRIPT_DIR/requirements.txt"
   touch "$VENV_DIR/.installed"
   echo "Dependencies installed."
 fi
 
-# ── Pre-download model (cached in HuggingFace cache after first download) ────
-echo "Checking model: $NER_MODEL"
-"$PYTHON" - <<'PYEOF'
+# ── Pre-download pythainlp NER model ─────────────────────────────────────────
+echo "Checking pythainlp NER model (engine=$NER_ENGINE) …"
+"$PYTHON" - <<PYEOF
 import os, sys
-model = os.environ["NER_MODEL"]
+engine = os.environ["NER_ENGINE"]
 try:
-    from transformers import AutoTokenizer, AutoModelForTokenClassification
-    print(f"  Downloading / loading tokenizer …")
-    AutoTokenizer.from_pretrained(model)
-    print(f"  Downloading / loading model weights …")
-    AutoModelForTokenClassification.from_pretrained(model)
-    print(f"  Model ready: {model}")
+    from pythainlp.tag import NER as ThaiNER
+    tagger = ThaiNER(engine=engine)
+    tagger.tag("ทดสอบ")  # triggers download if needed
+    print(f"  Model ready: {engine}")
 except Exception as e:
-    print(f"  WARNING: could not pre-load model: {e}", file=sys.stderr)
-    print("  The model will be downloaded on first request instead.")
+    print(f"  WARNING: {e}", file=sys.stderr)
+    print("  Model will be downloaded on first request.")
 PYEOF
 
 # ── Start the server ─────────────────────────────────────────────────────────
 echo ""
 echo "──────────────────────────────────────────────────────────────"
 echo " kham-tnc NER Validator"
-echo " Model  : $NER_MODEL"
-echo " Device : $NER_DEVICE  (-1 = CPU)"
+echo " Engine : $NER_ENGINE (WangchanBERTa via pythainlp)"
 echo " URL    : http://$HOST:$PORT"
 echo ""
 echo " Health check : curl http://$HOST:$PORT/health"
