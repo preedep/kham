@@ -39,6 +39,9 @@ Indexes on `tokens.word`, `tokens.doc_id`, `tokens.pos_tag`, `tokens.ne_tag`.
 | `POST /api/correct`             | POST     | JSON `{word, correct_pos?, correct_ne?, note?}`        |
 | `DELETE /api/correct`           | DELETE   | `?word=...`                                            |
 | `GET /api/corrections/export`   | GET      | `format=pos_tsv` \| `ne_tsv` — downloads `.tsv` patch |
+| `GET /api/suggest`              | GET      | `word`, `context` — proxies to NER validator sidecar   |
+| `GET /api/untagged`             | GET      | `limit=50`, `offset=0` — words with NULL POS+NE tag    |
+| `GET /api/segment-view`         | GET      | `doc_id`, `center`, `window=15` — token window with tags|
 
 ### Corrections / Annotation workflow
 
@@ -66,6 +69,9 @@ cargo run -p kham-tnc -- serve --corpus corpus.sqlite --port 8080
 
 - [x] Phase 1 skeleton: corpus schema, indexer, KWIC, frequency, collocation, REST API
 - [x] Corrections / annotation: tag editor modal, corrections table, TSV export
-- [ ] Phase 1 complete: wildcard search, sort options, CSV export
+- [x] NER validator sidecar: WangchanBERTa via pythainlp thainer-v2, `/api/suggest` proxy
+- [x] Untagged words view: tab showing NULL POS+NE words sorted by frequency, export to TSV
+- [x] Segmentation viewer: KWIC expand button with colour-coded token chips, `/api/segment-view`
+- [ ] Phase 1 complete: wildcard search, CSV export
 - [ ] Phase 2: POS-aware query syntax, n-gram analysis, dispersion, visualizations
 - [ ] Phase 3: multi-corpus comparison, keyword analysis, deployment artifacts

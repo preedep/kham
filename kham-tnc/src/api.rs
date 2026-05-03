@@ -46,6 +46,8 @@ pub async fn serve(corpus_path: &str, port: u16, validator_url: Option<String>) 
         .route("/api/correct", delete(correct_delete_handler))
         .route("/api/corrections/export", get(corrections_export_handler))
         .route("/api/suggest", get(suggest_handler))
+        .route("/api/untagged", get(untagged_handler))
+        .route("/api/segment-view", get(segment_view_handler))
         .with_state(state);
 
     let addr = format!("0.0.0.0:{port}");
@@ -265,6 +267,52 @@ async fn corrections_export_handler(
             }
         },
     }
+}
+
+// ── Untagged words ────────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct UntaggedParams {
+    #[serde(default = "default_limit")]
+    limit: usize,
+    #[serde(default)]
+    offset: usize,
+}
+
+async fn untagged_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<UntaggedParams>,
+) -> Json<serde_json::Value> {
+    let db = s.db.lock().unwrap();
+    match freq::untagged_words(&db, p.limit, p.offset) {
+        Ok(rows) => Json(serde_json::json!({ "results": rows })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+// ── Segmentation view ─────────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+struct SegmentViewParams {
+    doc_id: i64,
+    center: i64,
+    #[serde(default = "default_seg_window")]
+    window: usize,
+}
+
+async fn segment_view_handler(
+    State(s): State<Arc<AppState>>,
+    Query(p): Query<SegmentViewParams>,
+) -> Json<serde_json::Value> {
+    let db = s.db.lock().unwrap();
+    match kwic::segment_view(&db, p.doc_id, p.center, p.window) {
+        Ok(tokens) => Json(serde_json::json!({ "tokens": tokens, "node_pos": p.center })),
+        Err(e) => Json(serde_json::json!({ "error": e.to_string() })),
+    }
+}
+
+fn default_seg_window() -> usize {
+    15
 }
 
 // ── NER Suggest ───────────────────────────────────────────────────────────────

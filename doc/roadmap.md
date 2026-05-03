@@ -250,6 +250,21 @@ kham-tnc/
 - [ ] Direction filter (left-only / right-only)
 - [ ] Export as CSV
 
+**Annotation / corrections**
+- [x] Tag editor modal — click ✎ on any word in KWIC/Freq to set correct POS or NE tag
+- [x] Corrections table + TSV export patches for `pos_th.tsv` / `ne_th.tsv`
+- [x] WangchanBERTa NER sidecar — `scripts/ner_validator/run.sh`; AI-assist "Suggest" button in modal
+
+**Dictionary gap analysis**
+- [x] Untagged words tab — words with no POS/NE tag sorted by frequency (`GET /api/untagged`)
+- [x] Header chip shows untagged type count; clickable shortcut to the tab
+- [x] Export word list as TSV for batch dictionary review
+
+**Segmentation viewer**
+- [x] KWIC expand button (▶) — lazy-loads `GET /api/segment-view` inline below each concordance row
+- [x] Colour-coded token chips: blue=node, POS-coloured=tagged, amber=untagged; NE badge overlay
+- [x] Click any chip to open tag editor modal
+
 ### Phase 2 — Linguistic Depth
 
 **POS-aware search**

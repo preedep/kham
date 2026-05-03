@@ -6,10 +6,19 @@ use serde::Serialize;
 #[derive(Serialize)]
 pub struct KwicLine {
     pub doc_id: i64,
+    pub node_pos: i64,
     pub filename: String,
     pub left: Vec<String>,
     pub node: String,
     pub right: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct TokenDetail {
+    pub pos: i64,
+    pub word: String,
+    pub pos_tag: Option<String>,
+    pub ne_tag: Option<String>,
 }
 
 pub fn search(
@@ -67,6 +76,7 @@ pub fn search(
 
         lines.push(KwicLine {
             doc_id,
+            node_pos,
             filename,
             left,
             node: node_word,
@@ -75,4 +85,36 @@ pub fn search(
     }
 
     Ok(lines)
+}
+
+/// Return all tokens in a window around `center` position, with full tag metadata.
+/// Used by the segmentation viewer in the UI to show colour-coded token boundaries.
+pub fn segment_view(
+    db: &CorpusDb,
+    doc_id: i64,
+    center: i64,
+    window: usize,
+) -> Result<Vec<TokenDetail>> {
+    let left = (center - window as i64).max(0);
+    let right = center + window as i64 + 1;
+
+    let mut stmt = db.conn.prepare_cached(
+        "SELECT pos, word, pos_tag, ne_tag
+         FROM tokens
+         WHERE doc_id = ?1 AND pos >= ?2 AND pos < ?3
+         ORDER BY pos",
+    )?;
+
+    let rows = stmt
+        .query_map(params![doc_id, left, right], |r| {
+            Ok(TokenDetail {
+                pos: r.get(0)?,
+                word: r.get(1)?,
+                pos_tag: r.get(2)?,
+                ne_tag: r.get(3)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+
+    Ok(rows)
 }

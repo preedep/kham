@@ -178,10 +178,17 @@ impl CorpusDb {
         let type_count: i64 =
             self.conn
                 .query_row("SELECT COUNT(DISTINCT word) FROM tokens", [], |r| r.get(0))?;
+        let untagged_type_count: i64 = self.conn.query_row(
+            "SELECT COUNT(DISTINCT word) FROM tokens
+             WHERE pos_tag IS NULL AND ne_tag IS NULL AND length(word) >= 2",
+            [],
+            |r| r.get(0),
+        )?;
         Ok(CorpusStats {
             doc_count,
             token_count,
             type_count,
+            untagged_type_count,
         })
     }
 }
@@ -201,6 +208,8 @@ pub struct CorpusStats {
     pub doc_count: i64,
     pub token_count: i64,
     pub type_count: i64,
+    /// Distinct word types with no POS and no NE tag (length ≥ 2) — dictionary coverage gap.
+    pub untagged_type_count: i64,
 }
 
 #[derive(serde::Serialize)]

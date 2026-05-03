@@ -43,6 +43,7 @@
         <span id="chipDocs" class="px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">—</span>
         <span id="chipTokens" class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">—</span>
         <span id="chipTypes" class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">—</span>
+        <span id="chipUntagged" title="Word types with no POS/NE tag — dictionary gap" class="px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700 cursor-pointer hover:bg-amber-100 dark:hover:bg-amber-900/50 transition-colors" onclick="switchTab('untagged')">—</span>
       </div>
       <!-- Dark mode toggle -->
       <button onclick="toggleDark()" title="Toggle dark mode"
@@ -140,6 +141,9 @@
   <div class="flex gap-1 bg-slate-100 dark:bg-slate-800/50 rounded-xl p-1 w-fit mb-6 border border-slate-200 dark:border-slate-700">
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors bg-blue-600 text-white" data-tab="kwic" onclick="switchTab('kwic')">KWIC</button>
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="freq" onclick="switchTab('freq')">ความถี่</button>
+    <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 flex items-center gap-1.5" data-tab="untagged" onclick="switchTab('untagged')">
+      <span class="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0"></span>ไม่มี Tag
+    </button>
     <button class="tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700" data-tab="colloc" onclick="switchTab('colloc')">Collocation</button>
     <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-colors text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 flex items-center gap-1.5" data-tab="correct" onclick="switchTab('correct')">
       <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
@@ -215,6 +219,44 @@
         </table>
       </div>
       <div id="freqPagination" class="flex items-center justify-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700"></div>
+    </div>
+  </div>
+
+  <!-- ── Untagged Words Panel ─────────────────────────────────────────────── -->
+  <div class="tab-panel" id="panel-untagged">
+    <div class="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+      <div class="px-5 py-3 border-b border-slate-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="text-sm font-semibold text-slate-700 dark:text-slate-200">คำที่ยังไม่มี POS / NE Tag</h2>
+          <p class="text-xs text-slate-400 mt-0.5">คำที่ปรากฏในคลังแต่ยังไม่มี tag — เพิ่มลงใน <code class="font-mono">pos_th.tsv</code> หรือ <code class="font-mono">ne_th.tsv</code> เพื่อปรับปรุง kham-core</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <span id="untaggedCount" class="text-xs font-mono text-amber-600 dark:text-amber-400">—</span>
+          <button onclick="exportUntagged()"
+            class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-xs font-medium text-slate-600 dark:text-slate-300 hover:border-blue-500 hover:text-blue-600 transition-colors flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+            word list (.tsv)
+          </button>
+          <button onclick="loadUntagged(0)" class="px-4 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-white text-sm font-medium transition-colors">โหลด</button>
+        </div>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-slate-100/80 dark:bg-slate-700/50 text-xs uppercase tracking-wide text-slate-500 dark:text-slate-400">
+              <th class="px-5 py-3 text-left font-semibold w-16">#</th>
+              <th class="px-5 py-3 text-left font-semibold">คำ</th>
+              <th class="px-5 py-3 text-left font-semibold cursor-pointer hover:text-blue-600" onclick="sortUntagged('count')">ความถี่ <span id="uth-count" class="sort-arrow">↓</span></th>
+              <th class="px-5 py-3 text-right font-semibold">เอกสาร</th>
+              <th class="px-5 py-3 text-left font-semibold">ต่อล้านคำ</th>
+            </tr>
+          </thead>
+          <tbody id="untaggedTbody" class="divide-y divide-slate-200 dark:divide-slate-700/50">
+            <tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">คลิก "โหลด" เพื่อดูรายการคำที่ยังไม่มี tag</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="untaggedPagination" class="flex items-center justify-center gap-2 px-5 py-3 border-t border-slate-200 dark:border-slate-700"></div>
     </div>
   </div>
 
@@ -436,9 +478,14 @@ const S = {
   freqRows: [],
   collocSort: 'log_dice',
   charts: {},
+  untaggedPage: 0,
+  untaggedRows: [],
+  untaggedSort: 'count',
+  untaggedDir: 'desc',
 };
 const LIMIT = 50;
 const FREQ_LIMIT = 100;
+const UNTAGGED_LIMIT = 100;
 
 // ─── Dark mode ────────────────────────────────────────────────────────────────
 function toggleDark() {
@@ -470,6 +517,7 @@ async function api(path, params = {}) {
     document.getElementById('chipDocs').textContent = fmt(s.doc_count) + ' docs';
     document.getElementById('chipTokens').textContent = fmt(s.token_count) + ' tokens';
     document.getElementById('chipTypes').textContent = fmt(s.type_count) + ' types';
+    document.getElementById('chipUntagged').textContent = fmt(s.untagged_type_count) + ' untagged';
     document.getElementById('headerStats').classList.remove('hidden');
   } catch(_) {}
   loadFreq(0);
@@ -490,13 +538,16 @@ function setLoading(on) {
 function switchTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => {
     const active = b.dataset.tab === tab;
-    b.className = `tab-btn px-5 py-2 rounded-lg text-sm font-medium transition-colors ${active
+    const isPx4Flex = b.dataset.tab === 'untagged' || b.dataset.tab === 'correct';
+    const sizeClass = isPx4Flex ? 'px-4 flex items-center gap-1.5' : 'px-5';
+    b.className = `tab-btn ${sizeClass} py-2 rounded-lg text-sm font-medium transition-colors ${active
       ? 'bg-blue-600 text-white'
       : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'}`;
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'panel-' + tab));
   if (tab === 'colloc' && S.query) loadColloc();
   if (tab === 'correct') loadCorrections(0);
+  if (tab === 'untagged') loadUntagged(0);
 }
 
 // ─── Search ───────────────────────────────────────────────────────────────────
@@ -564,6 +615,16 @@ function renderKwic(rows, lim, page) {
       </td>
       <td class="px-4 py-2.5 text-slate-500 dark:text-slate-400 text-sm max-w-xs truncate" title="${esc(right)}">${esc(right)}</td>
       <td class="px-4 py-2.5 font-mono text-xs text-slate-400 dark:text-slate-500 max-w-[160px] truncate" title="${esc(r.filename||'')}">${esc(fname)}</td>
+      <td class="px-2 py-2.5 text-center">
+        <button class="p-0.5 rounded text-slate-300 dark:text-slate-600 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="ดู Segmentation" onclick="toggleSegView('segrow-${page}-${i}', ${r.doc_id}, ${r.node_pos})">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+      </td>
+    </tr>
+    <tr id="segrow-${page}-${i}" style="display:none">
+      <td colspan="5" class="px-4 pb-3 pt-0 bg-slate-50/80 dark:bg-slate-800/30">
+        <div class="seg-view flex flex-wrap gap-1 py-1.5 min-h-[28px]"></div>
+      </td>
     </tr>`;
   }).join('');
 
@@ -586,6 +647,7 @@ function renderKwic(rows, lim, page) {
               <th class="px-3 py-2.5 text-center font-semibold">คำค้นหา</th>
               <th class="px-4 py-2.5 text-left font-semibold w-2/5">บริบทขวา</th>
               <th class="px-4 py-2.5 text-left font-semibold">เอกสาร</th>
+              <th class="px-2 py-2.5 w-8"></th>
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-200 dark:divide-slate-700/50">${trs}</tbody>
@@ -1100,6 +1162,131 @@ function exportCorrections(format) {
 
 // Load badge count on init
 updateCorrectBadge();
+
+// ─── Untagged Words Tab ───────────────────────────────────────────────────────
+async function loadUntagged(page = 0) {
+  S.untaggedPage = page;
+  const tbody = document.getElementById('untaggedTbody');
+  tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm animate-pulse">กำลังโหลด…</td></tr>`;
+  try {
+    const data = await api('/api/untagged', { limit: UNTAGGED_LIMIT, offset: page * UNTAGGED_LIMIT });
+    S.untaggedRows = data.results || [];
+    renderUntagged(S.untaggedRows, page);
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="5" class="px-5 py-4">${errMsg(e.message)}</td></tr>`;
+  }
+}
+
+function renderUntagged(rows, page) {
+  const p = page ?? S.untaggedPage;
+  document.getElementById('untaggedCount').textContent = `${fmt(rows.length)} รายการ`;
+
+  if (!rows.length) {
+    document.getElementById('untaggedTbody').innerHTML =
+      '<tr><td colspan="5" class="px-5 py-8 text-center text-slate-400 dark:text-slate-500 text-sm">ไม่มีคำที่ยังไม่มี tag — พจนานุกรมครอบคลุมคลังทั้งหมด 🎉</td></tr>';
+    document.getElementById('untaggedPagination').innerHTML = '';
+    return;
+  }
+
+  const off = p * UNTAGGED_LIMIT;
+  const trs = rows.map((r, i) => `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
+    <td class="px-5 py-2.5 text-xs font-mono text-slate-400 dark:text-slate-500">${off + i + 1}</td>
+    <td class="px-5 py-2.5">
+      <span class="inline-flex items-center gap-1.5">
+        <span class="font-semibold">${esc(r.word)}</span>
+        <button class="edit-tag-btn" title="เพิ่ม Tag" onclick="openTagModal('${esc(r.word)}','','')">
+          <svg width="11" height="11" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+        </button>
+      </span>
+    </td>
+    <td class="px-5 py-2.5 font-mono text-blue-600 dark:text-blue-400 font-semibold">${fmt(r.count)}</td>
+    <td class="px-5 py-2.5 font-mono text-right text-slate-500 dark:text-slate-400">${fmt(r.docs)}</td>
+    <td class="px-5 py-2.5 font-mono text-xs text-slate-500 dark:text-slate-400">${fmtF(r.per_million)}</td>
+  </tr>`).join('');
+
+  document.getElementById('untaggedTbody').innerHTML = trs;
+
+  const hasPrev = p > 0;
+  const hasNext = rows.length >= UNTAGGED_LIMIT;
+  document.getElementById('untaggedPagination').innerHTML = `
+    <button onclick="loadUntagged(${p - 1})" ${!hasPrev ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">← ก่อนหน้า</button>
+    <span class="text-xs font-mono text-slate-400">หน้า ${p + 1}</span>
+    <button onclick="loadUntagged(${p + 1})" ${!hasNext ? 'disabled' : ''} class="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-600 text-sm text-slate-600 dark:text-slate-400 hover:border-blue-500 hover:text-blue-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors">ถัดไป →</button>`;
+}
+
+function sortUntagged(col) {
+  if (S.untaggedSort === col) S.untaggedDir = S.untaggedDir === 'desc' ? 'asc' : 'desc';
+  else { S.untaggedSort = col; S.untaggedDir = 'desc'; }
+  const arrowEl = document.getElementById('uth-count');
+  if (arrowEl) arrowEl.textContent = S.untaggedDir === 'desc' ? '↓' : '↑';
+  const sorted = [...S.untaggedRows].sort((a, b) => {
+    const av = a[col], bv = b[col];
+    const cmp = typeof av === 'string' ? av.localeCompare(bv, 'th') : av - bv;
+    return S.untaggedDir === 'desc' ? -cmp : cmp;
+  });
+  renderUntagged(sorted, S.untaggedPage);
+}
+
+function exportUntagged() {
+  if (!S.untaggedRows.length) { alert('กรุณาโหลดข้อมูลก่อน'); return; }
+  const lines = ['word\tcount\tdocs\tper_million',
+    ...S.untaggedRows.map(r => `${r.word}\t${r.count}\t${r.docs}\t${r.per_million.toFixed(2)}`)];
+  const blob = new Blob([lines.join('\n')], { type: 'text/tab-separated-values;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'untagged_words.tsv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ─── Segmentation Viewer ─────────────────────────────────────────────────────
+async function toggleSegView(rowId, docId, nodePos) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+  row.style.display = 'table-row';
+  const container = row.querySelector('.seg-view');
+  container.innerHTML = '<span class="text-xs text-slate-400 animate-pulse">กำลังโหลด…</span>';
+
+  try {
+    const data = await api('/api/segment-view', { doc_id: docId, center: nodePos, window: 15 });
+    const tokens = data.tokens || [];
+    const nodePosVal = data.node_pos;
+
+    const posColor = {
+      NOUN: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+      VERB: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+      ADJ:  'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+      ADV:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+      PROPN:'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300',
+      NUM:  'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    };
+    const neRing = {
+      PERSON: 'ring-1 ring-rose-400 dark:ring-rose-500',
+      PLACE:  'ring-1 ring-teal-400 dark:ring-teal-500',
+      ORG:    'ring-1 ring-violet-400 dark:ring-violet-500',
+    };
+
+    container.innerHTML = tokens.map(t => {
+      const isNode = t.pos === nodePosVal;
+      let chipClass;
+      if (isNode) {
+        chipClass = 'bg-blue-500 text-white font-bold ring-2 ring-blue-400 ring-offset-1 dark:ring-offset-slate-800';
+      } else if (t.pos_tag) {
+        chipClass = posColor[t.pos_tag] || 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300';
+      } else {
+        chipClass = 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-300 dark:border-amber-700';
+      }
+      const ringClass = t.ne_tag ? (neRing[t.ne_tag] || 'ring-1 ring-slate-300') : '';
+      const neBadge = t.ne_tag ? `<span class="ml-0.5 text-[9px] font-bold leading-none opacity-80">${esc(t.ne_tag.slice(0,3))}</span>` : '';
+      const titleAttr = [t.word, t.pos_tag && `POS: ${t.pos_tag}`, t.ne_tag && `NE: ${t.ne_tag}`].filter(Boolean).join(' · ');
+      return `<span class="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium cursor-pointer hover:opacity-75 transition-opacity ${chipClass} ${ringClass}"
+        onclick="openTagModal('${esc(t.word)}','${esc(t.pos_tag||'')}','${esc(t.ne_tag||'')}')"
+        title="${esc(titleAttr)}">${esc(t.word)}${neBadge}</span>`;
+    }).join('');
+  } catch(e) {
+    container.innerHTML = `<span class="text-xs text-red-500">⚠ ${esc(e.message)}</span>`;
+  }
+}
 </script>
 </body>
 </html>
