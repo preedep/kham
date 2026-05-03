@@ -1,0 +1,12 @@
+-- kham_pg--0.8.1--0.8.2.sql
+--
+-- Upgrade path: 0.8.1 → 0.8.2
+--
+-- No SQL object changes in this release.  The 0.8.2 update expands the
+-- built-in NE gazetteer and POS table in kham-core:
+--
+--   * ne_th.tsv: 36,668 → 38,950 entries (+2,280 from thainer-corpus-v2 CC0)
+--   * pos_th.tsv: 8,993 → 11,404 entries (+2,407 from UD_Thai-PUD CC-BY-SA-3.0)
+--
+-- Running ALTER EXTENSION kham_pg UPDATE loads the new .so automatically.
+-- No DDL changes are required.
