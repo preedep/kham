@@ -373,8 +373,8 @@ function renderKwic(rows, lim, page) {
     return;
   }
   const trs = rows.map((r, i) => {
-    const left = (r.left||[]).join(' ');
-    const right = (r.right||[]).join(' ');
+    const left = (r.left||[]).join('​');   // zero-width space — no visible gaps in Thai
+    const right = (r.right||[]).join('​');
     const fname = (r.filename||'doc').split('/').pop();
     return `<tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors">
       <td class="px-4 py-2.5 text-right text-slate-500 dark:text-slate-400 kwic-left text-sm max-w-xs truncate" title="${esc(left)}">${esc(left)}</td>
